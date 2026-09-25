@@ -1,0 +1,125 @@
+{
+  "phase": "14.6",
+  "objective": "Reduce unnecessary daily search-provider/API calls while maintaining useful job discovery, without redesigning the source architecture, scoring, normalization/dedup, or the 9-sheet report.",
+  "date": "2026-09-21",
+  "candidate_id": "cand_821156a4dfc3",
+  "new_files": [
+    "config/search_planner.json",
+    "scripts/search_history_store.py",
+    "scripts/daily_search_planner.py",
+    "scripts/test_phase14_6_daily_planner.py"
+  ],
+  "modified_files": [
+    "scripts/search_submission.py (added optional query_plan_override param to build_search_plan()/submit_search() -- None default preserves prior behavior exactly)",
+    "scripts/generate_run_report.py (added optional planner_metrics param to generate(), merged into the existing RUN_SUMMARY sheet only -- no new sheet, no change to any other sheet)"
+  ],
+  "not_modified": [
+    "scripts/score_job.py", "scripts/tracker.py", "scripts/canonical_job.py", "scripts/cross_source_dedup.py",
+    "scripts/source_adapter.py", "scripts/source_registry.py", "scripts/search_provider_manager.py",
+    "scripts/search_provider.py", "scripts/restricted_source_registry.py", "scripts/search_provider_adapter.py",
+    "scripts/search_provider_usage_store.py (reused as-is for provider-level budget/status)"
+  ],
+  "old_strategy": {
+    "description": "4 locations x 11 sources, one query per (source, location) pair, every run, no history awareness.",
+    "total_queries": 44,
+    "search_provider_queries": 28,
+    "direct_queries": 16
+  },
+  "new_strategy": {
+    "description": "Source-aware refresh intervals + query-fingerprint cooldown + consolidated (OR'd-location) search-provider queries + per-run/per-day budgets + two-wave execution (direct first, then search-provider) through the existing, unmodified submit_search -> claim_next_queue_item -> process_queue_item pipeline, called at most twice.",
+    "first_run_total_queries": 23,
+    "first_run_direct_queries": 16,
+    "first_run_search_provider_queries": 7,
+    "immediate_replan_total_queries": 0,
+    "immediate_replan_note": "A second plan built immediately after (same day, same profile) shows ALL 11 sources SKIPPED (cooldown/refresh-interval not elapsed) -- confirmed against the real live-derived temp DB, not just the offline acceptance test."
+  },
+  "query_reduction": {
+    "old_requests_total": 44,
+    "new_requests_total_first_run": 23,
+    "total_reduction_percent_first_run": 47.7,
+    "old_requests_search_provider_only": 28,
+    "new_requests_search_provider_only_first_run": 7,
+    "search_provider_request_reduction_percent_first_run": 75.0,
+    "note": "Direct-source query count (16) is unchanged by consolidation -- Section 6 scopes consolidation to search-provider sources only; direct sources still query per-location because that mirrors how their own site search actually works. The full reduction (including the immediate-replan case, 44 -> 0) only manifests on a SUBSEQUENT run within the cooldown window; a first-ever run for a candidate necessarily checks every due source at least once (Section 8's explicit requirement)."
+  },
+  "provider_requests_avoided": {
+    "search_provider_requests_avoided_first_run": 21,
+    "mechanism": "Consolidation (1 OR'd-location query per source instead of 4 per-location queries)."
+  },
+  "cooldown_behavior": {
+    "search_query_cooldown_hours_default": 24,
+    "verified_offline": "A second build_daily_plan() call immediately after a successful execute_daily_plan() shows every source SKIPPED with reason 'recent successful run (refresh interval not elapsed)', and estimated_provider_calls == 0.",
+    "verified_live": "Re-ran build_daily_plan() (read-only, zero network calls) against the temp DB populated by the one live run -- all 11 sources correctly SKIPPED, 0 estimated provider calls.",
+    "force_refresh_bypass_verified": true
+  },
+  "refresh_behavior": {
+    "source_refresh_interval_hours": {
+      "NAUKRI": 12, "HIRIST": 24, "IIMJOBS": 24, "APNA": 12,
+      "LINKEDIN": 24, "INDEED": 24, "FOUNDIT": 24, "INSTAHYRE": 24, "CUTSHORT": 24, "WELLFOUND": 24, "SHINE": 24
+    },
+    "permanently_suppressed": false,
+    "note": "is_source_due() returns True once refresh_interval_hours has elapsed since last_run_at -- no source is ever marked permanently ineligible."
+  },
+  "budget_behavior": {
+    "max_search_provider_queries_per_run_default": 12,
+    "max_search_provider_queries_per_day_default": 30,
+    "max_search_provider_queries_per_provider_per_day_default": 12,
+    "per_provider_per_day_mechanism": "Reused via SearchProviderManager's existing max_daily param / SEARCH_PROVIDER_MAX_DAILY_REQUESTS env var (Phase 14.2, untouched) -- not reimplemented.",
+    "per_run_and_per_day_aggregate_mechanism": "New in this phase: daily_search_planner.build_daily_plan() caps the total number of search-provider query-plan entries it includes, decrementing a local remaining-budget counter as it assigns queries to DUE sources; the daily aggregate check sums today's already-recorded requests across all 5 providers via the existing search_provider_usage_store.py.",
+    "verified_offline": "With max_search_provider_queries_per_run=1, only 1 search-provider query was included in the plan and at least one source showed a budget-limited skip reason."
+  },
+  "failover_behavior": {
+    "mechanism": "Unchanged -- SearchProviderManager (Phase 14.2) remains the ONLY provider-selection mechanism, per Section 1's explicit instruction. The planner never queries a second provider for the same query after a first success; it never constructs a provider directly.",
+    "serper_state": "AUTH_FAILED (HTTP 403) -- unchanged this phase, per explicit instruction not to attempt repair. Serper's priority position (last, after You/Tavily/Exa/Brave) plus You.com's continued success means Serper was never reached and consumed zero requests this phase (confirmed: provider_requests_used['serper'] == 0)."
+  },
+  "direct_vs_provider_prioritization": {
+    "mechanism": "Two-wave execution: wave 1 submits and fully processes all DUE direct sources first (through the existing, unmodified pipeline); wave 2 then submits and processes DUE search-provider sources against the SAME database. This lets the existing, unmodified cross-source dedup mechanism see wave 1's jobs already in the DB before wave 2's jobs are normalized/scored.",
+    "clarification": "This project's dedup mechanism recognizes duplicates AFTER both are fetched (title/company/location similarity) -- it cannot know in advance that a not-yet-fetched search-provider posting duplicates a direct-source one, so query-level 'skip this specific provider query because direct sources probably already found it' pre-filtering was NOT implemented (no evidence-based way to do this without either fabricating an assumption or fetching first). What IS implemented, and verified: wave ordering plus the existing dedup mechanism running across both waves' persisted data together."
+  },
+  "new_jobs_discovered": {
+    "old_baseline_phase_14_5_eligible_scored": 171,
+    "new_planner_first_run_eligible_scored": 106,
+    "new_planner_first_run_eligible_direct": 79,
+    "new_planner_first_run_eligible_search_provider": 27,
+    "honest_finding": "Search-provider eligible/scored jobs dropped from 93 (Phase 14.5's 28-query, per-location matrix) to 27 (this run's 7-query, consolidated matrix) -- NOT primarily from the cooldown/budget logic (this was a first-ever run, nothing was skipped), but from a mechanical property of search_provider_adapter.py's own, UNCHANGED request cap: every provider call returns at most 10 results (_MAX_RESULTS_PER_QUERY = 10) regardless of how many locations are OR'd into the query text. Consolidating 4 location-specific queries (up to 40 possible results per source) into 1 combined query (up to 10 possible results per source) trades discovery breadth for request count. This is a real, disclosed trade-off, not a defect -- see 'known_limitations' below."
+  },
+  "known_jobs_skipped": {
+    "immediate_replan_skips": 11,
+    "note": "All 11 sources (4 direct + 7 search-provider) were skipped on the immediate second plan, avoiding what would otherwise have been another 23-query run for data known to be fresh within the cooldown window."
+  },
+  "serper_auth_failed_handling": {
+    "state": "AUTH_FAILED / HTTP 403",
+    "requests_consumed_this_phase": 0,
+    "automatic_retry_attempted": false,
+    "note": "No code change was made to Serper's implementation or credentials this phase, per explicit instruction. It remains visible in provider_status output as AUTH_FAILED and will only be retried after the user explicitly repairs its credentials and runs Test."
+  },
+  "nine_sheet_report_validation": {
+    "sheet_count": 9,
+    "sheets": ["APPLY_TODAY", "ALL_MATCHING_JOBS", "NEW_JOBS", "ALREADY_APPLIED", "REJECTED_EXCLUDED", "DUPLICATES", "APPLICATION_TRACKER", "SOURCE_HEALTH", "RUN_SUMMARY"],
+    "planner_metrics_location": "RUN_SUMMARY sheet only, as planner.* rows appended after the existing summary keys -- verified via both the offline acceptance test and the live-data workbook (data/reports/phase14_6_daily_planner_optimization.xlsx)."
+  },
+  "test_suite": {
+    "total_files": 68,
+    "all_passed": true,
+    "new_test_file": "scripts/test_phase14_6_daily_planner.py (21 checks, fully offline, real-evidence replay fixtures, never touches production DB)"
+  },
+  "production_db": {
+    "path": "data/applications/jobos.db",
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "byte_identical": true
+  },
+  "safety_confirmations": {
+    "scheduler_or_launchd_changed": false,
+    "auto_apply_changed": false,
+    "restricted_board_pages_fetched_directly": false,
+    "second_pipeline_created": false,
+    "scoring_changed": false,
+    "normalization_dedup_changed": false,
+    "report_structure_changed": false
+  },
+  "known_limitations_and_recommendations": [
+    "Consolidated search-provider queries trade discovery breadth for request count: each provider call is capped at 10 results (search_provider_adapter.py's existing _MAX_RESULTS_PER_QUERY, unchanged), so 1 combined-location query surfaces fewer total candidate URLs than 4 per-location queries would. A future phase could consider requesting a higher `num` for a consolidated query, or lowering the adaptive split threshold from 'zero results' to 'below N results', but this was not implemented without an explicit decision, per the instruction to keep the heuristic simple and not over-engineer ahead of approval.",
+    "A genuine bug was found and fixed during this phase's own live validation (see report .md 'A bug was found and fixed' section): execute_daily_plan()'s before/after job-set snapshot for the search-provider wave used the *_SEARCH registry keys instead of the real persisted board names, so new_jobs_by_source/known_jobs_by_source for that wave initially came back empty even though real jobs were found. Fixed in scripts/daily_search_planner.py (job_id_sources param added to _run_one_wave()); re-verified via the offline acceptance test (new-job count rose from 2 to 19 after the fix) and by recomputing the already-fetched live temp DB's actual per-source counts (no additional network calls needed)."
+  ]
+}

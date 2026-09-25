@@ -1,0 +1,160 @@
+{
+  "task": "Phase 6 Step 3 -- Hirist adapter offline implementation, zero live requests",
+  "live_requests_made": 0,
+  "hirist_status_after_this_task": {
+    "status": "AdapterStatus.NOT_ENABLED",
+    "capabilities": [],
+    "changed_from_before_this_task": false
+  },
+  "files_changed": {
+    "rewritten": ["scripts/hirist_adapter.py"],
+    "new": [
+      "scripts/hirist_parser.py",
+      "scripts/test_hirist_adapter.py",
+      "data/fixtures/hirist/valid_results_page1.html",
+      "data/fixtures/hirist/valid_results_page2.html",
+      "data/fixtures/hirist/empty_results.html",
+      "data/fixtures/hirist/malformed_json_ld.html",
+      "data/fixtures/hirist/missing_json_ld.html",
+      "data/fixtures/hirist/blocked_access_denied.html",
+      "data/fixtures/hirist/challenge_captcha.html",
+      "data/fixtures/hirist/malformed_job_url.html",
+      "data/fixtures/hirist/duplicate_jobs.html",
+      "data/fixtures/hirist/pagination_self_loop.html",
+      "data/fixtures/hirist/next_link_off_domain.html",
+      "data/reports/hirist_phase6_adapter_implementation.md",
+      "data/reports/hirist_phase6_adapter_implementation.json"
+    ],
+    "minimally_modified": ["scripts/test_multi_source_adapter_architecture.py"],
+    "not_modified": [
+      "scripts/source_registry.py", "scripts/search_profile.py",
+      "scripts/search_worker.py", "scripts/score_job.py",
+      "scripts/job_eligibility.py", "scripts/experience_eligibility.py",
+      "scripts/location_taxonomy.py", "scripts/freshness.py",
+      "scripts/discover_local.py", "scripts/cross_source_dedup.py",
+      "scripts/canonical_job.py", "scripts/tracker.py",
+      "data/applications/jobos.db", "scripts/naukri_adapter.py",
+      "scripts/linkedin_adapter.py", "any LinkedIn design document"
+    ]
+  },
+  "required_narrowly_scoped_change": {
+    "file": "scripts/test_multi_source_adapter_architecture.py",
+    "function": "test_unsupported_adapter_behavior",
+    "reason": "HIRIST no longer raises AdapterNotEnabledError immediately from health_check()/search() -- it now has real parsing logic, reaching HiristFetcher's own NotImplementedError backstop instead. This is a real, intentional, safe behavior change for this one adapter, not a test weakening.",
+    "fix": "HIRIST excluded from the 'must raise AdapterNotEnabledError' loop, with a new, separate assertion added in the same function confirming HiristAdapter.status == NOT_ENABLED and its default fetcher raises NotImplementedError rather than making any live call",
+    "other_assertions_in_file_required_no_change": true
+  },
+  "adapter_behavior_implemented": {
+    "url_construction": {
+      "pattern": "https://www.hirist.tech/search/<role-slug>-jobs?locations=<location>",
+      "role_slugification": "same convention as naukri_adapter.py's _slugify()",
+      "location_parameter_confirmed_effective": false,
+      "location_parameter_sent_anyway": true,
+      "basis": "same honest-uncertainty pattern already established for Naukri's own jobAge parameter",
+      "extra_escape_hatch": "query.extra['hirist_search_url'], mirroring naukri_adapter.py",
+      "undocumented_parameters_added": false
+    },
+    "json_ld_extraction": {
+      "targets_itemlist_type": true,
+      "extraction_paths": [
+        {"path": "nested 'item' object (schema.org JobPosting shape)", "confirmed_against_real_site": false, "fields_read_if_present": ["title", "hiringOrganization.name", "url", "datePosted", "description", "employmentType", "jobLocation"]},
+        {"path": "flat 'name' string with ' - ' delimiter", "confirmed_against_real_site": "partially -- the one field Phase 6 directly observed", "fails_closed_on_zero_or_multiple_delimiter_occurrences": true}
+      ],
+      "unparseable_entries_skipped_not_fabricated": true,
+      "all_entries_unparseable_on_nonempty_list_classified_as": "PARSE_FAILURE, not VALID_EMPTY_RESULT"
+    },
+    "fields_intentionally_not_implemented": [
+      {"field": "detail-page scraping", "reason": "no detail page ever visited in Phase 6; DETAIL capability Unknown"},
+      {"field": "application-URL extraction", "reason": "never observed; APPLICATION_URL capability Unknown"},
+      {"field": "native freshness filtering", "reason": "no freshness parameter ever attempted or observed"},
+      {"field": "remote/work-model filtering as a search input", "reason": "never tested"},
+      {"field": "salary extraction claimed as confirmed", "reason": "parser can read baseSalary defensively if present, but no fixture populates it and this is not claimed as a confirmed Hirist capability"},
+      {"field": "experience extraction", "reason": "never observed on the real page; not implemented at all"},
+      {"field": "location extraction based on assumption", "reason": "only extracted from nested item.jobLocation when unambiguously present; never derived from the query's own location input"},
+      {"field": "undocumented query parameters", "reason": "none added beyond the one path segment and one honestly-caveated locations= parameter"}
+    ]
+  },
+  "pagination_implementation": {
+    "first_page": "constructed search URL, no page parameter",
+    "next_page_detection": "directly-observed <link rel=\"next\" href=\"...\"> tag, two attribute orderings handled",
+    "domain_safety": "a discovered next URL is never followed if its host differs from www.hirist.tech",
+    "loop_protection": "every visited URL tracked in a set within one search() call; a repeat stops pagination",
+    "max_pages": 3,
+    "max_pages_evidenced_by_live_observation": false,
+    "max_pages_note": "deliberate, conservative, explicitly-labeled placeholder pending real evidence from a future live validation",
+    "cross_page_deduplication": "in-call safeguard on (company, title), in addition to (not instead of) the existing discover_local.deduplicate()",
+    "partial_failure_tolerance": "a block/challenge/parse-failure result on the FIRST page raises; the same result on a LATER page stops pagination gracefully, keeping already-collected results"
+  },
+  "error_status_model": [
+    {"condition": "real, non-empty JSON-LD ItemList", "state": "VALID_RESULTS", "behavior": "returns parsed jobs"},
+    {"condition": "valid page, itemListElement: []", "state": "VALID_EMPTY_RESULT", "behavior": "returns []"},
+    {"condition": "hard-block phrase", "state": "BLOCKED", "behavior": "AdapterBlockedError (first page) / stop pagination (later page)"},
+    {"condition": "challenge phrase", "state": "SOFT_BLOCK_OR_CHALLENGE", "behavior": "AdapterBlockedError with BlockReason.UNKNOWN_BLOCK (first page) / stop pagination (later page)"},
+    {"condition": "malformed/missing JSON-LD, or every entry unparseable", "state": "PARSE_FAILURE", "behavior": "AdapterTimeoutError (first page) / stop pagination (later page)"},
+    {"condition": "HTTP/network failure", "state": "n/a", "behavior": "AdapterTimeoutError propagates (first page) / stops pagination gracefully (later page)"}
+  ],
+  "new_enum_values_added": false,
+  "test_coverage": {
+    "new_test_file": "scripts/test_hirist_adapter.py",
+    "scenario_count": 14,
+    "extra_safety_checks_beyond_requested_scope": ["off-domain rel=next link never followed"],
+    "fixture_files": 10,
+    "fixture_directory": "data/fixtures/hirist/",
+    "fixtures_are_synthetic_not_real_captures": true,
+    "live_network_calls_in_tests": 0,
+    "scenarios": [
+      "1. valid ItemList with jobs (2 pages, nested-item field extraction)",
+      "2. empty ItemList -> VALID_EMPTY_RESULT",
+      "3. malformed JSON-LD -> PARSE_FAILURE",
+      "4. missing JSON-LD -> PARSE_FAILURE",
+      "5. missing optional fields default to empty, never fabricated",
+      "6. malformed job URL left empty, entry still parsed",
+      "7. duplicate jobs within one page deduplicated",
+      "8. rel=next extracted; off-domain next link never followed",
+      "9. pagination loop protection (self-referencing next)",
+      "10. maximum-page protection (bounded at 3 against endless next)",
+      "11. HTTP error handling (first-page raises, later-page graceful stop)",
+      "12. parser never invents unsupported fields; ambiguous delimiter rejected",
+      "13. adapter remains NOT_ENABLED (status, capabilities, fetcher backstop, registry zero-call guarantee)",
+      "14. default sources remain ['NAUKRI']"
+    ]
+  },
+  "authorization_limitation": {
+    "unchanged_from_phase_6_steps_1_2": true,
+    "robots_txt_did_not_disallow_observed_paths": true,
+    "explicit_authorization_confirmed": false,
+    "terms_of_service_read_or_verified": false,
+    "implementation_implies_authorization_resolved": false
+  },
+  "exact_enablement_status": {
+    "status": "AdapterStatus.NOT_ENABLED",
+    "capabilities": [],
+    "reason_capabilities_left_empty": "consistent with Phase 6 offline design Section 2: no capability marked confirmed until demonstrated the same way Naukri's were -- offline implementation alone does not satisfy the enablement gate"
+  },
+  "regression_results": {
+    "new_dedicated_test": "14/14 PASS",
+    "shared_architecture_test": "15/15 PASS (updated for the narrowly-scoped HIRIST exclusion)",
+    "full_standalone_suite": "PASS=42 FAIL=0",
+    "py_compile": "PY_COMPILE_ALL_OK",
+    "hirist_status_reverified": "AdapterStatus.NOT_ENABLED",
+    "hirist_capabilities_reverified": [],
+    "default_sources_reverified": ["NAUKRI"]
+  },
+  "production_db": {
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "unchanged": true,
+    "opened_for_writing": false,
+    "opened_at_all": false
+  },
+  "git_diff_inspection": {
+    "repository_has_commits": false,
+    "meaningful_git_diff_possible": false,
+    "reason": "git log shows zero commits -- every file is untracked from git's perspective",
+    "verification_method_used_instead": "direct inspection of this task's own edit history confirming the exact file list above, nothing else touched"
+  },
+  "stopped_after_this_task": true,
+  "live_hirist_validation_performed": false,
+  "hirist_enabled": false,
+  "search_worker_modified_to_execute_hirist": false
+}

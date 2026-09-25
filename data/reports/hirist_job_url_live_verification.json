@@ -1,0 +1,161 @@
+{
+  "task": "Phase 6 Step 11 -- Hirist job_url live verification, exactly one live search-page request",
+  "hirist_parser_py_modified_during_this_task": false,
+  "hirist_enabled": false,
+  "source_registry_modified": false,
+  "naukri_files_modified": false,
+  "production_db_opened": false,
+  "company_title_parsing_modified": false,
+  "single_request_enforcement": {
+    "method": "Reused, unmodified, the exact Step 9 diagnostic-only Node/Playwright script (session scratchpad, not a project file) containing exactly one page.goto() call and no pagination logic. HiristAdapter.search() was never invoked.",
+    "url_built_offline": true,
+    "url_matches_step9": true,
+    "url": "https://www.hirist.tech/search/senior-devops-engineer-jobs?locations=Bengaluru"
+  },
+  "A_http_evidence": {
+    "total_requests": 1,
+    "requested_url": "https://www.hirist.tech/search/senior-devops-engineer-jobs?locations=Bengaluru",
+    "final_url": "https://www.hirist.tech/search/senior-devops-engineer-jobs?locations=Bengaluru",
+    "redirected": false,
+    "http_status": 200,
+    "effective_user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+    "headless_mode": true,
+    "channel": "chromium",
+    "response_length_chars": 311917,
+    "started_at": "2026-09-20T15:36:17.555Z",
+    "ended_at": "2026-09-20T15:36:21.607Z",
+    "elapsed_seconds_approx": 4.1,
+    "retries": 0,
+    "detail_page_requests": 0,
+    "second_queries": 0,
+    "authentication_or_captcha_interaction": 0,
+    "persisted_artifact": "temporary scratchpad file, not a permanent project artifact (per this task's own instruction)"
+  },
+  "B_json_ld_structure": {
+    "classifier_state": "VALID_RESULTS",
+    "matched_block_phrase": null,
+    "total_listitem_entries": 20,
+    "entries_with_top_level_url": 20,
+    "confirms_step9_finding_not_a_one_off": true
+  },
+  "C_normalization_job_url_fidelity": {
+    "jobs_successfully_parsed": 10,
+    "jobs_total_entries": 20,
+    "jobs_with_job_url_populated": 10,
+    "jobs_with_job_url_populated_of_parsed": "10/10 (100%)",
+    "job_url_exactly_matches_source_listitem_url_for_all": true,
+    "mismatches_found": 0,
+    "evidence_of_constructed_or_guessed_url": false,
+    "malformed_or_offdomain_urls_observed_in_real_data": 0,
+    "note_on_malformed_offdomain_path": "not exercised by this real data run (all 20 real URLs were well-formed hirist.tech links); already separately verified with synthetic cases in Step 10's test_hirist_job_url_remediation.py (tests D1/D2)",
+    "sample_jobs": [
+      {"company": "Verint", "title": "Senior DevOps Engineer", "job_url": "https://www.hirist.tech/j/verint-senior-dev-ops-engineer-1672606"},
+      {"company": "Senior DevOps Engineer", "title": "AWS & Kubernetes", "job_url": "https://www.hirist.tech/j/senior-dev-ops-engineer-aws-and-kubernetes-1672338"},
+      {"company": "Vedantu Innovations", "title": "Senior DevOps & SecOps Engineer", "job_url": "https://www.hirist.tech/j/vedantu-innovations-senior-dev-ops-and-sec-ops-engineer-1672535"},
+      {"company": "NTT DATA", "title": "Senior DevOps Engineer", "job_url": "https://www.hirist.tech/j/ntt-data-senior-dev-ops-engineer-1670149"},
+      {"company": "SatSure", "title": "Senior Cloud/DevOps Engineer", "job_url": "https://www.hirist.tech/j/sat-sure-senior-cloud-dev-ops-engineer-1670842"}
+    ]
+  },
+  "D_job_id_determinism": {
+    "pipeline_used": "discover_local.generate_job_id() -> job_id.job_id_from_url() -- existing, unmodified",
+    "verified_examples": [
+      {"company": "Verint", "title": "Senior DevOps Engineer", "job_url": "https://www.hirist.tech/j/verint-senior-dev-ops-engineer-1672606", "job_id": "HIRIST-5649154751c6aff0", "deterministic_within_run": true},
+      {"company": "Senior DevOps Engineer", "title": "AWS & Kubernetes", "job_url": "https://www.hirist.tech/j/senior-dev-ops-engineer-aws-and-kubernetes-1672338", "job_id": "HIRIST-a192c63836dd5b44", "deterministic_within_run": true},
+      {"company": "Vedantu Innovations", "title": "Senior DevOps & SecOps Engineer", "job_url": "https://www.hirist.tech/j/vedantu-innovations-senior-dev-ops-and-sec-ops-engineer-1672535", "job_id": "HIRIST-69d7cdb927f9e0a2", "deterministic_within_run": true},
+      {"company": "NTT DATA", "title": "Senior DevOps Engineer", "job_url": "https://www.hirist.tech/j/ntt-data-senior-dev-ops-engineer-1670149", "job_id": "HIRIST-8385171ec90662ae", "deterministic_within_run": true},
+      {"company": "SatSure", "title": "Senior Cloud/DevOps Engineer", "job_url": "https://www.hirist.tech/j/sat-sure-senior-cloud-dev-ops-engineer-1670842", "job_id": "HIRIST-b0ceedcb0ced8064", "deterministic_within_run": true}
+    ],
+    "cross_run_determinism_confirmed": {
+      "description": "the Verint job's job_id (HIRIST-5649154751c6aff0) is byte-identical to the value independently computed in Step 10's report for the same URL",
+      "significance": "confirms the hash is genuinely deterministic ACROSS separate runs/captures, not merely self-consistent within one process"
+    },
+    "new_code_added": false
+  },
+  "E_company_title_not_modified": {
+    "modified_in_this_task": false,
+    "known_limitation_reproduced": true,
+    "affected_count": "3/10 parsed jobs",
+    "affected_examples": [
+      {"company_as_parsed": "Senior DevOps Engineer", "title_as_parsed": "AWS & Kubernetes"},
+      {"company_as_parsed": "Senior DevOps Engineer", "title_as_parsed": "Cloud Infrastructure"},
+      {"company_as_parsed": "Senior DevOps Engineer", "title_as_parsed": "AWS & Kubernetes"}
+    ],
+    "significance": "same limitation reproduced on independent, fresh live data -- confirms it is a stable characteristic of Hirist's real data, not a Step 9 capture artifact",
+    "fix_attempted": false
+  },
+  "F_no_extra_network": {
+    "confirmed": true,
+    "operations_run_offline_after_single_request": [
+      "classify_search_page()", "_find_item_list_json_ld()",
+      "_parse_job_entry() x20", "normalize_job()", "generate_job_id() x6"
+    ],
+    "fetcher_or_browser_invoked_again": false
+  },
+  "safety_verification": {
+    "exactly_one_http_request": true,
+    "zero_pagination_requests": true,
+    "zero_detail_page_requests": true,
+    "zero_retries": true,
+    "zero_second_queries": true,
+    "no_authentication_or_captcha_interaction": true,
+    "headless_chromium_only_no_stealth": true,
+    "production_db_unchanged": true,
+    "hirist_status_not_enabled": true,
+    "hirist_capabilities_empty": true,
+    "default_sources": ["NAUKRI"],
+    "hirist_parser_py_modified": false,
+    "source_registry_modified": false,
+    "naukri_files_modified": []
+  },
+  "production_db": {
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "unchanged": true,
+    "row_counts_unchanged": true,
+    "row_counts": {
+      "candidates": 1,
+      "candidate_search_profile": 1,
+      "jobs": 9,
+      "candidate_job_matches": 0,
+      "search_runs": 0,
+      "search_queue": 0
+    },
+    "opened_at_all": false
+  },
+  "verification_results": {
+    "full_standalone_suite": "PASS=45 FAIL=0",
+    "py_compile": "PY_COMPILE_ALL_OK",
+    "json_report_valid": true,
+    "hirist_status": "AdapterStatus.NOT_ENABLED",
+    "hirist_capabilities": [],
+    "default_sources": ["NAUKRI"]
+  },
+  "files_changed": {
+    "new": [
+      "data/reports/hirist_job_url_live_verification.md",
+      "data/reports/hirist_job_url_live_verification.json"
+    ],
+    "modified": [],
+    "not_modified": [
+      "scripts/hirist_parser.py", "scripts/hirist_adapter.py",
+      "scripts/hirist_fetcher.py", "scripts/hirist_fetch_bridge.js",
+      "scripts/naukri_parser.py", "scripts/naukri_adapter.py",
+      "scripts/naukri_fetcher.py", "scripts/naukri_fetch_bridge.js",
+      "scripts/source_registry.py", "scripts/discover_local.py",
+      "scripts/job_id.py", "data/applications/jobos.db",
+      "any existing Hirist fixture", "any LinkedIn file"
+    ],
+    "raw_capture_persistence": "temporary scratchpad file only, not committed to the project, per this task's own instruction"
+  },
+  "summary": [
+    "the Step 10 job_url remediation is confirmed working correctly against fresh, real, live Hirist data -- 10/10 successfully-parsed jobs had job_url populated, all exactly matching their source ListItem.url, zero constructed/guessed URLs",
+    "the existing generate_job_id() pipeline is confirmed producing deterministic, URL-derived IDs for these real jobs via pre-existing, unmodified code -- including cross-run determinism confirmed against Step 10's independently-computed value for the same URL",
+    "the company/title limitation reproduces identically on this independent capture (3/10 jobs affected), confirming it as a stable characteristic of the real data, not addressed here per instruction",
+    "zero extra network activity beyond the one authorized request"
+  ],
+  "stopped_after_this_task": true,
+  "live_hirist_query_performed": true,
+  "live_hirist_query_count": 1,
+  "hirist_enabled": false,
+  "awaiting_review_before_next_step": true
+}

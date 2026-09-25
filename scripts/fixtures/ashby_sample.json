@@ -1,0 +1,22 @@
+{
+  "jobs": [
+    {
+      "title": "Product Manager",
+      "location": "Hyderabad, India",
+      "employmentType": "FullTime",
+      "jobUrl": "https://jobs.ashbyhq.com/examplecompany/product-manager-1",
+      "applyUrl": "https://jobs.ashbyhq.com/examplecompany/product-manager-1/application",
+      "publishedAt": "2026-09-12T00:00:00.000Z",
+      "descriptionPlain": "Own our SaaS product strategy and roadmap."
+    },
+    {
+      "title": "UX Designer",
+      "location": "Remote",
+      "employmentType": "Contract",
+      "jobUrl": "https://jobs.ashbyhq.com/examplecompany/ux-designer-1",
+      "applyUrl": "https://jobs.ashbyhq.com/examplecompany/ux-designer-1/application",
+      "publishedAt": "2026-09-08T00:00:00.000Z",
+      "descriptionPlain": "Design delightful user experiences."
+    }
+  ]
+}

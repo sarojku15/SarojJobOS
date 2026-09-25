@@ -1,0 +1,106 @@
+{
+  "phase": "14.5",
+  "objective": "One real unified JobOS search combining live direct-source adapters (Naukri, Hirist, IIMJobs, Apna) with You.com-discovered restricted-board sources (LinkedIn, Indeed, Foundit, Instahyre, Cutshort, Wellfound, Shine), through the existing, unmodified pipeline.",
+  "date": "2026-09-21",
+  "candidate_id": "cand_821156a4dfc3",
+  "search_run_id": "96212b7d-7c20-4865-9e65-41c1f709c4d6",
+  "search_parameters": {
+    "role": "Site Reliability Engineer",
+    "locations": ["Bangalore", "Hyderabad", "Pune", "Chennai"],
+    "max_job_age_days": 3,
+    "sources": ["NAUKRI", "HIRIST", "IIMJOBS", "APNA", "LINKEDIN_SEARCH", "INDEED_SEARCH", "FOUNDIT_SEARCH", "INSTAHYRE_SEARCH", "CUTSHORT_SEARCH", "WELLFOUND_SEARCH", "SHINE_SEARCH"]
+  },
+  "query_plan_count": 44,
+  "elapsed_seconds": 1904.3,
+  "status": "COMPLETED",
+  "unified_totals": {
+    "raw": 653,
+    "normalized": 497,
+    "malformed_dropped": 156,
+    "within_batch_duplicates": 178,
+    "unique": 319,
+    "eligible": 171,
+    "scored": 171,
+    "matches_created": 171,
+    "matches_updated": 0,
+    "priority_A": 6,
+    "priority_B": 5,
+    "priority_C": 9,
+    "priority_REJECT": 151,
+    "ready_for_approval_A_or_B": 11,
+    "apply_today_count": 8,
+    "cross_source_duplicate_candidates": 0
+  },
+  "per_source": {
+    "NAUKRI":    {"kind": "direct", "queries": 4, "raw": 80,  "normalized_unique": 74,  "eligible_scored": 26, "matches": 26},
+    "HIRIST":    {"kind": "direct", "queries": 4, "raw": 39,  "normalized_unique": 10,  "eligible_scored": 10, "matches": 10},
+    "IIMJOBS":   {"kind": "direct", "queries": 4, "raw": 16,  "normalized_unique": 4,   "eligible_scored": 4,  "matches": 4},
+    "APNA":      {"kind": "direct", "queries": 4, "raw": 238, "normalized_unique": 138, "eligible_scored": 38, "matches": 38},
+    "LINKEDIN":  {"kind": "search_provider", "provider": "YOU", "queries": 4, "raw": 40, "normalized_unique": 17, "eligible_scored": 17, "matches": 17, "avg_completeness": 1.0},
+    "INDEED":    {"kind": "search_provider", "provider": "YOU", "queries": 4, "raw": 40, "normalized_unique": 0,  "eligible_scored": 0,  "matches": 0, "note": "every hit missing company (documented, pre-existing characteristic of Indeed's title text)"},
+    "FOUNDIT":   {"kind": "search_provider", "provider": "YOU", "queries": 4, "raw": 40, "normalized_unique": 0,  "eligible_scored": 0,  "matches": 0, "note": "titles truncated mid-sentence before company appears (documented in Phase 14.4)"},
+    "INSTAHYRE": {"kind": "search_provider", "provider": "YOU", "queries": 4, "raw": 40, "normalized_unique": 37, "eligible_scored": 37, "matches": 37, "avg_completeness": 0.67},
+    "CUTSHORT":  {"kind": "search_provider", "provider": "YOU", "queries": 4, "raw": 40, "normalized_unique": 9,  "eligible_scored": 9,  "matches": 9, "avg_completeness": 1.0},
+    "WELLFOUND": {"kind": "search_provider", "provider": "YOU", "queries": 4, "raw": 40, "normalized_unique": 15, "eligible_scored": 15, "matches": 15, "avg_completeness": 0.956},
+    "SHINE":     {"kind": "search_provider", "provider": "YOU", "queries": 4, "raw": 40, "normalized_unique": 15, "eligible_scored": 15, "matches": 15, "avg_completeness": 0.67}
+  },
+  "freshness": {
+    "note": "The persisted jobs.freshness DB column is NULL for all 319 rows in this run -- a pre-existing, out-of-scope characteristic, not touched this phase. The 8 APPLY_TODAY-qualifying rows were all NAUKRI jobs, whose in-memory ranking-time freshness_age_days (0-3 days) was correctly computed and used by generate_run_report.py's own, separate ranking pass -- the two freshness signals are not the same field. Every search-provider-discovered job (all 7 restricted boards) correctly carries freshness_age_days=None and never qualified for APPLY_TODAY, consistent with the UNKNOWN-never-auto-qualifies safety rule verified in Phase 14.4."
+  },
+  "requests": {
+    "you_com_api_requests": 28,
+    "direct_source_query_level_requests": 16,
+    "you_com_note": "1 role x 4 locations x 7 restricted boards = 28, succeeded on the first attempt -- no retries needed this phase (unlike Phase 14.4, which required diagnosing a freshness-parameter bug)."
+  },
+  "failures": [],
+  "blocked_sources": [],
+  "unimplemented_sources": [],
+  "succeeded_queries": 44,
+  "timed_out_queries": 0,
+  "malformed_errors_sample_reason": "missing required field 'company' -- Indeed/Foundit titles never/rarely carry a company name; some Apna/Naukri listing-page rows lacked a parseable company too. Never fabricated; correctly excluded from normalization.",
+  "excel_workbook": {
+    "path": "data/reports/phase14_5_unified_multisource_validation.xlsx",
+    "sheets": ["APPLY_TODAY", "ALL_MATCHING_JOBS", "NEW_JOBS", "ALREADY_APPLIED", "REJECTED_EXCLUDED", "DUPLICATES", "APPLICATION_TRACKER", "SOURCE_HEALTH", "RUN_SUMMARY"],
+    "sheet_count": 9,
+    "apply_today_rows": 8,
+    "all_matching_jobs_rows": 20,
+    "rejected_excluded_rows": 299,
+    "application_tracker_rows": 319,
+    "discovered_via_verified": "DIRECT for NAUKRI/HIRIST/IIMJOBS/APNA rows; SEARCH_PROVIDER:YOU for all 7 restricted-board rows; Discovery_Query and Completeness populated on every restricted-board row"
+  },
+  "api_sources_capability_check": {
+    "NAUKRI": "ENABLED",
+    "HIRIST": "ENABLED",
+    "IIMJOBS": "ENABLED",
+    "APNA": "ENABLED",
+    "LINKEDIN": "AVAILABLE_VIA_SEARCH_PROVIDER (provider=YOU, display=You.com)",
+    "INDEED": "AVAILABLE_VIA_SEARCH_PROVIDER (provider=YOU, display=You.com)",
+    "FOUNDIT": "AVAILABLE_VIA_SEARCH_PROVIDER (provider=YOU, display=You.com)",
+    "INSTAHYRE": "AVAILABLE_VIA_SEARCH_PROVIDER (provider=YOU, display=You.com)",
+    "CUTSHORT": "AVAILABLE_VIA_SEARCH_PROVIDER (provider=YOU, display=You.com)",
+    "WELLFOUND": "AVAILABLE_VIA_SEARCH_PROVIDER (provider=YOU, display=You.com)",
+    "SHINE": "AVAILABLE_VIA_SEARCH_PROVIDER (provider=YOU, display=You.com)",
+    "internal_search_registry_keys_visible_in_ui": false
+  },
+  "production_db": {
+    "path": "data/applications/jobos.db",
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "byte_identical": true
+  },
+  "env_file": {
+    "changed": false,
+    "key_ever_printed_logged_or_stored_in_db": false
+  },
+  "test_suite": {
+    "total_files": 67,
+    "all_passed": true
+  },
+  "safety_confirmations": {
+    "scheduler_or_launchd_changed": false,
+    "auto_apply_changed": false,
+    "restricted_board_pages_fetched_directly": false,
+    "captcha_bypassed": false,
+    "second_pipeline_created": false
+  }
+}

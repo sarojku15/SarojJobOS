@@ -1,0 +1,119 @@
+{
+  "phase": "9 -- Generic Job Search Web GUI + API",
+  "status": "IMPLEMENTED_MVP_WORKING_LOCALLY",
+  "architecture_audit": {
+    "reused_unmodified_behavior": [
+      "candidate_profile.py",
+      "resume_extractor.py",
+      "search_worker.py",
+      "generate_run_report.py",
+      "source_registry.py",
+      "job_ranking.py",
+      "query_planner.py"
+    ],
+    "additive_only_changes": {
+      "scripts/search_profile.py": "added optional target_roles_override/target_locations_override/work_models_override params to build_search_profile(), default None = unchanged behavior",
+      "scripts/search_submission.py": "same three overrides threaded through build_search_plan() and submit_search()",
+      "proof_zero_regression": "all 25 pre-existing scripts/test_search_submission.py tests still pass unmodified"
+    },
+    "gap_found": "no existing mechanism supported multiple independent saved searches with different target_roles/target_locations for one candidate -- fixed via the override params plus new additive saved_searches/saved_search_runs tables"
+  },
+  "new_files": {
+    "api": ["__init__.py", "db.py", "schemas.py", "profile_store.py", "search_store.py", "results_store.py", "main.py"],
+    "scripts": ["init_dev_db.py", "migrate_v3_saved_searches.py", "test_phase9_api.py"],
+    "web": ["index.html", "profile.html", "search_new.html", "dashboard.html", "results.html", "app.js", "style.css"],
+    "total_lines": 2546
+  },
+  "database": {
+    "dev_db_path": "data/applications/jobos_dev.db",
+    "new_tables": ["saved_searches", "saved_search_runs"],
+    "production_db_touched": false,
+    "production_sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "production_sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "production_size_bytes": 114688,
+    "production_row_counts_unchanged": {
+      "candidates": 1,
+      "candidate_search_profile": 1,
+      "jobs": 9,
+      "candidate_job_matches": 0,
+      "search_runs": 0,
+      "search_queue": 0
+    }
+  },
+  "api_endpoints": [
+    "POST /api/candidates",
+    "GET /api/candidates/{id}",
+    "GET /api/candidates/{id}/profile",
+    "PUT /api/candidates/{id}/profile",
+    "POST /api/candidates/{id}/profile/confirm",
+    "POST /api/candidates/{id}/resume",
+    "GET /api/sources",
+    "POST /api/candidates/{id}/searches",
+    "GET /api/candidates/{id}/searches",
+    "GET /api/searches/{id}",
+    "PUT /api/searches/{id}",
+    "DELETE /api/searches/{id}",
+    "POST /api/searches/{id}/run",
+    "GET /api/runs/{id}",
+    "GET /api/searches/{id}/results",
+    "GET /api/candidates/{id}/report",
+    "GET /api/candidates/{id}/dashboard"
+  ],
+  "web_pages": ["/", "/profile", "/searches/new", "/dashboard", "/searches/{id}/results"],
+  "execution_model": {
+    "run_endpoint_blocking": false,
+    "mechanism": "threading.Thread running search_worker.run_once(search_run_id=...) in the background; POST returns {run_id, status:QUEUED} immediately; GET /api/runs/{id} polls search_runs.status directly (QUEUED/RUNNING/COMPLETED/PARTIAL/BLOCKED/FAILED, no new vocabulary invented)"
+  },
+  "genericity_test": {
+    "personas_tested": [
+      {"key": "A", "title": "Senior SRE", "location": "Bangalore", "years": 11},
+      {"key": "B", "title": "Senior Java Developer", "location": "Pune", "years": 8},
+      {"key": "C", "title": "Product Manager", "location": "Hyderabad", "years": 6},
+      {"key": "D", "title": "Data Scientist", "location": "Remote", "years": 4, "resume": false}
+    ],
+    "same_code_path_verified": true,
+    "no_hardcoded_role_or_location_in_api_or_web": true,
+    "live_network_calls": 0
+  },
+  "test_results": {
+    "new_test_file": "scripts/test_phase9_api.py",
+    "new_test_checks_passed": 58,
+    "new_test_checks_failed": 0,
+    "existing_test_files_run": 51,
+    "existing_test_files_passed": 51,
+    "existing_test_files_skipped_documented_live_network": [
+      "test_naukri_adapter.py",
+      "test_live_naukri_score_audit.py"
+    ],
+    "regressions": 0
+  },
+  "security_checks_covered": [
+    "empty candidate name -> 422",
+    "empty target_roles -> 422",
+    "negative salary -> 422",
+    "NOT_ENABLED source (HIRIST) requested -> 400",
+    "unknown candidate_id -> 404",
+    "unknown saved_search_id -> 404",
+    "unknown run_id -> 404",
+    "non-PDF resume upload -> 400",
+    "path-traversal-style resume filename -> server-generated UUID filename used, no traversal",
+    "malformed JSON body -> 422",
+    "path-traversal-style candidate_id in URL -> 404",
+    "no client-controlled DB path anywhere",
+    "no raw SQL built from client input (parameterized queries only)"
+  ],
+  "no_auto_apply_audit": {
+    "method": "grep api/ and web/ for submit_application/apply_to_job/auto_apply",
+    "matches_found": 0,
+    "only_job_action_available": "external [Open Job] link (target=_blank) to the job's own source URL"
+  },
+  "sources_exposed_to_gui": {
+    "enabled": ["NAUKRI"],
+    "not_enabled_confirmed_excluded": ["HIRIST", "LINKEDIN", "INDEED", "FOUNDIT", "INSTAHYRE", "CUTSHORT", "WELLFOUND", "SHINE", "TIMESJOBS", "IIMJOBS", "CAREER_PAGE"]
+  },
+  "launchd_activated": false,
+  "applications_submitted": 0,
+  "hirist_enabled": false,
+  "linkedin_enabled": false,
+  "stopped_after_phase_9": true
+}

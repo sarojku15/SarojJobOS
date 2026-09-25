@@ -1,0 +1,7 @@
+{
+  "source": "NAUKRI",
+  "url": "https://www.naukri.com/job-listings-site-reliability-engineer-tata-consultancy-services-bengaluru-8-to-10-years-190626026419",
+  "expected_reachable": false,
+  "expected_block_reason": "UNKNOWN_BLOCK",
+  "detection_basis": "Title and body contain 'Access Denied'; edgesuite.net reference indicates an Akamai/WAF edge-level block, not a Naukri-specific login wall, CAPTCHA widget, or maintenance banner."
+}

@@ -1,0 +1,58 @@
+<!--
+REAL DATA fixture (unlike this directory's other files, which are
+synthetic). This is the VERBATIM JSON-LD payload from Phase 6 Step 9's
+one real, untruncated, explicitly-authorized live capture of
+https://www.hirist.tech/search/senior-devops-engineer-jobs?locations=Bengaluru
+(see data/reports/hirist_step9_raw_capture.html, the original full raw
+HTML, and data/reports/hirist_raw_payload_capture.md for the full
+evidence trail). Reproduced here, offline, as a standing regression
+fixture for Phase 8's Hirist offline gate
+(data/reports/phase8_multisource_validation.md) -- specifically to
+demonstrate, with REAL (not invented) data, that the "name" field
+mixes at least three conventions with no deterministic way to tell
+them apart:
+  1. "Company - Title"                    (e.g. entry 1, 4, 7, 15, 16)
+  2. bare "Title" with NO company at all   (e.g. entries 2, 12, 20)
+  3. "Company - Title - Tags/Skills"       (e.g. entries 8, 9, 10, 11)
+Entries 2 and 20 are IDENTICAL bare titles that the current parser's
+"exactly one ' - ' occurrence" rule incorrectly splits as if they were
+convention 1, producing a real, confirmed-wrong company/title pair
+(company="Senior DevOps Engineer", title="AWS & Kubernetes") -- this
+is not a hypothetical, it is exactly what happened live, twice, in
+this same captured page.
+-->
+<!DOCTYPE html><html lang="en"><head>
+<title>Search for - Senior Devops Engineer Jobs | hirist.tech</title>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "ItemList",
+  "name": "Search for - Senior Devops Engineer Jobs",
+  "numberOfItems": 20,
+  "itemListElement": [
+    {"@type": "ListItem", "position": 1, "name": "Verint - Senior DevOps Engineer", "url": "https://www.hirist.tech/j/verint-senior-dev-ops-engineer-1672606"},
+    {"@type": "ListItem", "position": 2, "name": "Senior DevOps Engineer - AWS & Kubernetes", "url": "https://www.hirist.tech/j/senior-dev-ops-engineer-aws-and-kubernetes-1672338"},
+    {"@type": "ListItem", "position": 3, "name": "Vedantu Innovations - Senior DevOps & SecOps Engineer", "url": "https://www.hirist.tech/j/vedantu-innovations-senior-dev-ops-and-sec-ops-engineer-1672535"},
+    {"@type": "ListItem", "position": 4, "name": "NTT DATA - Senior DevOps Engineer", "url": "https://www.hirist.tech/j/ntt-data-senior-dev-ops-engineer-1670149"},
+    {"@type": "ListItem", "position": 5, "name": "SatSure - Senior Cloud/DevOps Engineer", "url": "https://www.hirist.tech/j/sat-sure-senior-cloud-dev-ops-engineer-1670842"},
+    {"@type": "ListItem", "position": 6, "name": "Verint - Senior Software Engineer - DevOps", "url": "https://www.hirist.tech/j/verint-senior-software-engineer-dev-ops-1672604"},
+    {"@type": "ListItem", "position": 7, "name": "Lucideus - Senior DevOps Engineer", "url": "https://www.hirist.tech/j/lucideus-senior-dev-ops-engineer-1672519"},
+    {"@type": "ListItem", "position": 8, "name": "EXL - Senior DevOps Engineer - Cloud Architecture & Infrastructure", "url": "https://www.hirist.tech/j/exl-senior-dev-ops-engineer-cloud-architecture-and-infrastructure-1668805"},
+    {"@type": "ListItem", "position": 9, "name": "Appzlogic Mobility - Senior DevOps Engineer - GCP/GKE", "url": "https://www.hirist.tech/j/appzlogic-mobility-senior-dev-ops-engineer-gcp-gke-1672633"},
+    {"@type": "ListItem", "position": 10, "name": "MoveInSync - Senior DevOps Engineer - AWS Infrastructure", "url": "https://www.hirist.tech/j/move-in-sync-senior-dev-ops-engineer-aws-infrastructure-1668654"},
+    {"@type": "ListItem", "position": 11, "name": "Optum - Senior DevOps Engineer - AWS/Azure/Google Cloud Platform", "url": "https://www.hirist.tech/j/optum-senior-dev-ops-engineer-aws-azure-google-cloud-platform-1666517"},
+    {"@type": "ListItem", "position": 12, "name": "Senior DevOps Engineer - Cloud Infrastructure", "url": "https://www.hirist.tech/j/senior-dev-ops-engineer-cloud-infrastructure-1665020"},
+    {"@type": "ListItem", "position": 13, "name": "Opstree Solutions - Senior DevOps/SRE Engineer - Cloud Infrastructure", "url": "https://www.hirist.tech/j/opstree-solutions-senior-dev-ops-sre-engineer-cloud-infrastructure-1670073"},
+    {"@type": "ListItem", "position": 14, "name": "Moody's - Senior Software Engineer - DevOps & Cloud Engineering", "url": "https://www.hirist.tech/j/moodys-senior-software-engineer-dev-ops-and-cloud-engineering-1672889"},
+    {"@type": "ListItem", "position": 15, "name": "Atyeti - Senior DevOps Engineer", "url": "https://www.hirist.tech/j/atyeti-senior-dev-ops-engineer-1671255"},
+    {"@type": "ListItem", "position": 16, "name": "CG-VAK - Senior DevOps Engineer", "url": "https://www.hirist.tech/j/cg-vak-senior-dev-ops-engineer-1672799"},
+    {"@type": "ListItem", "position": 17, "name": "ZeMoSo Technologies - Senior DevOps Engineer - AWS", "url": "https://www.hirist.tech/j/ze-mo-so-technologies-senior-dev-ops-engineer-aws-1672158"},
+    {"@type": "ListItem", "position": 18, "name": "RHIA - Senior DevOps Engineer - Cloud Infrastructure", "url": "https://www.hirist.tech/j/rhia-senior-dev-ops-engineer-cloud-infrastructure-1671644"},
+    {"@type": "ListItem", "position": 19, "name": "Normec Verifavia - Senior DevOps Engineer - Cloud Infrastructure", "url": "https://www.hirist.tech/j/normec-verifavia-senior-dev-ops-engineer-cloud-infrastructure-1672687"},
+    {"@type": "ListItem", "position": 20, "name": "Senior DevOps Engineer - AWS & Kubernetes", "url": "https://www.hirist.tech/j/senior-dev-ops-engineer-aws-and-kubernetes-1669811"}
+  ]
+}
+</script>
+</head><body>
+<h1>Senior Devops Engineer Jobs</h1>
+</body></html>

@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Job Search OS — Searches</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<header>
+  <span class="brand">Job Search OS</span>
+  <a href="/">Home</a>
+  <a href="/profile">Profile</a>
+  <a href="/searches" class="active">Searches</a>
+  <a href="/dashboard">Dashboard</a>
+</header>
+<main>
+  <h1>Your saved searches</h1>
+  <div id="msg"></div>
+  <div class="card">
+    <div id="list"><div class="loading-state">Loading...</div></div>
+    <button onclick="window.location.href='/searches/new'">+ New search</button>
+  </div>
+</main>
+<script src="/static/app.js"></script>
+<script>
+async function load() {
+  const msg = document.getElementById("msg");
+  const list = document.getElementById("list");
+
+  const candidateId = await requireActiveCandidateOrRedirect();
+  if (!candidateId) return;
+
+  try {
+    const { searches } = await api(`/api/candidates/${candidateId}/searches`);
+    if (!searches.length) {
+      showEmpty(list, "No saved searches yet.");
+      return;
+    }
+    list.innerHTML = searches
+      .map(
+        (s) => `
+          <div class="search-list-item">
+            <div>
+              <b><a href="/searches/${s.saved_search_id}" style="color:inherit;text-decoration:none">${escapeHtml(s.name)}</a></b>
+              <div class="meta">${escapeHtml(s.target_roles.join(", "))} &mdash; ${escapeHtml(s.target_locations.join(", "))}</div>
+              <div class="meta">Sources: ${escapeHtml((s.sources || []).join(", ") || "(default enabled sources)")} &middot; Min score: ${s.minimum_match_score ?? "70"} &middot; Freshness: ${s.max_job_age_days ?? "-"}d</div>
+            </div>
+            <div>
+              <button class="secondary small" onclick="window.location.href='/searches/${s.saved_search_id}'">Open</button>
+            </div>
+          </div>
+        `
+      )
+      .join("");
+  } catch (err) {
+    showError(msg, err);
+  }
+}
+
+load();
+</script>
+</body>
+</html>

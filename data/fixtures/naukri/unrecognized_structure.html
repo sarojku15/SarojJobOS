@@ -1,0 +1,21 @@
+<!--
+  SYNTHETIC MINIMAL FIXTURE -- NOT a captured live Naukri page.
+
+  Exercises naukri_parser.classify_search_page()'s PARSE_FAILURE branch:
+  a reachable page that is neither a recognized block/access-denied page,
+  nor a recognized Naukri search-results shell (no id="jobs-list-header" /
+  id="listContainer" markers), nor a recognized challenge/interstitial
+  (no "checking your browser" style evidence). This is the deliberate
+  "none of the above" case: completely generic, unrecognized markup with
+  zero job-listing links. classify_search_page() MUST NOT classify this as
+  VALID_EMPTY_RESULT -- that is the specific safety rule this fixture
+  exists to guard.
+-->
+<html lang="en">
+<head>
+<title>Untitled</title>
+</head>
+<body>
+<p>Hello world.</p>
+</body>
+</html>

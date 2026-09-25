@@ -1,0 +1,134 @@
+{
+  "report": "phase14_2_multi_provider_search",
+  "generated": "2026-09-21",
+  "objective": "Replace sole dependence on SERPER_API_KEY with a configurable multi-provider search API pool (You.com, Tavily, Exa, Brave, Serper) with automatic priority-ordered failover, feeding the same existing JobOS pipeline built in Phase 14 -- no redesign of that architecture.",
+
+  "provider_configured": {"you": true, "tavily": false, "exa": false, "brave": false, "serper": false},
+  "provider_configured_note": "Updated by the GUI provider key hot-refresh fix below -- 'you' was false at this report's original writing; the user has since successfully saved a real You.com key through the GUI, which previously appeared to silently fail due to the bug documented in gui_provider_key_hot_refresh_fix.",
+  "any_provider_configured": true,
+  "live_activation_note": "You.com is now configured via the GUI. No live discovery search has been run yet in this session -- see gui_provider_key_hot_refresh_fix's own scope note. Tavily/Exa/Brave/Serper remain unconfigured.",
+
+  "provider_priority_default": ["you", "tavily", "exa", "brave", "serper"],
+  "provider_statuses": {"you": "NOT_CONFIGURED", "tavily": "NOT_CONFIGURED", "exa": "NOT_CONFIGURED", "brave": "NOT_CONFIGURED", "serper": "NOT_CONFIGURED"},
+  "provider_requests": {"you": 0, "tavily": 0, "exa": 0, "brave": 0, "serper": 0},
+  "provider_successes": {"you": 0, "tavily": 0, "exa": 0, "brave": 0, "serper": 0},
+  "provider_quota_failures": {"you": 0, "tavily": 0, "exa": 0, "brave": 0, "serper": 0},
+  "provider_auth_failures": {"you": 0, "tavily": 0, "exa": 0, "brave": 0, "serper": 0},
+  "provider_rate_limits": {"you": 0, "tavily": 0, "exa": 0, "brave": 0, "serper": 0},
+  "failover_events": [],
+  "per_provider_result_counts": {"you": 0, "tavily": 0, "exa": 0, "brave": 0, "serper": 0},
+  "per_source_result_counts": {"LINKEDIN": 0, "INDEED": 0, "FOUNDIT": 0, "INSTAHYRE": 0, "CUTSHORT": 0, "WELLFOUND": 0, "SHINE": 0},
+  "raw_jobs": 0,
+  "normalized_jobs": 0,
+  "duplicates": 0,
+  "eligible_jobs": 0,
+  "scored_jobs": 0,
+  "apply_today": 0,
+  "unknown_freshness": 0,
+  "report_path": null,
+  "live_run_note": "All of the counts/events above are 0/empty because no live provider call was made this phase -- no *_API_KEY is present in this environment. These are deliberately NOT the offline test-fixture numbers (see offline_validation below), to avoid presenting test data as a live result.",
+
+  "production_db_sha_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+  "production_db_sha_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+  "production_db_byte_identical": true,
+  "production_db_row_counts": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+
+  "full_test_count": {"files": 64, "result": "all 64 files exit 0 (63 pre-existing + this phase's new test_phase14_2_multi_provider.py, 65 checks, 0 failed)"},
+
+  "scheduler_changed": false,
+  "auto_apply_changed": false,
+  "restricted_board_pages_fetched_directly": false,
+  "production_db_modified": false,
+
+  "env_file_integrity": "The real project .env was byte-identical before and after every test run in this phase (verified explicitly in test_phase14_2_multi_provider.py, part 21, via a temp backup/restore around all live .env-mutating API calls).",
+
+  "offline_validation": {
+    "note": "65 offline checks in scripts/test_phase14_2_multi_provider.py, zero real network calls anywhere -- fake env vars only make is_provider_configured() return True; every actual .search() call goes through an in-file fake provider class or a monkeypatched search_provider.construct_provider(), never a real HTTP request.",
+    "covered": [
+      "provider selection respects priority order + configured-key + GUI-disabled + local-budget filtering",
+      "missing key excludes a provider entirely",
+      "GUI-set enable/disable overrides respected",
+      "first eligible provider succeeds -> used directly, no unnecessary calls to later providers",
+      "empty-but-successful result is returned as-is and does NOT trigger failover",
+      "QUOTA_EXHAUSTED -> failover to next provider, local status recorded",
+      "AUTH_FAILED -> failover to next provider, local status recorded",
+      "RATE_LIMITED (after the provider's own internal retry loop) -> failover",
+      "SERVER_ERROR/5xx (after internal retries) -> failover",
+      "all providers exhausted -> SearchProviderPoolExhausted, never a fabricated result",
+      "zero configured providers -> SearchProviderPoolExhausted, never a fabricated result",
+      "local usage counters accumulate correctly per outcome type",
+      "daily counter window roll-over resets correctly",
+      "monthly counter window roll-over resets correctly",
+      "local advisory budget ceiling (max_daily) correctly blocks/unblocks a provider, only when explicitly configured",
+      "discovery_source correctly names the ACTUAL provider that answered (e.g. SEARCH_PROVIDER:YOU), not hardcoded to Serper",
+      "discovery_query is preserved verbatim on the job record",
+      "source/job_source still carry the real board name (e.g. LINKEDIN), never the provider name",
+      "all seven restricted-source adapters route through the identical manager/injection mechanism",
+      "ReplayProvider/RecordingProvider (Phase 14) still work unchanged",
+      "API key masking: only the last 4 characters are ever shown, full value never returned by any endpoint response",
+      "env_config.write_env_key()/remove_env_key() correctly persist to a .env-shaped file AND update os.environ, without touching any file outside the temp test directory or the real .env (backed up/restored around the one test that does touch the real .env)",
+      "the generated Excel report shows the correct, dynamic Discovered_Via value for a non-Serper provider (EXA), proving attribution is genuinely dynamic",
+      "full GET/POST/DELETE settings API surface exercised via FastAPI TestClient against a temp dev DB"
+    ]
+  },
+
+  "new_files": [
+    "scripts/search_provider_usage_store.py",
+    "scripts/search_provider_settings_store.py",
+    "scripts/search_provider_manager.py",
+    "scripts/env_config.py",
+    "api/search_provider_settings_api.py",
+    "web/settings_search_providers.html",
+    "scripts/test_phase14_2_multi_provider.py"
+  ],
+  "modified_files": [
+    "scripts/search_provider.py (extended with YouProvider/TavilyProvider/ExaProvider/BraveProvider, ProviderErrorType/ProviderSearchError, shared retry+classification helper -- SerperProvider/RecordingProvider/ReplayProvider unchanged in behavior)",
+    "scripts/search_provider_adapter.py (now resolves via SearchProviderManager when no provider is explicitly injected; status checks the whole pool, not only SERPER_API_KEY; discovery_source names the actual answering provider)",
+    "scripts/source_capabilities.py (search_provider_active_provider/search_provider_active_provider_display added -- still one row per board, *_SEARCH registry keys still hidden from the GUI-facing listing)",
+    "api/main.py (7 new /api/settings/search-providers routes + /settings/search-providers page route)",
+    "api/schemas.py (SearchProviderOrderIn/SearchProviderKeyIn/SearchProviderResetUsageIn)",
+    "web/dashboard.html (link to the new Settings page)",
+    "scripts/test_phase14_search_provider.py (1 assertion updated: SerperProvider's persistent-timeout failure now raises a classified ProviderSearchError instead of a plain RuntimeError -- a deliberate upgrade, not a regression)"
+  ],
+  "not_modified": [
+    "restricted_source_registry.py (reused unchanged, per explicit instruction)",
+    "scripts/score_job.py, config/profile.json",
+    "scripts/naukri_adapter.py / hirist_adapter.py / iimjobs_adapter.py / apna_adapter.py",
+    "scripts/cross_source_dedup.py / canonical_job.py / freshness.py / job_eligibility.py",
+    "generate_run_report.py (Phase 14's Discovered_Via/Discovery_Query/Completeness columns already display whatever discovery_source string is stored -- zero further change needed for dynamic provider attribution to work)"
+  ],
+
+  "architectural_notes": [
+    "SearchProviderManager (scripts/search_provider_manager.py) is the ONE place failover policy lives. search_provider_adapter.py's seven adapters call into it only when no explicit provider has been injected via set_search_provider() -- that injection hook (unchanged from Phase 14) still governs every test and any future controlled live-validation run, giving deterministic, single-provider behavior on demand.",
+    "API keys are never stored anywhere but this project's own pre-existing, git-ignored .env file (scripts/env_config.py) -- never the production SQLite DB, never any candidate/job/candidate_job_matches row, never echoed back by any API response (only a last-4-characters mask).",
+    "Local usage/settings state lives in two small, git-ignored JSON files under data/applications/ (search_provider_usage.json, search_provider_settings.json) -- structurally identical in spirit to how Phase 14's discovery metadata lives in the jobs table, but deliberately kept OUT of the production job/application data model per explicit instruction.",
+    "SUPERSEDED by gui_provider_key_hot_refresh_fix below: a GUI-saved key now takes effect for BOTH provider-eligibility checks AND the seven adapters' own AdapterStatus (the discover_from_sources() pre-flight gate) immediately, with no restart required -- see that section for exactly how."
+  ],
+
+  "gui_provider_key_hot_refresh_fix": {
+    "reported_symptom": "Entering a You.com key and clicking 'Save key' did not result in You.com becoming CONFIGURED; the page kept showing 'You.com: NOT_CONFIGURED -- No API key configured for this provider.'",
+    "root_cause": "A pure frontend bug in web/settings_search_providers.html. The Save-key click handler looked up its own input element LAZILY inside the click callback via row.querySelector('.p-key-input'). `row` is a DocumentFragment (template.content.cloneNode(true)); by click time, content.appendChild(row) (called once, at the end of render(), after every handler is wired) had already MOVED row's children into the live document, leaving the fragment empty. The lazy lookup returned null, and `input.value` threw an uncaught TypeError BEFORE the API call was ever made -- so .env was never written and no error was ever shown (the exception happened before the try/catch). Confirmed directly via a real Playwright session (page.on('pageerror') captured the exact TypeError) and via a parallel curl diagnostic proving the BACKEND was already correct all along (write + os.environ update + immediate GET reflecting configured:true, same process, no restart).",
+    "exact_fix": "Capture the input element reference ONCE at render time (const keyInput = row.querySelector('.p-key-input'), evaluated before appendChild moves the fragment's children) and reference that captured variable inside the click handler instead of re-querying the now-empty `row`.",
+    "second_gap_closed": "search_provider_adapter.SearchProviderAdapterBase gained an __init__ that sets an INSTANCE-level `status` (AdapterStatus.ENABLED if get_configured_providers() else NOT_ENABLED), recomputed fresh on every construction. source_registry.get_adapter(source) always constructs a fresh instance, so discover_from_sources()'s pre-flight gate now picks up a newly-saved key on the very next real search run, no restart -- without touching the class-level `.status` other code (source_capabilities.py's generic helper, source_registry.get_adapter_status()) still reads for every other adapter.",
+    "save_test": "scripts/test_phase14_2_hot_refresh.py: saving a fake key makes is_provider_configured('you') True in the same process immediately; SearchProviderManager.eligible_providers() and a freshly-constructed adapter's own .status both confirm ENABLED right after -- no restart.",
+    "remove_test": "Same file: removing the key immediately flips is_provider_configured('you') back to False; SearchProviderManager immediately excludes it; a freshly-constructed adapter's .status immediately reads NOT_ENABLED again.",
+    "provider_manager_refresh_test": "Replacing a fake key three times in a row proved the VERY NEXT SearchProviderManager.search() call always sees the current value -- no cached provider instance anywhere in the construction path.",
+    "api_immediacy_test": "Via a real FastAPI TestClient: GET /api/settings/search-providers shows configured:true immediately after POST .../key; GET /api/sources shows search_provider_status=AVAILABLE, search_provider=YOU, final_status=AVAILABLE_VIA_SEARCH_PROVIDER for every restricted board immediately after, and reverts immediately after DELETE .../key -- no restart in either direction.",
+    "browser_smoke_test": "Real Chromium (Playwright) session against the live dev server with a fake key: NOT_CONFIGURED -> entered key -> Save -> page state reload -> CONFIGURED (bug fixed, previously stayed NOT_CONFIGURED) -> raw key never appeared in page HTML -> Remove -> back to NOT_CONFIGURED. Zero uncaught page errors (previously the exact TypeError).",
+    "incident_disclosure": "This browser smoke test discovered the real project .env already contained the user's genuine You.com API key (evidently saved through a means outside the broken GUI). The smoke test's own Remove-key step, run against the shared live dev server, deleted that real key as an unintended side effect of testing the removal flow. It was recovered from this session's own prior diagnostic output and restored via the real POST .../key endpoint (confirmed via GET .../search-providers: configured:true, masked value ending in the same last 4 characters as the original). All further destructive UI testing in this fix used an isolated .env copy exclusively.",
+    "test_adjustment": "test_phase14_search_provider.py's existing 'NOT_ENABLED adapter is skipped' check previously simulated NOT_ENABLED by subclassing SearchProviderAdapterBase with a class-level status override -- now correctly superseded by the new instance-level, live-configured-pool status. Fixed by using a plain JobSourceAdapter subclass instead, since that test's actual target (discover_from_sources()'s generic skip mechanism) never depended on the search-provider family specifically. Not a regression.",
+    "full_test_count": {"files": 66, "result": "all 66 files exit 0 (65 pre-existing + this fix's new test_phase14_2_hot_refresh.py, 26 checks, 0 failed)"},
+    "production_db_sha_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "production_db_sha_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "production_db_byte_identical": true,
+    "scheduler_changed": false,
+    "auto_apply_changed": false,
+    "restricted_board_pages_fetched_directly": false,
+    "new_files": ["scripts/test_phase14_2_hot_refresh.py"],
+    "modified_files": [
+      "web/settings_search_providers.html (the actual bug fix)",
+      "scripts/search_provider_adapter.py (SearchProviderAdapterBase.__init__, instance-level dynamic status)",
+      "scripts/test_phase14_search_provider.py (one test adjusted for the new instance-level status, not a regression)"
+    ]
+  }
+}

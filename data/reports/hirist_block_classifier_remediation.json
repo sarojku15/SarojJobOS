@@ -1,0 +1,110 @@
+{
+  "task": "Phase 6 Step 6 -- Hirist block-classifier remediation, offline only, zero network requests",
+  "live_network_requests_made": 0,
+  "tools_confirmed_not_invoked": ["Playwright", "hirist_fetcher.py", "hirist_fetch_bridge.js", "curl", "wget", "browser", "any HTTP client"],
+  "previous_false_positive_mechanism": {
+    "function": "hirist_parser._find_block_signal(html)",
+    "old_behavior": "checked _HARD_BLOCK_PHRASES/_CHALLENGE_PHRASES against html.lower() -- the entire raw HTML document, including <script> contents/attributes, <style> rules, HTML comments, and JSON-LD payload text",
+    "confirmed_precedent": "naukri_parser.py's own docstrings document a real prior incident: the literal word 'captcha' found inside a dormant .bot-guard-captcha CSS class on a genuinely valid Naukri page -- independently re-verified in Phase 6 Step 5 via grep against the real local fixture file"
+  },
+  "exact_remediation": {
+    "file_modified": "scripts/hirist_parser.py",
+    "function_modified": "_find_block_signal(html)",
+    "new_import": "from naukri_parser import _extract_visible_text",
+    "before_code": "lowered = html.lower(); for phrase in _HARD_BLOCK_PHRASES: if phrase in lowered: return (\"BLOCKED\", phrase); for phrase in _CHALLENGE_PHRASES: if phrase in lowered: return (\"SOFT_BLOCK_OR_CHALLENGE\", phrase); return (None, None)",
+    "after_code": "title, visible_text = _extract_visible_text(html); combined = f\"{title} {visible_text}\".lower(); for phrase in _HARD_BLOCK_PHRASES: if phrase in combined: return (\"BLOCKED\", phrase); for phrase in _CHALLENGE_PHRASES: if phrase in combined: return (\"SOFT_BLOCK_OR_CHALLENGE\", phrase); return (None, None)",
+    "naukri_parser_py_modified": false,
+    "reuse_mechanism": "plain Python import of naukri_parser._extract_visible_text() / _VisibleTextExtractor, used exactly as-is",
+    "reuse_justification": "the utility is genuinely source-agnostic (skips <script>/<style> content and never treats tag names/attributes as text) -- it knows nothing about Naukri's own page structure, so reusing it does not couple Hirist's parser to Naukri's",
+    "other_functions_in_hirist_parser_py_changed": false,
+    "classify_search_page_still_passes_full_raw_html_to_json_ld_extraction": true,
+    "block_challenge_taxonomy_changed": false,
+    "phrase_lists_themselves_changed": false,
+    "only_what_text_is_checked_changed": true
+  },
+  "why_safer": [
+    "structurally eliminates an entire class of false positive rather than trying to out-guess every noisy keyword in third-party scripts/CSS/JSON config",
+    "does not weaken genuine detection -- title and visible body text are both still checked exactly as before",
+    "reuses an already-proven, already-running-in-production mechanism (naukri_parser._VisibleTextExtractor) rather than inventing a new one",
+    "minimal blast radius: one function's internal implementation changed, one new read-only import, zero other files modified"
+  ],
+  "test_cases": {
+    "file": "scripts/test_hirist_block_classifier_forensics.py",
+    "action": "rewritten from a Step 5 characterization test (documenting the bug) to a Step 6 post-fix regression suite",
+    "check_count": 6,
+    "checks": [
+      {"id": "A", "scenario": "'captcha' only in CSS class name + <script src> attribute, valid ItemList present", "result": "no longer misclassified -- VALID_RESULTS, job still parsed"},
+      {"id": "A2", "scenario": "'captcha' only inside an HTML comment", "result": "correctly VALID_RESULTS -- comments already excluded by the underlying HTMLParser base behavior"},
+      {"id": "B", "scenario": "'captcha' genuinely present in visible body text", "result": "still correctly SOFT_BLOCK_OR_CHALLENGE -- detection not weakened"},
+      {"id": "C", "scenario": "existing hard-block fixture (blocked_access_denied.html)", "result": "still correctly BLOCKED with correct matched phrase"},
+      {"id": "D", "scenario": "existing valid Hirist fixtures (page1, page2, empty)", "result": "all still classify exactly as before, fully unaffected"},
+      {"id": "E", "scenario": "off-domain rel=next pagination protection", "result": "unchanged -- still refuses off-domain, same-domain extraction still works"}
+    ],
+    "requirement_F_no_naukri_regressions": {
+      "verified_by": "full standalone suite run, not a duplicated Naukri-specific test in this file",
+      "naukri_parser_py_modified": false,
+      "reason_no_naukri_test_could_be_affected": "naukri_parser.py was never modified"
+    },
+    "existing_hirist_adapter_tests_rerun": {
+      "file": "scripts/test_hirist_adapter.py",
+      "scenario_count": 14,
+      "result": "14/14 PASS against the fixed classifier, no changes needed to that file"
+    }
+  },
+  "confirmations": {
+    "zero_live_requests": true,
+    "hirist_status_not_enabled": true,
+    "hirist_capabilities_empty": true,
+    "production_db_untouched": true,
+    "naukri_behavior_unchanged": true,
+    "naukri_files_modified": [],
+    "source_registry_modified": false,
+    "search_profile_modified": false,
+    "search_worker_modified": false,
+    "scoring_modified": false,
+    "eligibility_modified": false,
+    "freshness_modified": false,
+    "deduplication_modified": false,
+    "hirist_adapter_py_modified": false,
+    "hirist_live_fetch_code_modified": false,
+    "block_challenge_taxonomy_unchanged": true,
+    "phrase_lists_unchanged": true
+  },
+  "verification_results": {
+    "test_hirist_block_classifier_forensics_py": "6/6 PASS",
+    "test_hirist_adapter_py": "14/14 PASS",
+    "full_standalone_suite": "PASS=43 FAIL=0",
+    "py_compile": "PY_COMPILE_ALL_OK",
+    "json_report_valid": true,
+    "hirist_status": "AdapterStatus.NOT_ENABLED",
+    "hirist_capabilities": [],
+    "default_sources": ["NAUKRI"]
+  },
+  "production_db": {
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "unchanged": true,
+    "opened_at_all": false
+  },
+  "files_changed": {
+    "modified": ["scripts/hirist_parser.py"],
+    "rewritten": ["scripts/test_hirist_block_classifier_forensics.py"],
+    "new": ["data/reports/hirist_block_classifier_remediation.md", "data/reports/hirist_block_classifier_remediation.json"],
+    "not_modified": [
+      "scripts/naukri_parser.py", "scripts/naukri_adapter.py",
+      "scripts/naukri_fetcher.py", "scripts/naukri_fetch_bridge.js",
+      "scripts/hirist_adapter.py", "scripts/hirist_fetcher.py",
+      "scripts/hirist_fetch_bridge.js", "scripts/source_registry.py",
+      "scripts/search_profile.py", "scripts/search_worker.py",
+      "scripts/score_job.py", "scripts/job_eligibility.py",
+      "scripts/experience_eligibility.py", "scripts/location_taxonomy.py",
+      "scripts/freshness.py", "scripts/discover_local.py",
+      "scripts/cross_source_dedup.py", "scripts/canonical_job.py",
+      "data/applications/jobos.db", "any LinkedIn file"
+    ]
+  },
+  "stopped_after_this_task": true,
+  "live_hirist_query_performed": false,
+  "hirist_enabled": false,
+  "awaiting_review_before_next_step": true
+}

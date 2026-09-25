@@ -1,0 +1,219 @@
+{
+  "task": "Phase 6 Step 2 -- Hirist offline integration design/specification only, no implementation",
+  "based_solely_on": [
+    "data/reports/hirist_phase6_inspection.md/.json (Phase 6 Step 1 factual findings)",
+    "existing, unmodified adapter architecture (source_adapter.py, source_registry.py, discover_local.py, canonical_job.py, freshness.py, location_taxonomy.py, experience_eligibility.py)"
+  ],
+  "live_requests_made": 0,
+  "hirist_status_after_this_task": {"status": "AdapterStatus.NOT_ENABLED", "capabilities": [], "changed_in_this_task": false},
+  "1_adapter_boundary": {
+    "proposed_class": "HiristAdapter(JobSourceAdapter) in scripts/hirist_adapter.py -- same existing file, extended in place",
+    "methods": ["health_check(self) -> AdapterHealth", "search(self, query: SearchQuery) -> list[dict]"],
+    "health_check_advisory_vs_hard_gate": "undetermined -- Phase 6 only visited one search page, never the homepage, so no evidence exists either way",
+    "responsibilities_in_scope": [
+      "constructing the search URL from a SearchQuery",
+      "fetching via an injectable fetcher object (mirrors NaukriAdapter(fetcher=...))",
+      "parsing primarily via the observed schema.org JSON-LD block; HTML-anchor fallback noted but not designed in detail (class-name heuristic was unreliable in Phase 6)",
+      "classifying the response into the Section 9 state set",
+      "mapping parsed data into the existing flat raw-job dict shape",
+      "declaring status/capabilities truthfully, only once demonstrated"
+    ],
+    "responsibilities_out_of_scope": [
+      "scoring (score_job.py)",
+      "eligibility (job_eligibility.py, experience_eligibility.py, location_taxonomy.py)",
+      "deduplication (discover_local.deduplicate(), cross_source_dedup.py)",
+      "freshness classification (freshness.py)",
+      "persistence (tracker.py, search_worker.py upsert functions)",
+      "application submission",
+      "retry/escalation decisions on a block"
+    ]
+  },
+  "2_capabilities": {
+    "SEARCH": {"classification": "potentially available", "basis": "one successful, populated search-results page observed; not confirmed due to only one query/role/location tested"},
+    "DETAIL": {"classification": "unknown", "basis": "no detail page visited in Phase 6"},
+    "NATIVE_FRESHNESS": {"classification": "unknown / not confirmed", "basis": "no freshness parameter attempted; nothing observed indicated a native mechanism"},
+    "PAGINATION": {"classification": "confirmed by inspection", "basis": "rel=\"next\" link tag directly observed in the live page's own HTML -- the only capability earning confirmed status in this table"},
+    "APPLICATION_URL": {"classification": "unknown", "basis": "not visible in captured excerpt; no detail page visited; robots.txt placed no restriction but that is not confirmation of availability"},
+    "COMPANY_METADATA": {"classification": "unknown", "basis": "company NAME observed in JSON-LD but excerpt cut off before any structured company object could be confirmed present or absent"},
+    "SALARY": {"classification": "unknown", "basis": "not visible in captured excerpt; schema.org JobPosting defines an optional baseSalary field in general, but whether Hirist populates it was not observed"},
+    "REMOTE_FILTER": {"classification": "unknown", "basis": "not tested at all in Phase 6"},
+    "LOCATION_FILTER": {"classification": "unknown", "basis": "explicitly NOT marked confirmed despite temptation to do so -- the page's own canonical tag dropped the locations query parameter used in the request, ambiguous evidence the parameter may be silently ignored; no differing baseline request was ever compared"},
+    "nothing_marked_confirmed_merely_because_common_on_job_sites": true
+  },
+  "3_search_mapping": {
+    "observed_urls": {
+      "search": "https://www.hirist.tech/search/senior-devops-engineer-jobs?locations=Bengaluru",
+      "canonical": "https://www.hirist.tech/search/senior-devops-engineer-jobs",
+      "pagination_next": "https://www.hirist.tech/search/senior-devops-engineer-jobs?page=2"
+    },
+    "role": {"proposed_mapping": "/search/<role-slug>-jobs path segment, slug transform analogous to naukri_adapter.py's _slugify()", "status": "observed URL shape returned real results for the one role tested; slug transform function itself is proposed, not separately re-verified for other roles"},
+    "location": {"proposed_mapping": "?locations=<value> query parameter", "status": "proposed only -- Phase 6 sent this parameter but never confirmed it changes results; a dedicated live comparison would be needed, not authorized by this design"},
+    "experience_years": {"proposed_mapping": "none proposed", "status": "no evidence of an experience-filter URL parameter observed or sought"},
+    "exclude_keywords": {"proposed_mapping": "client-side, post-fetch filter", "status": "no Hirist-side mechanism observed or presumed, same as the LinkedIn design's conclusion"},
+    "max_job_age_days": {"proposed_mapping": "not mapped", "status": "NATIVE_FRESHNESS unconfirmed; silently unsupported until/unless confirmed, matching existing None-means-unrestricted fallback discipline"},
+    "extra": {"proposed_mapping": "reserved escape hatch, e.g. extra['hirist_search_url'], same pattern as naukri_adapter.py's extra['naukri_search_url']"},
+    "pagination_as_search_input": "not a SearchQuery field today for any adapter; see Section 6"
+  },
+  "4_json_ld_extraction_design": {
+    "type_observed": "schema.org ItemList (and a separate BreadcrumbList, not job-listing data)",
+    "item_list_structure_confirmed": {"context": "https://schema.org", "type": "ItemList", "name_field_present": true, "numberOfItems_observed": 20, "itemListElement_present": true},
+    "job_level_fields_actually_observed": {
+      "position": "observed (position 1 shown)",
+      "name": "observed but only partially -- combined company+title string in one captured fragment (e.g. 'Verint - Senior ...'), truncated by the 4000-character capture bound"
+    },
+    "fields_not_captured_therefore_unknown": [
+      "stable per-item identifier (@id or similar)",
+      "per-item url field",
+      "structured company field beyond the plain-text name (e.g. hiringOrganization object)",
+      "datePosted / freshness field",
+      "description",
+      "employmentType",
+      "baseSalary",
+      "experienceRequirements",
+      "structured per-item location field"
+    ],
+    "name_field_delimiter_assumption": "the one observed example suggests a ' - ' delimiter between company and title, but this is a single, truncated data point, NOT confirmed as a general reliable convention",
+    "design_principle": "fail closed (raise a parse error) rather than guess a split point when the delimiter pattern doesn't match cleanly -- consistent with this project's existing fail-loud-don't-guess discipline",
+    "schema_org_fields_assumed_always_present": false,
+    "recommended_follow_up_not_performed": "a fresh, separately-authorized single live pass capturing the complete JSON-LD payload (no 4000-character bound) before any parser is written against assumed structure"
+  },
+  "5_normalized_job_mapping": {
+    "target_shape_source": "discover_local.normalize_job() -- unchanged, existing contract",
+    "only_strictly_required_fields": ["company", "title"],
+    "field_mapping": {
+      "source": {"proposed": "literal 'HIRIST'", "status": "certain"},
+      "company": {"proposed": "parsed from JSON-LD name string's presumed delimited prefix", "status": "derived, not directly confirmed"},
+      "title": {"proposed": "parsed from the same name string's remainder", "status": "derived, not directly confirmed"},
+      "location": {"proposed": "unknown at per-item level; fallback to query's own location input only if explicitly logged as a fallback, not real extraction", "status": "null/unknown until confirmed"},
+      "work_model": {"proposed": "defaults to empty string -> WorkModel.UNKNOWN, the existing safe default", "status": "unknown, no signal observed"},
+      "job_url": {"proposed": "unknown -- no per-item URL field confirmed in JSON-LD fragment; 20 HTML anchors counted but hrefs not extracted", "status": "unknown, needs confirmation"},
+      "application_url": {"proposed": "unknown", "status": "not observed"},
+      "posted_date": {"proposed": "unknown; if confirmed later, passed through as-is to existing freshness.classify_freshness()", "status": "not observed"},
+      "jd_text": {"proposed": "unknown, likely only on an unvisited detail page", "status": "not observed"},
+      "experience_required": {"proposed": "unknown", "status": "not observed"},
+      "mandatory_skills_preferred_skills": {"proposed": "empty lists (existing default) unless a skills-bearing field is confirmed", "status": "not observed"},
+      "experience_min_months": {"proposed": "omitted unless a numeric source field is confirmed", "status": "unknown"}
+    },
+    "unmapped_fields_destination": "canonical_job.py's existing, unmodified source_metadata catch-all",
+    "no_field_fabricated": true
+  },
+  "6_pagination": {
+    "mechanism": "directly observed rel=\"next\" link tag, href pattern ?page=N",
+    "first_page": "constructed search URL with no page parameter (implicitly page 1)",
+    "next_page_detection": "parse response HTML for <link rel=\"next\" href=\"...\">; if present, that href is the next page",
+    "stopping_condition": ["rel=\"next\" absent from a fetched page", "configured maximum-page safety limit reached", "a page returns zero new job items (defensive)"],
+    "duplicate_protection": "adapter-local tracking of job identifiers seen within a single search() call, in ADDITION to (not instead of) the existing, unmodified discover_local.deduplicate()",
+    "maximum_page_safety_limit": "no specific number proposed -- explicit, deferred implementation decision, no evidence yet about reasonable result-set sizes",
+    "interaction_with_existing_searchquery_limits": "would be the FIRST adapter-level pagination loop in this project (Naukri is page-1-only by design) -- a genuine, non-trivial architecture addition requiring its own explicit review at implementation time",
+    "implemented_in_this_task": false
+  },
+  "7_freshness": {
+    "native_freshness_observed": false,
+    "native_freshness_classification": "unknown / not confirmed",
+    "existing_pipeline_capability": "freshness.classify_freshness() already performs post-retrieval classification of any posted_date text into HOT/FRESH/AGING/OLD/UNKNOWN, entirely independent of whether the source supports a native date filter",
+    "would_apply_to_hirist_if_posted_date_confirmed": true,
+    "new_code_required_for_post_retrieval_classification": false,
+    "claims_hirist_supports_native_freshness_filter": false
+  },
+  "8_robots_policy_boundary": {
+    "robots_txt_accessible": true,
+    "jobs_search_paths_disallowed_for_generic_agents": false,
+    "sitemap_information_present": true,
+    "crawl_delay_observed": 10,
+    "crawl_delay_binding_ambiguous": true,
+    "exact_authorization_established": false,
+    "reason": "Terms of Service were not read or verified in Phase 6 or this step",
+    "robots_txt_converted_into_legal_conclusion": false
+  },
+  "9_error_status_model": {
+    "no_new_enum_values_proposed": true,
+    "mapping": [
+      {"condition": "real, non-empty JSON-LD ItemList with items", "state": "VALID_RESULTS", "behavior": "adapter returns parsed raw-job list"},
+      {"condition": "valid page but numberOfItems: 0 / empty itemListElement", "state": "VALID_EMPTY_RESULT", "behavior": "adapter returns []"},
+      {"condition": "login wall / access-denied / explicit block phrase", "state": "BLOCKED", "behavior": "AdapterBlockedError raised"},
+      {"condition": "ambiguous page, no clear result or block signal", "state": "SOFT_BLOCK_OR_CHALLENGE", "behavior": "AdapterBlockedError with BlockReason.UNKNOWN_BLOCK -- never silently reinterpreted as empty"},
+      {"condition": "JSON-LD missing, malformed, or unexpected shape", "state": "PARSE_FAILURE", "behavior": "AdapterTimeoutError, skips this one query only"},
+      {"condition": "HTTP failure (non-2xx, network error, timeout)", "state": "HTTP failure", "behavior": "AdapterTimeoutError, existing contract"},
+      {"condition": "pagination failure (missing rel=next, malformed next URL)", "state": "not a source-level failure", "behavior": "treated as no-more-pages unless first page itself fails to parse"}
+    ]
+  },
+  "10_offline_fixture_test_plan": {
+    "scenarios": [
+      "valid JSON-LD, multiple jobs",
+      "empty ItemList",
+      "malformed JSON",
+      "missing fields (name+position only, the one confirmed-minimal shape observed)",
+      "duplicate jobs (within page and across pages)",
+      "missing rel=next",
+      "pagination (page 1 -> page 2 boundary)",
+      "malformed next URL (unparseable or off-domain href)",
+      "HTTP 403/429/5xx",
+      "robots/policy metadata (Crawl-delay parsing, decoupled from live fetching)",
+      "schema changes (ItemList replaced by bare array, or name replaced by structured fields)"
+    ],
+    "all_static_zero_network": true
+  },
+  "11_authorization_enablement_gate": {
+    "conditions_all_required": [
+      "policy/Terms review -- Hirist's actual Terms of Service reviewed and understood",
+      "permitted automated access established -- documented basis for this project's specific intended use",
+      "rate/crawl-delay handling -- explicit, implemented minimum delay honoring Crawl-delay: 10 as a floor",
+      "offline parser fixtures -- all 11 Section 10 scenarios implemented and passing",
+      "adapter tests -- URL construction, SearchQuery mapping, error/status mapping green",
+      "one controlled, authorized live validation (single query)",
+      "multi-query validation (small, controlled batch)",
+      "production safety verification -- DB SHA/row-count checks before and after every live step",
+      "regression suite -- full existing suite plus new Hirist tests green, proof no other adapter changed",
+      "source health behavior -- health_check() advisory-vs-hard-gate question explicitly resolved with evidence"
+    ],
+    "only_then_may_status_become_enabled": true
+  },
+  "12_human_handoff_path": {
+    "requires_new_code": false,
+    "requires_new_schema": false,
+    "mechanism": [
+      "candidate finds a Hirist job themselves, supplies URL via existing data/inbox/job_input.txt / scripts/add_job.py (SOURCE: HIRIST already a valid free-text value)",
+      "normalization: existing, unmodified discover_local.normalize_job() handles it identically",
+      "deduplication: existing (source, job_id) identity via job_id_from_url() already prevents duplicate entry",
+      "eligibility: existing job_eligibility.py/experience_eligibility.py evaluate it identically",
+      "scoring: existing, unmodified score_job() scores it identically",
+      "application tracking: existing jobs/candidate_job_matches schema and status lifecycle already support it"
+    ],
+    "available_today_independent_of_enablement_gate": true
+  },
+  "files_changed": {
+    "new_report_files": [
+      "data/reports/hirist_phase6_offline_design.md",
+      "data/reports/hirist_phase6_offline_design.json"
+    ],
+    "new_test_file": ["scripts/test_hirist_phase6_offline_design.py"],
+    "production_files_modified": []
+  },
+  "not_modified": [
+    "scripts/source_registry.py", "scripts/search_profile.py",
+    "scripts/search_worker.py", "scripts/hirist_adapter.py",
+    "scripts/score_job.py", "scripts/job_eligibility.py",
+    "scripts/experience_eligibility.py", "scripts/location_taxonomy.py",
+    "scripts/freshness.py", "scripts/discover_local.py",
+    "scripts/cross_source_dedup.py", "scripts/canonical_job.py",
+    "config/profile.json", "data/applications/jobos.db",
+    "Naukri (any file or behavior)", "LinkedIn (any file, design, or behavior)"
+  ],
+  "verification": {
+    "new_test_file_result": "6/6 PASS",
+    "full_standalone_suite_run": true,
+    "py_compile_run": true,
+    "json_validation_run": true,
+    "hirist_status_verified_not_enabled": true,
+    "hirist_capabilities_verified_empty": true,
+    "default_sources_verified_naukri_only": true,
+    "production_db_sha_verified_unchanged": true,
+    "zero_live_network_requests": true,
+    "zero_detail_page_requests": true,
+    "zero_authentication": true,
+    "zero_application": true,
+    "zero_production_behavior_changes": true
+  },
+  "stopped_after_this_task": true,
+  "implementation_or_enablement_begun": false
+}

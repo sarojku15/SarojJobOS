@@ -1,0 +1,53 @@
+<!--
+SYNTHETIC fixture, NOT a real captured Hirist page. Constructed to
+match the exact structural shape Phase 6 Step 1 directly observed
+(schema.org ItemList JSON-LD, numberOfItems, per-item position/name,
+and a rel="next" pagination link) -- see
+data/reports/hirist_phase6_inspection.md. The real page's full
+JSON-LD payload was never fully captured (only a truncated excerpt);
+this fixture's exact field content is invented for offline test
+coverage, not a claim about the real site's current data.
+
+Includes one entry using the flat "name" field (the one shape Phase 6
+actually, directly observed: "Company - Title") and one entry using
+the nested "item" object (schema.org's standards-compliant
+JobPosting shape, NOT directly confirmed against the real site --
+exercised here only to prove the parser handles it defensively if
+present).
+-->
+<!DOCTYPE html><html lang="en"><head>
+<title>Search for - Senior Devops Engineer Jobs, 3441 Job Vacancies | hirist.tech</title>
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://www.hirist.tech/search/senior-devops-engineer-jobs">
+<link rel="next" href="https://www.hirist.tech/search/senior-devops-engineer-jobs?page=2">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"item":{"@id":"https://www.hirist.tech/","name":"Home"}}]}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "ItemList",
+  "name": "Search for - Senior Devops Engineer Jobs",
+  "numberOfItems": 2,
+  "itemListElement": [
+    {"@type": "ListItem", "position": 1, "name": "Verint - Senior DevOps Engineer"},
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "item": {
+        "@type": "JobPosting",
+        "title": "Lead Platform Engineer",
+        "hiringOrganization": {"@type": "Organization", "name": "Example Systems Pvt Ltd"},
+        "url": "https://www.hirist.tech/job-detail/lead-platform-engineer-12345",
+        "datePosted": "2026-09-18",
+        "description": "We are hiring a Lead Platform Engineer with Kubernetes and Terraform experience.",
+        "employmentType": "FULL_TIME",
+        "jobLocation": {"@type": "Place", "address": {"@type": "PostalAddress", "addressLocality": "Bengaluru"}}
+      }
+    }
+  ]
+}
+</script>
+</head><body>
+<h1>Senior Devops Engineer Jobs</h1>
+</body></html>

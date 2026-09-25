@@ -1,0 +1,177 @@
+{
+  "generated_at": "2026-09-25T19:27:05.846031+00:00",
+  "elapsed_seconds": 74.4,
+  "run_id": "7df3c4b4-3e19-4eb1-8b4d-dde27cac05cb",
+  "final_status": "COMPLETED",
+  "run_detail_sources": [
+    {
+      "id": 1,
+      "search_run_id": "7df3c4b4-3e19-4eb1-8b4d-dde27cac05cb",
+      "source": "APNA",
+      "attempted": true,
+      "started_at": "2026-09-25T19:25:51+00:00",
+      "completed_at": "2026-09-25T19:27:04+00:00",
+      "duration_ms": 73000,
+      "reachable": true,
+      "succeeded": true,
+      "raw_count": 75,
+      "eligible_count": 69,
+      "displayed_count": 69,
+      "status": "SUCCESS",
+      "error_type": null,
+      "error_message": null,
+      "details_json": "{\"detail_fetch_attempted\": 20, \"detail_fetch_succeeded\": 19, \"detail_fetch_failed\": 1}",
+      "created_at": "2026-09-25T19:27:04.244266+00:00",
+      "board": "APNA",
+      "details": {
+        "detail_fetch_attempted": 20,
+        "detail_fetch_succeeded": 19,
+        "detail_fetch_failed": 1
+      }
+    }
+  ],
+  "jobs_discovered": 75,
+  "jobs_eligible": 69,
+  "api_results_count": 69,
+  "total_apna_jobs_in_db": 75,
+  "apna_jobs_with_nonempty_jd_text": 19,
+  "sample_enriched_jobs": [
+    {
+      "job_id": "APNA-00582df1ed2bbe77",
+      "posted_date": "2026-09-24",
+      "experience_required": "Min. 2 years",
+      "jd_text_preview": "Site Engineer job opportunity."
+    },
+    {
+      "job_id": "APNA-04df26d0fbeaf9e9",
+      "posted_date": "2026-07-26",
+      "experience_required": "Min. 1 year",
+      "jd_text_preview": "Site Reliability Engineer - QLTY Evaluate and ensure availability of components within their teams and identify how to bring all services within SLO (99.XX) \u2022 Monitor systems for implemented automatio"
+    },
+    {
+      "job_id": "APNA-0880b7928800fb79",
+      "posted_date": "2026-09-11",
+      "experience_required": "Min. 0.5 years",
+      "jd_text_preview": "CONSTRUCITONS -SITE ENGINEER for Building Constructions 2-Wheeler Mandatory / Driving Licenece Mandatory Language: Hindi Mandatory Position: Site Engineer Department: Construction / Projects Location:"
+    },
+    {
+      "job_id": "APNA-1360ee3113777de1",
+      "posted_date": "2026-09-24",
+      "experience_required": "",
+      "jd_text_preview": "Job Description \u2013 Site Engineer Position Summary The Site Engineer is responsible for the execution and delivery of assigned projects across India. The role ensures work is completed as per approved d"
+    },
+    {
+      "job_id": "APNA-1ea1139bf9e40e5b",
+      "posted_date": "2026-09-18",
+      "experience_required": "Min. 1 year",
+      "jd_text_preview": "Job Summary We are looking for an experienced and responsible Civil Site Engineer to oversee and manage our company\u2019s own construction projects, including warehouse buildings, industrial structures, a"
+    }
+  ],
+  "sample_scores": [
+    {
+      "job_id": "APNA-04df26d0fbeaf9e9",
+      "title": "Site Reliability Engineer",
+      "company": "Infosys",
+      "score": 55,
+      "priority": "REJECT",
+      "matched_skills": [
+        "Core role alignment",
+        "SRE/DevOps responsibilities",
+        "Observability",
+        "Experience",
+        "Location",
+        "Overall/domain fit"
+      ],
+      "missing_skills": [
+        "AWS/Azure",
+        "Kubernetes",
+        "Terraform/IaC",
+        "CI/CD"
+      ]
+    },
+    {
+      "job_id": "APNA-f7e65b991100e9bf",
+      "title": "Site Engineer",
+      "company": "Trendcon Infra LLP",
+      "score": 35,
+      "priority": "REJECT",
+      "matched_skills": [
+        "Core role alignment",
+        "Observability",
+        "Experience",
+        "Location"
+      ],
+      "missing_skills": [
+        "SRE/DevOps responsibilities",
+        "AWS/Azure",
+        "Kubernetes",
+        "Terraform/IaC",
+        "CI/CD",
+        "Overall/domain fit"
+      ]
+    },
+    {
+      "job_id": "APNA-1360ee3113777de1",
+      "title": "Site Engineer",
+      "company": "Total Solutions Intec Private Limited",
+      "score": 33,
+      "priority": "REJECT",
+      "matched_skills": [
+        "Core role alignment",
+        "Experience requirement not specified",
+        "Location",
+        "Partial domain fit"
+      ],
+      "missing_skills": [
+        "SRE/DevOps responsibilities",
+        "AWS/Azure",
+        "Kubernetes",
+        "Terraform/IaC",
+        "CI/CD",
+        "Observability"
+      ]
+    },
+    {
+      "job_id": "APNA-62a66b5bb82c6604",
+      "title": "Site Civil Engineer",
+      "company": "Pragathi Enterprises",
+      "score": 33,
+      "priority": "REJECT",
+      "matched_skills": [
+        "Core role alignment",
+        "Experience requirement not specified",
+        "Location",
+        "Partial domain fit"
+      ],
+      "missing_skills": [
+        "SRE/DevOps responsibilities",
+        "AWS/Azure",
+        "Kubernetes",
+        "Terraform/IaC",
+        "CI/CD",
+        "Observability"
+      ]
+    },
+    {
+      "job_id": "APNA-235f962a1f346568",
+      "title": "Site Engineer",
+      "company": "Skyladder Builders",
+      "score": 30,
+      "priority": "REJECT",
+      "matched_skills": [
+        "Core role alignment",
+        "Experience requirement not specified",
+        "Location"
+      ],
+      "missing_skills": [
+        "SRE/DevOps responsibilities",
+        "AWS/Azure",
+        "Kubernetes",
+        "Terraform/IaC",
+        "CI/CD",
+        "Observability",
+        "Overall/domain fit"
+      ]
+    }
+  ]
+}

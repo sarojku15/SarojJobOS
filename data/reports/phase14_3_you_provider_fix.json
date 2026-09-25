@@ -1,0 +1,72 @@
+{
+  "report": "phase14_3_you_provider_fix",
+  "generated": "2026-09-21",
+  "objective": "Fix YouProvider's HTTP 403 by correcting the API integration against You.com's CURRENT documented Search API -- not a key-configuration problem, a wrong endpoint/method/request-shape problem.",
+
+  "1_old_endpoint_found": "GET https://api.ydc-index.io/search?query=...&num_web_results=... (query-string params, no JSON body, X-API-Key header only) -- an old/undocumented shape that returns HTTP 403 against a current You.com key.",
+  "2_new_endpoint": "https://ydc-index.io/v1/search",
+  "3_http_method": "POST (was GET)",
+  "4_auth_header": "X-API-Key: <key>, plus Content-Type: application/json (the old implementation never sent Content-Type since it had no JSON body)",
+  "5_env_variable_behavior": "YDC_API_KEY (You.com's own canonical name) is now preferred; the project's original YOU_API_KEY is kept as an automatic fallback for backward compatibility -- search_provider.get_provider_api_key('you') checks YDC_API_KEY first, then YOU_API_KEY. The existing Settings GUI's Save action still WRITES YOU_API_KEY (no migration of the save path), but reading now accepts either name transparently. Neither key is ever logged, printed, stored in the database, or included in any exception message.",
+
+  "6_403_response_before_fix": "HTTP 403 with no diagnostic detail captured at all (the old code never read the response body on error) -- surfaced to the user only as the bare status code.",
+  "7_403_response_after_fix": "N/A this run -- the corrected POST /v1/search request did NOT return a 403. It returned HTTP 200 with 5 real results. The response-body-capture mechanism for a 403 (Part 6) was still built and is verified with mocked 403 responses in the new test suite (captures the provider's own message, e.g. a simulated 'Missing required scopes', into ProviderSearchError.detail, never exposing the key).",
+
+  "8_provider_test_result": {
+    "provider": "you",
+    "query": "site:linkedin.com/jobs/view Site Reliability Engineer Bangalore",
+    "requested_count": 5,
+    "http_status": "200 (implicit -- no exception raised)",
+    "result_count": 5,
+    "first_urls": [
+      "https://in.linkedin.com/jobs/view/site-reliability-engineer-ii-db-at-sixt-research-development-india-3628987742",
+      "https://in.linkedin.com/jobs/view/associate-site-reliability-engineer-at-blackline-3144459838",
+      "https://in.linkedin.com/jobs/view/site-reliability-engineer-at-prosol-it-2803407748",
+      "https://in.linkedin.com/jobs/view/site-reliability-engineer-f2f-interview-bangalore-at-zettamine-labs-pvt-ltd-4452341912",
+      "https://in.linkedin.com/jobs/view/senior-site-reliability-engineer-at-nvidia-2996877120"
+    ],
+    "verified_via": ["a direct one-off diagnostic call to search_provider.YouProvider().search()", "the real Settings -> Test action (POST /api/settings/search-providers/you/test) against the live dev server, after the .env-loader fix below -- returned {\"status\": \"AVAILABLE\", \"detail\": \"Connection OK (1 result(s) returned)\"}"],
+    "note": "This was ONLY a provider-authentication/discovery test via You.com's own API. No LinkedIn page was fetched directly. No restricted-board network access occurred. The full seven-source live search was explicitly NOT run, per instruction."
+  },
+
+  "9_web_search_scope_missing": false,
+  "9_note": "The real, already-configured You.com key was valid and DID have Web Search API scope all along -- the 403 was caused entirely by calling the wrong (old, undocumented) endpoint with the wrong HTTP method, not by a scope/permission problem. No new key or scope change was needed.",
+
+  "10_failover_status": "Unchanged. SearchProviderManager (scripts/search_provider_manager.py) was not modified this fix -- YouProvider only needed to correctly implement its own API contract. The existing priority order (You -> Tavily -> Exa -> Brave -> Serper), AUTH_FAILED/QUOTA_EXHAUSTED/RATE_LIMITED/SERVER_ERROR failover-to-next-provider behavior, and 'empty results are not a failure' rule all verified still passing via the full existing Phase 14.2 test suite, unmodified.",
+
+  "11_test_count": {
+    "new_file": "scripts/test_phase14_3_you_provider.py",
+    "new_file_checks": "47 passed, 0 failed",
+    "full_suite_files": 67,
+    "full_suite_result": "all 67 files exit 0",
+    "note": "2 pre-existing tests needed a one-line fix, not because of a regression in the fix itself: this phase ALSO added a small .env loader at api/main.py's startup (see additional_fix_env_loader below), which meant the real .env's now-genuinely-present YOU_API_KEY started leaking into every test process that imports api.main, even ones that intentionally want a controlled/empty environment. Fixed by monkeypatching env_config.read_env_file() to return {} for the duration of that one import in each affected test -- the real .env file itself was never touched."
+  },
+
+  "production_db_sha_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+  "production_db_sha_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+  "production_db_byte_identical": true,
+
+  "scheduler_changed": false,
+  "auto_apply_changed": false,
+  "restricted_board_pages_fetched_directly": false,
+  "seven_board_live_search_run": false,
+
+  "additional_fix_env_loader": {
+    "why": "While performing the requested real provider test (Part 8), discovered that editing .py files during this fix (a normal, unavoidable part of delivering it) triggers uvicorn --reload's normal file-watcher restart. Nothing in this project ever loaded .env into a fresh process's os.environ, so a key saved via the GUI (which correctly writes .env AND updates os.environ for the process handling that one Save request) appeared to 'disappear' after any subsequent restart -- .env itself was never wrong, nothing was reading it back at startup.",
+    "fix": "api/main.py now loads .env into os.environ at import time, using os.environ.setdefault() (standard dotenv semantics -- never overrides a variable the real shell environment already set), before any other module that reads a *_API_KEY is imported.",
+    "scope_note": "Not explicitly requested by this phase's instructions, but directly needed to deliver on Part 8's own premise ('the user currently has a real You.com API key configured') via the actual GUI Test action, not just a bypass script -- and a small, low-risk, clearly-scoped addition."
+  },
+
+  "new_files": ["scripts/test_phase14_3_you_provider.py"],
+  "modified_files": [
+    "scripts/search_provider.py (YouProvider rewritten against the current documented API; PROVIDER_ENV_KEY_ALIASES/get_provider_api_key()/get_active_env_key_name() added for YDC_API_KEY/YOU_API_KEY fallback; _safe_error_detail() added to the shared retry helper so every provider, not just You, now captures a safe diagnostic message from an error response body)",
+    "api/search_provider_settings_api.py (list_provider_settings() now displays whichever env var is actually in use, via get_active_env_key_name(), instead of always assuming the canonical save-target name)",
+    "api/main.py (new: loads .env into os.environ at startup, setdefault-only)",
+    "scripts/test_phase14_2_capability_ui.py / test_phase14_2_hot_refresh.py (each neutralizes the new .env loader for one controlled import, via a monkeypatch on env_config.read_env_file -- never touches the real .env file; not a behavior regression, a test-isolation fix made necessary by the new loader)"
+  ],
+  "not_modified": [
+    "scripts/search_provider_manager.py (failover architecture untouched, per explicit instruction)",
+    "scripts/search_provider_adapter.py, restricted_source_registry.py",
+    "scripts/score_job.py, config/profile.json, the four direct adapters, the dedup/canonical/freshness/eligibility modules, generate_run_report.py"
+  ]
+}

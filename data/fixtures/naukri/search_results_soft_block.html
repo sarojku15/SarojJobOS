@@ -1,0 +1,26 @@
+<!--
+  SYNTHETIC MINIMAL FIXTURE -- NOT a captured live Naukri page.
+
+  Exercises naukri_parser.classify_search_page()'s SOFT_BLOCK_OR_CHALLENGE
+  branch: a page that is reachable (HTTP-level success, no
+  access-denied/WAF phrase from detect_block_reason()'s existing
+  _UNKNOWN_BLOCK_PHRASES list), but shows none of the structural shell
+  markers (id="jobs-list-header", id="listContainer") that a genuine
+  Naukri search-results page renders, and instead shows plain-language
+  evidence of a challenge/interstitial page (a "checking your browser"
+  style message). This represents the class of page a bot-mitigation
+  challenge/interstitial commonly shows -- it is not copied from, or
+  claimed to be, any real captured Naukri page.
+-->
+<html lang="en">
+<head>
+<title>Just a moment...</title>
+</head>
+<body>
+<div id="challenge-wrapper">
+  <p>Checking your browser before accessing naukri.com.</p>
+  <p>This process is automatic. Your browser will redirect to your requested content shortly.</p>
+  <p>Please wait while we verify you are human.</p>
+</div>
+</body>
+</html>

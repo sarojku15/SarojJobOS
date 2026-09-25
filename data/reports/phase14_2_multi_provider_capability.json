@@ -1,0 +1,73 @@
+{
+  "report": "phase14_2_multi_provider_capability",
+  "generated": "2026-09-21",
+  "objective": "Fix the source-capability UI so the seven restricted boards no longer show stale, pre-search-provider wording ('Automated discovery not authorized' etc.) once a search provider makes them usable -- aggregate direct-source capability + search-provider capability into one board-level capability record and wire the GUI to actually use it.",
+
+  "root_cause": "scripts/source_capabilities.py already computed final_status/search_provider_status/search_provider_active_provider fields (built in the prior Phase 14.2 turn), but web/app.js's renderSourceStatus()/shortReason() were never updated to read them -- they still rendered the raw, pre-Phase-14 `reason` investigation text via a hardcoded lookup table (NOT_AUTHORIZED -> 'Automated access not authorized', etc.), which is exactly the stale wording the screenshot showed. The backend had the right data; the frontend was ignoring it.",
+
+  "provider_configuration_status": {
+    "you": "NOT_CONFIGURED", "tavily": "NOT_CONFIGURED", "exa": "NOT_CONFIGURED", "brave": "NOT_CONFIGURED", "serper": "NOT_CONFIGURED"
+  },
+  "active_providers": [],
+  "live_activation_note": "Search-provider architecture ready; no provider key configured.",
+
+  "source_capability_status": {
+    "NAUKRI": {"direct_status": "ENABLED", "search_provider_status": null, "search_provider": null, "final_status": "ENABLED"},
+    "HIRIST": {"direct_status": "ENABLED", "search_provider_status": null, "search_provider": null, "final_status": "ENABLED"},
+    "IIMJOBS": {"direct_status": "ENABLED", "search_provider_status": null, "search_provider": null, "final_status": "ENABLED"},
+    "APNA": {"direct_status": "ENABLED", "search_provider_status": null, "search_provider": null, "final_status": "ENABLED"},
+    "LINKEDIN": {"direct_status": "NOT_AUTHORIZED", "search_provider_status": "NOT_CONFIGURED", "search_provider": null, "final_status": "SEARCH_PROVIDER_NOT_CONFIGURED", "manual_import_available": true},
+    "INDEED": {"direct_status": "NOT_AUTHORIZED", "search_provider_status": "NOT_CONFIGURED", "search_provider": null, "final_status": "SEARCH_PROVIDER_NOT_CONFIGURED", "manual_import_available": true, "quality_note": "Indeed's own search-result titles never include a company name -- preserved as a separate note, not a status downgrade."},
+    "FOUNDIT": {"direct_status": "NOT_AUTHORIZED", "search_provider_status": "NOT_CONFIGURED", "search_provider": null, "final_status": "SEARCH_PROVIDER_NOT_CONFIGURED", "manual_import_available": true},
+    "INSTAHYRE": {"direct_status": "NOT_AUTHORIZED", "search_provider_status": "NOT_CONFIGURED", "search_provider": null, "final_status": "SEARCH_PROVIDER_NOT_CONFIGURED", "manual_import_available": true},
+    "CUTSHORT": {"direct_status": "NOT_AUTHORIZED", "search_provider_status": "NOT_CONFIGURED", "search_provider": null, "final_status": "SEARCH_PROVIDER_NOT_CONFIGURED", "manual_import_available": true},
+    "WELLFOUND": {"direct_status": "NOT_AUTHORIZED", "search_provider_status": "NOT_CONFIGURED", "search_provider": null, "final_status": "SEARCH_PROVIDER_NOT_CONFIGURED", "manual_import_available": true},
+    "SHINE": {"direct_status": "NOT_AUTHORIZED", "search_provider_status": "NOT_CONFIGURED", "search_provider": null, "final_status": "SEARCH_PROVIDER_NOT_CONFIGURED", "manual_import_available": true}
+  },
+
+  "restricted_boards_available_through_search_provider": [],
+  "restricted_boards_available_through_search_provider_note": "None right now -- no provider key is configured in this environment. Verified via an isolated test server with a placeholder SERPER_API_KEY that ALL SEVEN restricted boards correctly flip to final_status=AVAILABLE_VIA_SEARCH_PROVIDER, search_provider='SERPER', and move into the GUI's Available bucket the instant a provider becomes eligible -- see verification_evidence below.",
+
+  "unavailable_boards_and_reason": {
+    "note": "No board is 'unavailable' in the sense of being impossible -- every restricted board's real reason is documented separately (direct_status=NOT_AUTHORIZED, from Phase 12/13's dated robots.txt/anti-bot evidence) and every one offers manual_import_available=true as a fallback regardless of provider configuration."
+  },
+
+  "failover_behavior": "Unchanged from the prior Phase 14.2 turn: SearchProviderManager tries providers in priority order (default you -> tavily -> exa -> brave -> serper), skips unconfigured/disabled/over-budget providers, returns immediately on any successful call (including an empty result list -- never treated as failure), and moves to the next provider on QUOTA_EXHAUSTED/AUTH_FAILED/RATE_LIMITED (after that provider's own internal retry loop)/SERVER_ERROR. Raises SearchProviderPoolExhausted (never a fabricated result) if every eligible provider fails or none is configured. Not re-tested this turn beyond confirming it still passes unchanged (this turn's changes were capability-model/GUI only).",
+
+  "test_count": {
+    "new_file": "scripts/test_phase14_2_capability_ui.py",
+    "new_file_checks": "99 passed, 0 failed",
+    "full_suite_files": 65,
+    "full_suite_result": "all 65 files exit 0"
+  },
+
+  "verification_evidence": {
+    "live_api_check_unconfigured": "GET /api/sources against the real (shared) dev server confirmed every restricted board's final_status now reads SEARCH_PROVIDER_NOT_CONFIGURED and direct_status reads NOT_AUTHORIZED -- no stale ENABLED_DIRECT claim, no stale 'Automated discovery not authorized' text.",
+    "live_api_check_configured": "A short-lived, isolated uvicorn instance with a placeholder SERPER_API_KEY confirmed LINKEDIN's capability record exactly matches this phase's own Part 16 API example: {source_provider: 'SERPER', final_status: 'AVAILABLE_VIA_SEARCH_PROVIDER', direct_status: 'NOT_AUTHORIZED'}.",
+    "real_browser_check_unconfigured": "A real Chromium (Playwright) session against the dashboard's Sources card showed: 'CUTSHORT — Search provider not configured / Configure a search API to enable discovery. / Import a job manually' for every restricted board -- the exact replacement wording for the screenshot's stale text.",
+    "real_browser_check_configured": "The same check against the isolated, placeholder-key server showed all seven restricted boards move into the 'Available' section as '✓ LINKEDIN — Search Provider: Serper', plus a new 'Search Provider Status: 1 provider configured · Automatic failover: ON' line.",
+    "checkbox_routing_check": "New Search's checkbox list (searches/new) was confirmed, via the same real browser session, to show the friendly label 'LINKEDIN (via Search Provider: Serper)' while submitting the correct internal value 'LINKEDIN_SEARCH' -- and a real POST to /api/candidates/{id}/searches with sources=['LINKEDIN_SEARCH','NAUKRI'] was accepted (200). The test search row created during this manual check was archived immediately afterward."
+  },
+
+  "production_db_sha_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+  "production_db_sha_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+  "production_db_byte_identical": true,
+
+  "scheduler_changed": false,
+  "auto_apply_changed": false,
+  "restricted_board_pages_fetched_directly": false,
+
+  "new_files": ["scripts/test_phase14_2_capability_ui.py"],
+  "modified_files": [
+    "scripts/source_capabilities.py (board-level final_status priority logic exactly matching Part 4; new direct_status/search_provider/source fields matching Part 16's exact API shape; search_provider_status/final_status now derived from the SAME live is_provider_configured() check as search_provider_active_provider, fixing a real inconsistency this phase's own tests caught between a stale import-time AdapterStatus and a live check; list_enabled_sources()/list_unavailable_sources() now bucket by final_status so a restricted board with an available provider moves into the GUI's Available list)",
+    "web/app.js (renderSourceStatus() rewritten to branch on final_status via a new sourceStatusLine() helper -- 'Available via Search Provider — <Provider>' / 'Search provider not configured / Configure a search API to enable discovery.' -- plus a new Search Provider Status summary line; the old reason-code-based shortReason() lookup table removed entirely, not left dangling)",
+    "web/dashboard.html (fetches /api/settings/search-providers alongside the dashboard call and passes it to renderSourceStatus() for the new summary line; removed the now-redundant standalone Search Provider Settings button in favor of the one rendered inside the sources block)",
+    "web/search_new.html (checkbox list now built from board-level sources.enabled -- shows a friendly 'LINKEDIN (via Search Provider: Serper)' label while submitting the correct internal LINKEDIN_SEARCH registry key as the checkbox value; the user never manually picks a provider)",
+    "api/main.py (4 new short-path aliases matching Part 6 exactly: GET /api/search-providers, POST /api/search-providers/{provider}/test|enable|disable -- delegate to the same api/search_provider_settings_api.py logic the existing /api/settings/search-providers/* routes already use, zero duplicate implementation)"
+  ],
+  "not_modified": [
+    "scripts/search_provider.py, search_provider_manager.py, search_provider_usage_store.py, search_provider_settings_store.py, env_config.py (all unchanged this turn -- the multi-provider pool/failover implementation from the prior Phase 14.2 turn was already correct)",
+    "restricted_source_registry.py, search_provider_adapter.py (unchanged -- this turn was a capability-model/GUI fix, not a discovery-mechanism change)",
+    "scripts/score_job.py, config/profile.json, direct adapters, dedup/canonical/freshness/eligibility modules, generate_run_report.py"
+  ]
+}

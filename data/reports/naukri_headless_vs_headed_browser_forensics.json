@@ -1,0 +1,119 @@
+{
+  "task": "Offline forensic/design analysis of the technical difference between full-Chromium headed and full-Chromium headless that could explain Naukri's HTTP 403 to the latter",
+  "no_new_live_requests": true,
+  "no_browser_launches": true,
+  "code_changes_made": false,
+  "evidence_completeness_caveat": "Full untruncated command-line evidence exists only for one unrelated run (default chromium_headless_shell binary, headless). The two runs actually being compared here (channel='chromium' headed vs headless) both have process-evidence truncated at 300 characters, cutting off at the identical point before reaching headless-specific flags. Claims about the exact channel='chromium' pairing are therefore INFERENCE by analogy, not direct FACT, where noted.",
+  "1_chromium_executable": {
+    "headed_path": "chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
+    "headless_path": "identical",
+    "version": "1243 (both)",
+    "channel": "chromium (both, explicit)",
+    "same_executable_confirmed": true,
+    "label": "FACT"
+  },
+  "2_launch_arguments": {
+    "fully_captured_headless_flags_FACT_from_headless_shell_run": [
+      "--headless", "--enable-unsafe-swiftshader",
+      "--blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4",
+      "--hide-scrollbars", "--mute-audio", "--no-startup-window", "--remote-debugging-pipe", "--no-sandbox"
+    ],
+    "inferred_present_in_channel_chromium_headless_run": true,
+    "inference_basis": "Playwright's headless-conditional argument construction is not channel-dependent; the same logic branch applies regardless of which binary channel is ultimately resolved",
+    "confirmed_identical_shared_prefix_both_runs": "every flag through the disable-search-engine-choice-screen/disable-sync region, FACT (both truncated captures match exactly to that point)",
+    "not_determinable": "whether --enable-unsafe-swiftshader and the touch-emulation blink-settings flag are present or absent in the headed channel='chromium' run specifically -- truncated before that point",
+    "fingerprint_relevance": {
+      "--headless": "directly signals automation to Chromium itself",
+      "--enable-unsafe-swiftshader": "well-documented headless-detection vector via WebGL UNMASKED_RENDERER_WEBGL returning a software renderer string",
+      "blink-settings touch emulation": "detectable via CSS/JS hover and pointer media queries, reports touch-device profile instead of desktop mouse profile"
+    }
+  },
+  "3_browser_context": {
+    "viewport": {"value": "{width:1440, height:900}", "identical_both_modes": true, "label": "FACT"},
+    "user_agent": {"explicit_override": false, "label": "FACT - no override in code, either mode"},
+    "locale_timezone": {"explicit_override": false, "label": "FACT"},
+    "cookies_storage": {"value": "none, ever", "label": "FACT"},
+    "javascript": {"enabled": true, "label": "FACT"},
+    "proxy": {"configured": false, "label": "FACT"},
+    "extra_headers": {"configured": false, "label": "FACT"},
+    "conclusion": "Context creation code is byte-identical and unconditional on headless/headed"
+  },
+  "4_page_runtime_signals": {
+    "captured_by_this_project": false,
+    "navigator_webdriver": {"note": "patched true in both headed and headless per general Playwright behavior; does not differ between the two modes, so cannot explain the differential outcome", "label": "general knowledge, not project-captured"},
+    "webgl_renderer": {"note": "most plausible differentiator if --enable-unsafe-swiftshader is indeed headless-only for this project's launches", "label": "INFERENCE"},
+    "screen_window_dimensions": {"note": "may differ in headless due to lack of real OS window, independent of the identical Playwright viewport setting", "label": "NOT_DETERMINABLE, general knowledge only"}
+  },
+  "5_playwright_behavior": {
+    "version": "1.63.0, unchanged all session",
+    "browser_type": "chromium",
+    "channel_used_both_runs": "chromium",
+    "different_binaries_despite_channel": false,
+    "only_explicit_code_level_difference": "the headless boolean itself passed to chromium.launch()",
+    "label": "FACT"
+  },
+  "hypotheses": {
+    "A_different_binary": {"verdict": "CONTRADICTED", "evidence": "identical executable path confirmed both runs"},
+    "B_different_version": {"verdict": "CONTRADICTED", "evidence": "identical revision 1243 both runs"},
+    "C_headless_specific_launch_args": {"verdict": "SUPPORTED_by_inference", "evidence": "directly observed in an analogous headless run; inferred (not directly captured) for the exact compared pairing due to truncation"},
+    "D_navigator_webdriver_runtime": {"verdict": "CONTRADICTED_as_distinguishing_factor", "evidence": "patched identically in both modes per general Playwright behavior, does not differ between them"},
+    "E_viewport_screen_window": {"verdict": "CONTRADICTED_at_code_level_NOT_DETERMINABLE_at_runtime", "evidence": "Playwright viewport option identical in code; actual Chromium-reported screen dimensions never measured"},
+    "F_gpu_webgl_rendering": {"verdict": "SUPPORTED_by_inference", "evidence": "--enable-unsafe-swiftshader directly observed in an analogous headless run; presence/absence in the exact compared pairing is inferred, not directly captured"},
+    "G_http_header_difference": {"verdict": "NOT_DETERMINABLE", "evidence": "no header capture exists anywhere in this project"},
+    "H_browser_context_difference": {"verdict": "CONTRADICTED", "evidence": "context creation code byte-identical and unconditional"},
+    "I_playwright_specific_behavior": {"verdict": "NOT_DETERMINABLE_beyond_the_headless_flag_itself", "evidence": "no other Playwright-level configuration differs"},
+    "J_other_concrete_difference": {"verdict": "NOT_DETERMINABLE", "evidence": "none identified"},
+    "K_root_cause_not_determinable": {"verdict": "PARTIALLY_TRUE", "evidence": "mechanism class narrowed to Chromium's internal headless-mode flags/rendering (C, F specifically); the exact server-side signal Naukri keys on cannot be determined from client-side evidence alone, by definition"}
+  },
+  "headless_requirement_reframing": {
+    "literal_interpretation": "Chromium headless=true API flag",
+    "actual_operational_requirement": "no user-visible browser UI / background execution",
+    "these_are_distinct": true,
+    "significance": "opens the door to genuine headed-Chromium-rendering approaches (e.g. a virtual display) that satisfy the real requirement without using Chromium's native headless mode, which is the mode currently associated with the block"
+  },
+  "legitimate_background_execution_options": [
+    {
+      "option": "Xvfb + headed Chromium",
+      "satisfies_no_visible_window": true,
+      "uses_genuine_headed_rendering": true,
+      "evasion": false,
+      "risk": "Not available on macOS (X11/Linux concept); would require migrating browser execution to a Linux host/container. This project already has docker-compose.yml for other services, making this architecturally plausible but a real infrastructure change."
+    },
+    {
+      "option": "macOS background/non-interactive session with headed Chromium",
+      "satisfies_no_visible_window": "only informally - window still technically exists",
+      "uses_genuine_headed_rendering": true,
+      "evasion": false,
+      "risk": "No first-class macOS equivalent to Xvfb; not a clean architectural guarantee of invisibility"
+    },
+    {
+      "option": "Tune headless-mode rendering flags to avoid SwiftShader software fallback",
+      "satisfies_no_visible_window": true,
+      "uses_genuine_headed_rendering": "partially - real GPU path instead of software fallback, if available",
+      "evasion": false,
+      "risk": "Untested whether this changes Naukri's behavior at all; GPU access in a headless/background process is environment-dependent"
+    },
+    {
+      "option": "Native Linux headless Chromium",
+      "satisfies_no_visible_window": true,
+      "uses_genuine_headed_rendering": "uncertain",
+      "evasion": false,
+      "risk": "Does not address the flag-level differences identified; likely no better alone without combining with Xvfb or flag tuning"
+    }
+  ],
+  "recommended_next_offline_step": "Add a diagnostic-only page.evaluate() call in naukri_fetch_bridge.js to log navigator.webdriver, WebGL UNMASKED_RENDERER_WEBGL, and hover/pointer media-query results as a new stderr DIAGNOSTIC line. Purely additive, no behavior change, offline-testable against local fixtures, converts current INFERENCE-labeled claims (C, F) to FACT or CONTRADICTED for this project's own exact configuration. NOT implemented in this task.",
+  "what_must_be_tested_live_afterward": [
+    "One more single-query headed-vs-headless comparison with the new runtime diagnostics in place, to confirm/refute the WebGL/hover-pointer difference directly",
+    "A live test from an Xvfb-based Linux environment if that option is pursued",
+    "A live test of tuned headless rendering flags if that option is pursued"
+  ],
+  "change_default_browser_config_now": false,
+  "reason": "Evidence narrows the mechanism class but does not confirm the exact signal; no option has been live-tested; changing the default before confirmation risks trading a known-safe non-functional default for an unverified alternative",
+  "production_db": {
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "row_counts_before": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+    "row_counts_after": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+    "unchanged": true
+  }
+}

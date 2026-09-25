@@ -1,0 +1,336 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Job Search OS — New Search</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<header>
+  <span class="brand">Job Search OS</span>
+  <a href="/">Home</a>
+  <a href="/profile">Profile</a>
+  <a href="/searches" class="active">Searches</a>
+  <a href="/dashboard">Dashboard</a>
+</header>
+<main>
+  <h1 id="page-title">Create a saved search</h1>
+  <p class="lede" id="page-lede">You can create multiple searches with different criteria for the same profile.</p>
+  <div id="msg"></div>
+  <div id="content"><div class="loading-state">Loading...</div></div>
+</main>
+
+<template id="tpl-form">
+  <div class="card">
+    <div class="row">
+      <div><label>Candidate</label><div id="candidate-name" style="padding-top:6px;font-weight:600"></div></div>
+      <div><label>Profile</label><div id="profile-status" style="padding-top:6px"></div></div>
+    </div>
+    <div id="confirm-banner"></div>
+  </div>
+
+  <div class="card">
+    <h2>Resume / Profile</h2>
+    <div class="hint" style="margin-bottom:8px">Pin this search to a specific resume/profile version, or leave it on "Current profile" to always use whichever profile is active when the search runs. An old search stays tied to the resume it was created with, even after you upload a newer one.</div>
+    <div id="current-pin-hint" class="hint" style="margin-bottom:8px"></div>
+    <label>Resume / Profile version</label>
+    <select id="s-profile-version"><option value="">Current profile (always up to date)</option></select>
+    <div class="button-row" style="margin-top:8px">
+      <input type="file" id="s-resume-file-input" accept="application/pdf" />
+      <button id="s-upload-resume-btn" class="secondary" type="button">Upload New Resume</button>
+    </div>
+    <div id="s-resume-upload-msg" class="hint"></div>
+  </div>
+
+  <div class="card">
+    <h2>Search criteria</h2>
+
+    <label>Search name</label>
+    <input id="s-name" placeholder="e.g. Bangalore SRE roles" />
+
+    <label>Job title / keywords (comma-separated)</label>
+    <input id="s-roles" placeholder="e.g. Senior SRE, Platform Engineer" />
+
+    <label>Locations (comma-separated)</label>
+    <input id="s-locations" placeholder="e.g. Bangalore, Remote" />
+
+    <div class="row">
+      <div><label>Min experience (years)</label><input id="s-expmin" type="number" min="0" /></div>
+      <div><label>Max experience (years)</label><input id="s-expmax" type="number" min="0" /></div>
+      <div><label>Maximum job age (days)</label><input id="s-freshness" type="number" min="1" max="365" value="3" /></div>
+    </div>
+
+    <div class="row">
+      <div><label>Min salary</label><input id="s-salmin" type="number" min="0" /></div>
+      <div><label>Max salary</label><input id="s-salmax" type="number" min="0" /></div>
+      <div><label>Currency</label><input id="s-curr" placeholder="INR" /></div>
+    </div>
+
+    <label>Work model (comma-separated: Remote, Hybrid, Onsite)</label>
+    <input id="s-workmodel" placeholder="Remote, Hybrid, Onsite" />
+
+    <label>Skills / criteria (comma-separated)</label>
+    <input id="s-skills" placeholder="e.g. AWS, Terraform, Kubernetes" />
+
+    <label>Employment type</label>
+    <select id="s-emptype">
+      <option value="">(any)</option>
+      <option>FULL_TIME</option>
+      <option>CONTRACT</option>
+      <option>PART_TIME</option>
+      <option>INTERNSHIP</option>
+    </select>
+
+    <label>Minimum match score (0-100)</label>
+    <input id="s-minscore" type="number" min="0" max="100" value="70" />
+  </div>
+
+  <div class="card">
+    <h2>Sources</h2>
+    <div id="s-sources" class="hint">Loading enabled sources...</div>
+  </div>
+
+  <button id="create-btn">Save search</button>
+</template>
+
+<script src="/static/app.js"></script>
+<script>
+let candidateId = null;
+// Edit mode is detected purely from this page's own URL
+// (/searches/{id}/edit) -- the same form/JS is reused for both create
+// and edit, never a second page (item 4: Edit Existing Search UI).
+const editSearchMatch = window.location.pathname.match(/^\/searches\/([^/]+)\/edit$/);
+const editSearchId = editSearchMatch ? editSearchMatch[1] : null;
+let existingSearch = null;
+
+function csv(str) { return str.split(",").map((s) => s.trim()).filter(Boolean); }
+
+async function load() {
+  const content = document.getElementById("content");
+  const msg = document.getElementById("msg");
+
+  candidateId = await resolveActiveCandidate();
+  if (!candidateId) {
+    showEmpty(content, "No candidate selected yet.");
+    const cta = el(`<div style="text-align:center;margin-top:16px"><button onclick="window.location.href='/'">Go to Home</button></div>`);
+    content.appendChild(cta);
+    return;
+  }
+
+  try {
+    const fetches = [
+      api(`/api/candidates/${candidateId}`),
+      api(`/api/candidates/${candidateId}/profile`),
+      api("/api/sources"),
+    ];
+    if (editSearchId) {
+      fetches.push(api(`/api/searches/${editSearchId}?candidate_id=${candidateId}`));
+    }
+    const [candidate, profile, sources, fetchedSearch] = await Promise.all(fetches);
+    if (editSearchId) existingSearch = fetchedSearch;
+
+    content.innerHTML = "";
+    content.appendChild(document.getElementById("tpl-form").content.cloneNode(true));
+
+    document.getElementById("candidate-name").textContent = candidate.name || "(unnamed)";
+    document.getElementById("profile-status").innerHTML = badgeHtml(profile.metadata.profile_status);
+
+    if (editSearchId) {
+      document.getElementById("page-title").textContent = `Edit search: ${existingSearch.name}`;
+      document.getElementById("page-lede").textContent = "Changes here never rewrite past runs or their results -- only a future run of this search uses your new settings.";
+      document.getElementById("create-btn").textContent = "Save changes";
+      populateFormFromSearch(existingSearch);
+    }
+
+    if (profile.metadata.profile_status !== "CONFIRMED") {
+      showInfo(
+        document.getElementById("confirm-banner"),
+        "Your profile needs to be confirmed before running a new search. You can still save this search now and confirm your profile before running it."
+      );
+    }
+
+    // The user picks BOARDS (e.g. "LinkedIn"), never an internal
+    // registry key like "LINKEDIN_SEARCH" -- the backend decides
+    // whether a board's checkbox submits its own name (a direct
+    // adapter) or its search-provider sibling's registry key
+    // (Phase 14.2, Part 12). sources.enabled is the board-level
+    // capability list (source_capabilities.py), already deduplicated
+    // to one row per board.
+    const sourcesBox = document.getElementById("s-sources");
+    const selectableBoards = sources.enabled || [];
+    if (!selectableBoards.length) {
+      sourcesBox.innerHTML = `<div class="hint">No sources are currently enabled.</div>`;
+    } else {
+      // Edit mode: pre-check exactly the sources this search was
+      // already saved with. Create mode, or an edited search that had
+      // no explicit sources (null -> "default enabled sources"): check
+      // every currently-enabled board, same as before.
+      const existingSources = editSearchId ? existingSearch.sources : null;
+      sourcesBox.innerHTML = selectableBoards
+        .map((s) => {
+          const registryKey = s.final_status === "AVAILABLE_VIA_SEARCH_PROVIDER" ? `${s.source_name}_SEARCH` : s.source_name;
+          const label =
+            s.final_status === "AVAILABLE_VIA_SEARCH_PROVIDER"
+              ? `${s.source_name} <span class="hint">(via Search Provider: ${escapeHtml(s.search_provider_active_provider_display || s.search_provider || "configured")})</span>`
+              : s.source_name;
+          const isChecked = existingSources && existingSources.length ? existingSources.includes(registryKey) : true;
+          return `<label class="inline"><input type="checkbox" class="src-cb" value="${escapeHtml(registryKey)}" ${isChecked ? "checked" : ""} /> ${label}</label>`;
+        })
+        .join("<br/>");
+    }
+
+    // Boards with no automated discovery available at all yet (Phase
+    // 14.2: sources.unavailable already excludes any board that IS
+    // available via a configured search provider) -- this search will
+    // not include them.
+    const manualOnly = (sources.unavailable || []).filter((s) => s.manual_import_available);
+    if (manualOnly.length) {
+      const list = manualOnly.map((s) => escapeHtml(s.source_name)).join(", ");
+      sourcesBox.insertAdjacentHTML(
+        "afterend",
+        `<div class="hint">This search will not include: ${list} (no automated search available for these boards yet). <a href="/import">Import a job manually</a> from any of them instead.</div>`
+      );
+    }
+
+    document.getElementById("create-btn").addEventListener("click", handleCreate);
+    await loadProfileVersions();
+    wireResumeUploadOnSearchForm();
+  } catch (err) {
+    showError(msg, err);
+  }
+}
+
+function populateFormFromSearch(search) {
+  document.getElementById("s-name").value = search.name || "";
+  document.getElementById("s-roles").value = (search.target_roles || []).join(", ");
+  document.getElementById("s-locations").value = (search.target_locations || []).join(", ");
+  document.getElementById("s-expmin").value = search.minimum_experience_years ?? "";
+  document.getElementById("s-expmax").value = search.maximum_experience_years ?? "";
+  document.getElementById("s-freshness").value = search.max_job_age_days ?? 3;
+  document.getElementById("s-salmin").value = search.salary_expectation_min ?? "";
+  document.getElementById("s-salmax").value = search.salary_expectation_max ?? "";
+  document.getElementById("s-curr").value = search.salary_currency || "";
+  document.getElementById("s-workmodel").value = (search.work_models || []).join(", ");
+  document.getElementById("s-skills").value = (search.skills || []).join(", ");
+  document.getElementById("s-emptype").value = search.employment_type || "";
+  document.getElementById("s-minscore").value = search.minimum_match_score ?? 70;
+}
+
+async function loadProfileVersions() {
+  const select = document.getElementById("s-profile-version");
+  if (!select) return;
+  const pinHint = document.getElementById("current-pin-hint");
+  try {
+    const data = await api(`/api/candidates/${candidateId}/profile-versions`);
+    const versions = (data.profile_versions || []).filter((v) => v.confirmed_by_user);
+
+    if (editSearchId && pinHint) {
+      const pinned = existingSearch.profile_version;
+      if (pinned == null) {
+        pinHint.textContent = "Currently pinned to: Current profile (always up to date).";
+      } else {
+        const pinnedVersion = versions.find((v) => v.version === pinned);
+        pinHint.textContent = pinnedVersion && pinnedVersion.resume_filename
+          ? `Currently pinned to: Resume "${pinnedVersion.resume_filename}" (profile v${pinned}).`
+          : `Currently pinned to: profile v${pinned}.`;
+      }
+    }
+
+    // Keep the "Current profile" option (always first), append one
+    // option per CONFIRMED historical version -- a version that was
+    // never confirmed can't be pinned (mirrors the same CONFIRMED
+    // requirement the active-profile path already enforces).
+    for (const v of versions) {
+      const label = v.resume_filename
+        ? `Resume: ${v.resume_filename}${v.resume_version_label ? ` (${v.resume_version_label})` : ""} -- v${v.version}${v.is_active ? " (current)" : ""}`
+        : `Profile v${v.version}${v.is_active ? " (current)" : ""}`;
+      select.appendChild(el(`<option value="${v.version}">${escapeHtml(label)}</option>`));
+    }
+
+    if (editSearchId) {
+      select.value = existingSearch.profile_version != null ? String(existingSearch.profile_version) : "";
+    }
+  } catch (err) {
+    // Non-fatal -- the form still works with "Current profile" only.
+  }
+}
+
+function wireResumeUploadOnSearchForm() {
+  const btn = document.getElementById("s-upload-resume-btn");
+  if (!btn) return;
+  btn.addEventListener("click", async () => {
+    const msg = document.getElementById("s-resume-upload-msg");
+    const fileInput = document.getElementById("s-resume-file-input");
+    if (!fileInput.files.length) {
+      showError(msg, new Error("Choose a PDF resume file first."));
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = "Uploading...";
+    try {
+      const form = new FormData();
+      form.append("file", fileInput.files[0]);
+      await api(`/api/candidates/${candidateId}/resume`, { method: "POST", body: form });
+      showSuccess(msg, `Resume uploaded and parsed into a new DRAFT profile. Go to your Profile page to review it and click "Confirm profile" -- once confirmed, it'll appear in the selector above (reload this page after confirming).`);
+      fileInput.value = "";
+    } catch (err) {
+      showError(msg, err);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Upload New Resume";
+    }
+  });
+}
+
+async function handleCreate() {
+  const msg = document.getElementById("msg");
+  const roles = csv(document.getElementById("s-roles").value);
+  const locations = csv(document.getElementById("s-locations").value);
+  if (!roles.length || !locations.length) {
+    showError(msg, new Error("At least one job title and one location are required."));
+    return;
+  }
+  const selectedSources = Array.from(document.querySelectorAll(".src-cb:checked")).map((cb) => cb.value);
+
+  const payload = {
+    name: document.getElementById("s-name").value.trim() || roles[0],
+    target_roles: roles,
+    target_locations: locations,
+    work_models: csv(document.getElementById("s-workmodel").value),
+    skills: csv(document.getElementById("s-skills").value),
+    employment_type: document.getElementById("s-emptype").value || null,
+    minimum_experience_years: document.getElementById("s-expmin").value === "" ? null : Number(document.getElementById("s-expmin").value),
+    maximum_experience_years: document.getElementById("s-expmax").value === "" ? null : Number(document.getElementById("s-expmax").value),
+    salary_expectation_min: document.getElementById("s-salmin").value === "" ? null : Number(document.getElementById("s-salmin").value),
+    salary_expectation_max: document.getElementById("s-salmax").value === "" ? null : Number(document.getElementById("s-salmax").value),
+    salary_currency: document.getElementById("s-curr").value.trim() || null,
+    minimum_match_score: Number(document.getElementById("s-minscore").value || 70),
+    max_job_age_days: Number(document.getElementById("s-freshness").value || 3),
+    sources: selectedSources.length ? selectedSources : null,
+  };
+  // Always explicitly included (even as null) -- for edit mode this is
+  // what lets a user un-pin a search back to "Current profile"; for
+  // create mode null is the same as omitting it (a brand-new search
+  // has no history to worry about either way).
+  const profileVersionValue = document.getElementById("s-profile-version").value;
+  payload.profile_version = profileVersionValue === "" ? null : Number(profileVersionValue);
+
+  try {
+    if (editSearchId) {
+      const search = await api(`/api/searches/${editSearchId}?candidate_id=${candidateId}`, { method: "PUT", body: payload });
+      showSuccess(msg, `Changes saved. Past runs and their results are untouched -- your next run of this search will use these settings. Redirecting...`);
+      setTimeout(() => (window.location.href = `/searches/${search.saved_search_id}`), 900);
+    } else {
+      const search = await api(`/api/candidates/${candidateId}/searches`, { method: "POST", body: payload });
+      showSuccess(msg, `Search saved: ${search.name}. Redirecting...`);
+      setTimeout(() => (window.location.href = `/searches/${search.saved_search_id}`), 700);
+    }
+  } catch (err) {
+    showError(msg, err);
+  }
+}
+
+load();
+</script>
+</body>
+</html>

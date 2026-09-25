@@ -1,0 +1,89 @@
+{
+  "job_record": {
+    "job_id": "unique_source_job_identifier",
+    "source": "job_source",
+    "company": "",
+    "title": "",
+    "location": "",
+    "work_model": "",
+    "job_url": "",
+    "application_url": "",
+    "posted_date": "",
+    "discovered_at": "",
+
+    "jd_text": "",
+
+    "experience_required": "",
+    "mandatory_skills": [],
+    "preferred_skills": [],
+
+    "score": 0,
+    "priority": "",
+    "matched_skills": [],
+    "missing_skills": [],
+    "hard_reject_reasons": [],
+
+    "resume_variant": "",
+
+    "status": "FOUND",
+
+    "screening_questions": [],
+    "screening_answers": [],
+
+    "application_started_at": "",
+    "application_submitted_at": "",
+
+    "recruiter_name": "",
+    "recruiter_email": "",
+    "recruiter_contact": "",
+
+    "interview_round": "",
+    "interview_date": "",
+
+    "follow_up_date": "",
+
+    "notes": "",
+    "last_updated": ""
+  },
+
+  "allowed_statuses": [
+    "FOUND",
+    "NOT_QUALIFIED",
+    "SCREENING",
+    "SHORTLISTED",
+    "READY_FOR_APPROVAL",
+    "APPROVED",
+    "APPLICATION_STARTED",
+    "APPLIED",
+    "RECRUITER_CONTACTED",
+    "SCREENING_CALL",
+    "INTERVIEW_1",
+    "INTERVIEW_2",
+    "FINAL_ROUND",
+    "OFFER",
+    "REJECTED",
+    "EMPLOYER_REJECTED",
+    "GHOSTED",
+    "WITHDRAWN"
+  ],
+  "_status_notes": {
+    "NOT_QUALIFIED": "Score-bucket outcome (scripts/score_job.py) for an eligible-but-below-threshold or hard-rejected job. Added in Phase 7.2, replacing this path's prior (ambiguous) use of REJECTED going forward.",
+    "REJECTED": "LEGACY value. Before Phase 7.2, scripts/score_job.py used this literal string for the same score-bucket outcome NOT_QUALIFIED now represents. Kept in this list ONLY for backward compatibility with existing rows written before that change -- no code writes this value anymore. Never assume a row with this status was rejected by an employer.",
+    "EMPLOYER_REJECTED": "Reserved for a genuine, human-recorded employer/application-lifecycle rejection, once an approval/application workflow exists to set it. No code in this project currently writes this value -- see data/reports/phase7_2_automation_status_audit.md."
+  },
+
+  "priority_rules": {
+    "A": {
+      "minimum_score": 90
+    },
+    "B": {
+      "minimum_score": 80
+    },
+    "C": {
+      "minimum_score": 70
+    },
+    "REJECT": {
+      "maximum_score": 69
+    }
+  }
+}

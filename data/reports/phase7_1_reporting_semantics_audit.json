@@ -1,0 +1,241 @@
+{
+  "task": "Phase 7.1 -- Reporting Semantics + Daily Runtime Integration Gate",
+  "live_network_requests": 0,
+  "production_db_modified": false,
+  "scoring_weights_changed": false,
+  "eligibility_freshness_dedup_logic_changed": false,
+  "headline_questions": {
+    "q1_new_jobs_means_genuinely_new_to_saroj": {
+      "before_this_task": false,
+      "before_reason": "used jobs.created_at -- a GLOBAL, not candidate-scoped, signal; answered category C (newly inserted into the global jobs table), mislabeled as category A (new to this candidate)",
+      "after_this_task": true,
+      "after_reason": "fixed to use candidate_job_matches.created_at -- already existed, per-candidate, protected from overwrite (confirmed by reading upsert_candidate_job_match()'s ON CONFLICT UPDATE SET clause, which excludes created_at) -- no schema change needed, verified by offline test (Job A vs Job B)"
+    },
+    "q2_daily_execution_automatically_produces_workbook": {
+      "answer": false,
+      "reason": "no scheduler or daemon exists anywhere in this project (confirmed by tracing config/searches.json's 'schedule' key -- a plain config value never consumed -- and docker-compose.yml's n8n container, which has no wired workflows); generate_run_report.py was never invoked by any other file before this task",
+      "integration_point_built_this_task": "run_search_worker.py --report-out PATH [--report-since ISO_DATETIME] -- additive, opt-in, off by default, verified working",
+      "still_requires_manual_invocation": true,
+      "reason_not_made_automatic": "no scheduler exists or was built -- explicitly out of scope per instruction not to wire into production or implement unrequested CLAUDE.md gap-list items"
+    },
+    "proceed_to_another_source": false,
+    "reason": "per instruction: since q2 remains manual (not automatic), stopping and awaiting review"
+  },
+  "section1_new_jobs_vs_already_seen": {
+    "code_inspected": ["generate_run_report.py", "search_worker.py", "search_submission.py", "source_registry.py", "migrate_v2_schema.py", "tracker.py", "jobs/search_runs/search_queue/candidate_job_matches schemas"],
+    "concept_mapping": {
+      "A_genuinely_new_to_saroj": {"signal": "candidate_job_matches.created_at for (candidate_id, job_id)", "available": true, "was_being_used": false},
+      "B_already_seen": {"signal": "negation of A, or jobs.created_at < since", "available": true},
+      "C_newly_discovered_today": {"signal": "jobs.created_at >= since", "available": true, "candidate_scoped": false}
+    },
+    "original_implementation_answered": "category C, mislabeled as category A",
+    "why_never_caught_before": "single real candidate in production today -- A and C coincide in practice",
+    "evidence_candidate_job_matches_created_at_protected": "upsert_candidate_job_match()'s ON CONFLICT(candidate_id, job_id) DO UPDATE SET clause does not include created_at -- confirmed by direct code read",
+    "evidence_no_coverage_gap": "candidate_job_matches rows only ever exist for jobs that passed eligibility -- exactly the set NEW_JOBS could ever contain",
+    "historical_identity_already_available": true,
+    "new_schema_invented": false,
+    "fix": {
+      "file": "scripts/generate_run_report.py",
+      "new_function": "load_candidate_job_matches(conn, candidate_id)",
+      "changed_function": "build_report_rows() -- is_new/Previously Seen now computed from candidate_job_matches.created_at instead of jobs.created_at"
+    },
+    "verified_by_test": {
+      "job_a": "first matched this run -> NEW_JOBS=true, Previously Seen=No",
+      "job_b": "matched in an earlier run (candidate_job_matches.created_at backdated), rediscovered today -> NEW_JOBS=false, Previously Seen=Yes, still in APPLY_TODAY"
+    },
+    "classification": "PASS",
+    "classification_before_fix": "NEEDS CHANGE"
+  },
+  "section2_application_status_semantics": {
+    "distinctions": {
+      "INELIGIBLE": {"derivable": true, "mechanism": "ranking.eligible == False", "classification": "PASS"},
+      "SCORE_REJECTED_NOT_QUALIFIED": {"derivable": true, "mechanism": "eligible AND priority == 'REJECT'", "classification": "PASS"},
+      "ELIGIBLE_NOT_APPLIED": {"derivable": true, "mechanism": "qualifies, not applied, fails one of the stricter APPLY_TODAY criteria", "classification": "PASS"},
+      "READY_TO_APPLY": {"derivable": true, "mechanism": "qualifies AND fresh<=3d AND usable URL AND not suppressed duplicate AND not applied", "classification": "PASS"},
+      "APPLIED": {"derivable": true, "mechanism": "jobs.status == literal applied-lifecycle status (APPLIED/RECRUITER_CONTACTED/SCREENING_CALL/INTERVIEW_1/INTERVIEW_2/FINAL_ROUND/OFFER)", "classification": "PASS"},
+      "EMPLOYER_REJECTED": {"derivable": false, "classification": "BLOCKED"},
+      "WITHDRAWN": {"derivable": true, "mechanism": "jobs.status == 'WITHDRAWN', unambiguous, nothing else writes it", "classification": "PASS"},
+      "DUPLICATE": {"derivable": true, "mechanism": "new duplicate-cluster suppression logic", "classification": "PASS"},
+      "ALREADY_SEEN": {"derivable": true, "mechanism": "new Previously Seen column, see section 1", "classification": "PASS"}
+    },
+    "employer_rejected_blocked_evidence": {
+      "writers_of_jobs_status_column_traced": 2,
+      "writer_1": "score_job()'s bucket assignment at first insert (status=REJECTED for eligible-but-<70-scored, status=READY_FOR_APPROVAL otherwise)",
+      "writer_2": "none -- no code anywhere advances a job through the application lifecycle; no approval/application workflow exists yet (confirmed by code, not just CLAUDE.md's gap list)",
+      "status_protected_from_reoverwrite": "tracker.upsert_job()'s ON CONFLICT excludes status from UPDATE SET",
+      "conclusion": "a first-insert status='REJECTED' can only ever be a stale artifact of the original score -- this codebase cannot currently produce a genuine EMPLOYER_REJECTED state at all"
+    },
+    "reporting_layer_never_implies_employer_rejection": true,
+    "report_status_labels_for_rejected": {
+      "non_qualifying": "SCORE_REJECTED_NOT_QUALIFIED",
+      "qualifying_with_stale_rejected_status_edge_case": "AMBIGUOUS_REJECTED_STATUS_SEE_LIMITATION"
+    },
+    "verified_by_test_job_g": {
+      "scenario": "status manually forced to REJECTED on an otherwise-qualifying job",
+      "result": "Report Status=AMBIGUOUS_REJECTED_STATUS_SEE_LIMITATION, excluded from ALREADY_APPLIED and APPLY_TODAY -- limitation explicitly demonstrated, not papered over"
+    },
+    "proposed_fix_not_implemented": {
+      "option_a_recommended": {
+        "description": "rename score_job.py's score-bucket status string from 'REJECTED' to e.g. 'NOT_QUALIFIED', freeing 'REJECTED' exclusively for a genuine employer rejection",
+        "scope": "one string literal in score_job.py",
+        "implemented": false,
+        "reason_not_implemented": "score_job.py is explicitly protected by CLAUDE.md ('do not modify ... without being explicitly asked') and this task's own preamble constrains changes to eligibility/freshness/dedup logic -- stopping for explicit approval rather than assuming this qualifies as an additive reporting fix"
+      },
+      "option_b": {
+        "description": "add a new jobs.application_outcome column, decoupling lifecycle stage from terminal outcome",
+        "scope": "schema migration",
+        "implemented": false,
+        "reason_not_implemented": "larger change; only useful once a real application/approval workflow exists, which it does not yet"
+      },
+      "recommendation": "Option A, once a human approval/application workflow is actually being built (at which point an unambiguous employer-rejection status will be needed anyway)"
+    },
+    "silently_reinterpreted_existing_statuses": false
+  },
+  "section3_daily_runtime_integration": {
+    "traced_path": "scheduler -> search worker -> source discovery -> normalization -> dedup -> freshness -> eligibility -> scoring -> persistence -> reporting",
+    "scheduler_exists": false,
+    "evidence": [
+      "config/searches.json's 'schedule' key is a plain config value, never consumed by cron/launchd/any daemon (grep-confirmed)",
+      "docker-compose.yml's n8n container has no wired workflow files connecting it to this project's Python scripts",
+      "grep across scripts/*.py for 'generate_run_report' found no caller besides generate_run_report.py itself and its own test, before this task's changes"
+    ],
+    "integration_point_implemented": {
+      "location": "scripts/run_search_worker.py",
+      "new_flags": ["--report-out PATH", "--report-since ISO_DATETIME (optional)"],
+      "behavior": "after run_once() completes, if --report-out was passed, calls generate_run_report.generate() against the same --db/--candidate-id; skips cleanly with an explicit message for --dry-run or when nothing was claimed",
+      "additive": true,
+      "default_behavior_changed": false,
+      "openpyxl_import_lazy": true,
+      "wired_into_production_automatically": false
+    },
+    "verification": {
+      "plain_python3_dry_run_with_report_out": "skips cleanly, no error, no file written, no openpyxl import triggered",
+      "venv_python3_empty_queue_with_report_out": "skips cleanly with distinct message ('no queue item was claimed'), no file written",
+      "existing_test_search_worker_py_cli_tests": "all 38 still pass unmodified"
+    },
+    "not_wired_automatically": true,
+    "reason": "no scheduler exists or was built -- explicitly out of scope per instruction",
+    "classification": "PASS WITH LIMITATION"
+  },
+  "section4_workbook_business_objective": {
+    "sheets": [
+      {
+        "name": "APPLY_TODAY",
+        "source": "current DB state, re-scored live",
+        "criteria": "qualifies (priority A/B/C) AND active status AND freshness_age_days<=3 AND usable URL present AND not a suppressed duplicate",
+        "deterministic": true,
+        "trustworthy_for_daily_run": true,
+        "trustworthy_before_this_task": false,
+        "answers_real_decision": true,
+        "newly_enforced_this_task": ["freshness<=3 days", "usable URL required", "duplicate suppression"]
+      },
+      {"name": "ALL_MATCHING_JOBS", "source": "current DB state, re-scored live", "criteria": "qualifies, any status", "deterministic": true, "trustworthy_for_daily_run": true, "answers_real_decision": true},
+      {
+        "name": "NEW_JOBS",
+        "source": "current DB state, candidate_job_matches-based",
+        "criteria": "qualifies AND candidate_job_matches.created_at >= since",
+        "deterministic": true,
+        "trustworthy_for_daily_run": true,
+        "trustworthy_before_this_task": false,
+        "answers_real_decision": true,
+        "fixed_this_task": true
+      },
+      {"name": "ALREADY_APPLIED", "source": "jobs.status", "criteria": "applied-lifecycle status, excludes REJECTED", "deterministic": true, "trustworthy_for_daily_run": true, "answers_real_decision": true},
+      {"name": "REJECTED_EXCLUDED", "source": "current DB state, re-scored live", "criteria": "not qualifying AND not already-applied", "deterministic": true, "trustworthy_for_daily_run": "yes, with the documented EMPLOYER_REJECTED limitation", "answers_real_decision": true},
+      {"name": "DUPLICATES", "source": "cross_source_dedup, unmodified", "criteria": "rows in >=1 duplicate-candidate pair", "deterministic": true, "trustworthy_for_daily_run": true, "answers_real_decision": true},
+      {"name": "APPLICATION_TRACKER", "source": "current DB state, unfiltered", "criteria": "none -- every row", "deterministic": true, "trustworthy_for_daily_run": true, "answers_real_decision": true},
+      {"name": "SOURCE_HEALTH", "source": "search_runs, raw", "criteria": "candidate-scoped if given", "deterministic": true, "trustworthy_for_daily_run": "yes, with a minor pre-existing search_runs.source granularity limitation, not changed here", "answers_real_decision": true},
+      {"name": "RUN_SUMMARY", "source": "latest search_runs row + computed distributions (now includes report_status_distribution)", "criteria": "n/a", "deterministic": true, "trustworthy_for_daily_run": true, "answers_real_decision": true}
+    ],
+    "apply_today_no_longer_includes": {
+      "ineligible_jobs": "confirmed excluded, unchanged",
+      "stale_jobs_beyond_3_days": "FIXED this task -- was checking freshness CATEGORY only, never actual day count against max_job_age_days=3",
+      "duplicates": "FIXED this task -- duplicate-cluster suppression, only highest-scoring representative remains",
+      "already_applied_jobs": "confirmed excluded, unchanged",
+      "score_rejected_jobs": "confirmed excluded, unchanged",
+      "jobs_lacking_usable_url": "FIXED this task -- _has_usable_url() now required"
+    },
+    "every_actionable_row_exposes": {
+      "source": true, "company": true, "title": true, "location": true, "score": true, "priority": true,
+      "freshness": true, "eligibility_result": "new Eligible + Report Status columns", "reason_where_relevant": true,
+      "application_job_url": true, "seen_applied_state": "new Previously Seen column + existing Application Status"
+    },
+    "classification": "PASS",
+    "classification_before_fix": "NEEDS CHANGE (APPLY_TODAY, NEW_JOBS)"
+  },
+  "section5_offline_regression_test": {
+    "file": "scripts/test_generate_run_report.py",
+    "rewritten": true,
+    "replaces": "Phase 7's original 8-job fixture set",
+    "network_requests": 0,
+    "production_db_touched": false,
+    "mechanism": "two search_worker.py runs against one temp DB (earlier run discovers Job B; today's run discovers everything else + rediscovers Job B), deterministic fake adapters",
+    "scenarios": [
+      {"job": "A", "scenario": "brand new, eligible, score=100, fresh, not applied", "result": "NEW_JOBS + APPLY_TODAY, Previously Seen=No, Report Status=READY_TO_APPLY"},
+      {"job": "B", "scenario": "already seen (matched earlier run, backdated), eligible, fresh, not applied", "result": "not NEW_JOBS, still APPLY_TODAY, Previously Seen=Yes"},
+      {"job": "C", "scenario": "already applied (status=APPLIED post-ingestion)", "result": "ALREADY_APPLIED only, Report Status=APPLIED"},
+      {"job": "D", "scenario": "eligible, score=50 (<70)", "result": "not APPLY_TODAY, REJECTED_EXCLUDED, Report Status=SCORE_REJECTED_NOT_QUALIFIED"},
+      {"job": "E", "scenario": "cross-source duplicate of Job A (identical JD, same title/company/location)", "result": "not APPLY_TODAY (suppressed), Report Status=DUPLICATE; Job A remains representative in APPLY_TODAY"},
+      {"job": "F", "scenario": "posted 5 days ago (freshness=FRESH category, age=5 days)", "result": "not APPLY_TODAY (>3 days), still ALL_MATCHING_JOBS"},
+      {"job": "G", "scenario": "status manually forced to REJECTED on an otherwise-qualifying job", "result": "Report Status=AMBIGUOUS_REJECTED_STATUS_SEE_LIMITATION, excluded from ALREADY_APPLIED and APPLY_TODAY -- limitation explicitly demonstrated"}
+    ],
+    "result": "100% pass, all 7 scenarios plus full 9-sheet workbook artifact check",
+    "classification": "PASS"
+  },
+  "section6_production_safety": {
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "size_bytes_before": 114688,
+    "size_bytes_after": 114688,
+    "row_counts_before": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+    "row_counts_after": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+    "naukri_status": "AdapterStatus.ENABLED",
+    "linkedin_status": "AdapterStatus.NOT_ENABLED",
+    "hirist_status": "AdapterStatus.NOT_ENABLED",
+    "default_sources": ["NAUKRI"],
+    "production_db_opened_at_all": false,
+    "full_standalone_suite": "PASS=46 FAIL=0 (.venv)",
+    "py_compile": "PY_COMPILE_ALL_OK",
+    "json_report_valid": true,
+    "classification": "PASS"
+  },
+  "files_changed": {
+    "modified": [
+      "scripts/generate_run_report.py",
+      "scripts/run_search_worker.py"
+    ],
+    "rewritten": [
+      "scripts/test_generate_run_report.py"
+    ],
+    "new": [
+      "data/reports/phase7_1_reporting_semantics_audit.md",
+      "data/reports/phase7_1_reporting_semantics_audit.json"
+    ],
+    "not_modified": [
+      "scripts/generate_daily_report.py", "scripts/score_job.py", "scripts/tracker.py",
+      "scripts/search_worker.py", "scripts/job_ranking.py", "scripts/score_explanation.py",
+      "scripts/freshness.py", "scripts/job_eligibility.py", "scripts/cross_source_dedup.py",
+      "scripts/canonical_job.py", "scripts/candidate_profile.py", "scripts/search_submission.py",
+      "scripts/naukri_adapter.py", "scripts/hirist_adapter.py", "scripts/hirist_parser.py",
+      "scripts/hirist_fetcher.py", "scripts/linkedin_adapter.py", "scripts/source_registry.py",
+      "config/profile.json", "config/application_schema.json", "data/applications/jobos.db"
+    ]
+  },
+  "summary_classification": {
+    "new_jobs_vs_already_seen_semantics": "PASS (fixed this task; was NEEDS CHANGE)",
+    "ineligible_score_rejected_eligible_not_applied_ready_to_apply_applied_withdrawn_duplicate_already_seen": "PASS",
+    "employer_rejected": "BLOCKED -- proposal given (Option A recommended), not implemented, awaiting approval",
+    "daily_runtime_integration": "PASS WITH LIMITATION -- integration point built and verified; still manual, no scheduler exists or was built",
+    "apply_today_sheet": "PASS (fixed this task; was NEEDS CHANGE)",
+    "all_matching_jobs_already_applied_duplicates_application_tracker_run_summary_sheets": "PASS",
+    "rejected_excluded_sheet": "PASS WITH LIMITATION (inherits the EMPLOYER_REJECTED limitation)",
+    "source_health_sheet": "PASS WITH LIMITATION (pre-existing, unmodified search_runs.source granularity note)",
+    "offline_regression_test_jobs_a_through_g": "PASS",
+    "production_safety": "PASS"
+  },
+  "stopped_after_this_task": true,
+  "proceeded_to_another_source": false,
+  "awaiting_review_and_approval_on": "the proposed (not implemented) EMPLOYER_REJECTED status-vocabulary fix in score_job.py (Option A)",
+  "hirist_enabled": false,
+  "linkedin_enabled": false
+}

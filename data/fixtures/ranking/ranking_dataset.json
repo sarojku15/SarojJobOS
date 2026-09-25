@@ -1,0 +1,360 @@
+{
+  "reference_date": "2026-09-20",
+  "candidate_profile": {
+    "candidate": {"name": "Test Candidate", "experience_years": 11},
+    "target_locations": ["Bengaluru", "Hyderabad", "Pune", "Chennai", "Remote"],
+    "target_roles": ["Senior Site Reliability Engineer", "Senior SRE", "Senior DevOps Engineer", "Senior Cloud Engineer", "Senior Platform Engineer", "Infrastructure Engineer"],
+    "cloud": ["AWS", "Azure", "EC2", "S3", "Lambda", "VNet"],
+    "kubernetes": ["Kubernetes", "EKS", "AKS", "Helm"],
+    "iac_and_automation": ["Terraform", "Ansible"],
+    "cicd_and_devops": ["Jenkins", "GitHub Actions", "ArgoCD"],
+    "observability": ["Prometheus", "Grafana", "Splunk", "Dynatrace", "OpenTelemetry"],
+    "sre": ["SLO", "SLI", "SLA", "Error Budgets", "Incident Management", "RCA"],
+    "programming_and_scripting": ["Python", "Shell", "PowerShell"],
+    "tools": ["Linux"]
+  },
+  "cases": [
+    {
+      "case_id": 1,
+      "description": "Perfect match -- every dimension fully satisfied",
+      "job": {
+        "source": "SOURCE_A",
+        "job_id": "RANK-JOB-001",
+        "company": "Example Technologies",
+        "title": "Senior Site Reliability Engineer",
+        "location": "Bengaluru",
+        "work_model": "Hybrid",
+        "job_url": "https://source-a.example.com/jobs/2001",
+        "posted_date": "2026-09-19",
+        "jd_text": "We are looking for a Senior Site Reliability Engineer / DevOps engineer to own production reliability across AWS and Azure. You will run Kubernetes (EKS/AKS) clusters, manage infrastructure as code with Terraform and Ansible, build CI/CD pipelines with Jenkins and GitHub Actions, and drive incident management, SLO/SLI/error budget practices, and root cause analysis. Observability via Prometheus and Grafana is core. You will work across our cloud platform and distributed systems, supporting production infrastructure at scale.",
+        "experience_required": "8-12 years",
+        "mandatory_skills": ["Kubernetes", "Terraform"],
+        "preferred_skills": ["Prometheus", "Grafana"]
+      }
+    },
+    {
+      "case_id": 2,
+      "description": "Strong match with one skill gap -- no CI/CD signal at all",
+      "job": {
+        "source": "SOURCE_A",
+        "job_id": "RANK-JOB-002",
+        "company": "Northwind Cloud",
+        "title": "Senior Site Reliability Engineer",
+        "location": "Bengaluru",
+        "work_model": "Hybrid",
+        "job_url": "https://source-a.example.com/jobs/2002",
+        "posted_date": "2026-09-18",
+        "jd_text": "We are looking for a Senior Site Reliability Engineer to own production reliability across AWS and Azure. You will run Kubernetes (EKS/AKS) clusters, manage infrastructure as code with Terraform, and drive incident management, SLO/SLI/error budget practices, and root cause analysis. Observability via Prometheus and Grafana is core. You will work across our cloud platform and distributed systems, supporting production infrastructure at scale.",
+        "experience_required": "8-12 years",
+        "mandatory_skills": ["Kubernetes", "Terraform"],
+        "preferred_skills": ["Prometheus"]
+      }
+    },
+    {
+      "case_id": 3,
+      "description": "Borderline experience -- candidate exactly at the job's stated minimum (documented as MATCH, not BORDERLINE, per experience_eligibility.py's own docstring)",
+      "job": {
+        "source": "SOURCE_A",
+        "job_id": "RANK-JOB-003",
+        "company": "Solstice Systems",
+        "title": "Lead DevOps Engineer",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/2003",
+        "posted_date": "2026-09-17",
+        "jd_text": "Lead our DevOps practice: CI/CD pipeline ownership, Kubernetes platform operations, and infrastructure automation with Terraform and Ansible.",
+        "experience_required": "11-15 years",
+        "mandatory_skills": [],
+        "preferred_skills": []
+      }
+    },
+    {
+      "case_id": 4,
+      "description": "Below-profile experience -- job requires far less experience than the candidate has -> ineligible",
+      "job": {
+        "source": "SOURCE_A",
+        "job_id": "RANK-JOB-004",
+        "company": "Fresh Grad Startups",
+        "title": "Site Reliability Engineer",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/2004",
+        "posted_date": "2026-09-16",
+        "jd_text": "Entry-level SRE role supporting our small production environment.",
+        "experience_required": "1-3 years",
+        "mandatory_skills": [],
+        "preferred_skills": []
+      }
+    },
+    {
+      "case_id": 5,
+      "description": "Above-profile experience -- job requires more experience than the candidate has -> still eligible, informational only",
+      "job": {
+        "source": "SOURCE_A",
+        "job_id": "RANK-JOB-005",
+        "company": "Veteran Systems",
+        "title": "Principal Site Reliability Engineer",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/2005",
+        "posted_date": "2026-09-15",
+        "jd_text": "Principal SRE role requiring deep AWS, Kubernetes, and Terraform experience across a very large production estate.",
+        "experience_required": "18+ years",
+        "mandatory_skills": [],
+        "preferred_skills": []
+      }
+    },
+    {
+      "case_id": 6,
+      "description": "Wrong city -- job location has no compatible pairing with any target location -> ineligible",
+      "job": {
+        "source": "SOURCE_A",
+        "job_id": "RANK-JOB-006",
+        "company": "Coastal Systems",
+        "title": "Senior Site Reliability Engineer",
+        "location": "Mumbai",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/2006",
+        "posted_date": "2026-09-14",
+        "jd_text": "Senior SRE role based in our Mumbai office, on AWS and Kubernetes.",
+        "experience_required": "8-12 years",
+        "mandatory_skills": [],
+        "preferred_skills": []
+      }
+    },
+    {
+      "case_id": 7,
+      "description": "Remote job -- candidate's own generic 'Remote' preference matches a generic remote job",
+      "job": {
+        "source": "SOURCE_A",
+        "job_id": "RANK-JOB-007",
+        "company": "Skylark Networks",
+        "title": "Senior Platform Engineer",
+        "location": "Remote",
+        "work_model": "Remote",
+        "job_url": "https://source-a.example.com/jobs/2007",
+        "posted_date": "2026-09-13",
+        "jd_text": "Fully remote Senior Platform Engineer role owning our Kubernetes platform on AWS.",
+        "experience_required": "8-12 years",
+        "mandatory_skills": [],
+        "preferred_skills": []
+      }
+    },
+    {
+      "case_id": 8,
+      "description": "Unknown location -- missing location text -> eligibility UNKNOWN, not a rejection",
+      "job": {
+        "source": "SOURCE_A",
+        "job_id": "RANK-JOB-008",
+        "company": "Vantage Point Inc",
+        "title": "Senior Cloud Engineer",
+        "location": "",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/2008",
+        "posted_date": "2026-09-12",
+        "jd_text": "Senior Cloud Engineer role on our AWS-based platform team.",
+        "experience_required": "8-12 years",
+        "mandatory_skills": [],
+        "preferred_skills": []
+      }
+    },
+    {
+      "case_id": 9,
+      "description": "AWS-heavy job",
+      "job": {
+        "source": "SOURCE_A",
+        "job_id": "RANK-JOB-009",
+        "company": "Amberline Cloud",
+        "title": "Senior Cloud Engineer",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/2009",
+        "posted_date": "2026-09-11",
+        "jd_text": "Senior Cloud Engineer owning our AWS estate: EC2, S3, Lambda, and cost optimization across production infrastructure.",
+        "experience_required": "8-12 years",
+        "mandatory_skills": ["AWS"],
+        "preferred_skills": []
+      }
+    },
+    {
+      "case_id": 10,
+      "description": "Azure-heavy job",
+      "job": {
+        "source": "SOURCE_A",
+        "job_id": "RANK-JOB-010",
+        "company": "Bluepeak Systems",
+        "title": "Senior Platform Engineer",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/2010",
+        "posted_date": "2026-09-10",
+        "jd_text": "Senior Platform Engineer owning our Azure estate: AKS, VNet, and platform reliability across production infrastructure.",
+        "experience_required": "8-12 years",
+        "mandatory_skills": ["Azure"],
+        "preferred_skills": []
+      }
+    },
+    {
+      "case_id": 11,
+      "description": "Kubernetes-heavy job",
+      "job": {
+        "source": "SOURCE_A",
+        "job_id": "RANK-JOB-011",
+        "company": "Corestack Labs",
+        "title": "Platform Engineer",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/2011",
+        "posted_date": "2026-09-09",
+        "jd_text": "Platform Engineer building our internal Kubernetes platform: Helm charts, EKS cluster operations, and golden-path automation.",
+        "experience_required": "8-12 years",
+        "mandatory_skills": ["Kubernetes"],
+        "preferred_skills": []
+      }
+    },
+    {
+      "case_id": 12,
+      "description": "Irrelevant job -- completely unrelated role, no tech signals, no hard-reject keyword either",
+      "job": {
+        "source": "SOURCE_A",
+        "job_id": "RANK-JOB-012",
+        "company": "Willowbrook Foods",
+        "title": "Regional Sales Manager",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/2012",
+        "posted_date": "2026-09-08",
+        "jd_text": "Willowbrook Foods is hiring a Regional Sales Manager to grow our FMCG distribution network across southern India.",
+        "experience_required": "8-12 years",
+        "mandatory_skills": [],
+        "preferred_skills": []
+      }
+    },
+    {
+      "case_id": 13,
+      "description": "Fresh job (5 days old relative to reference_date)",
+      "job": {
+        "source": "SOURCE_A",
+        "job_id": "RANK-JOB-013",
+        "company": "Driftwood Cloud",
+        "title": "Senior Site Reliability Engineer",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/2013",
+        "posted_date": "2026-09-15",
+        "jd_text": "Senior SRE role on AWS and Kubernetes.",
+        "experience_required": "8-12 years",
+        "mandatory_skills": [],
+        "preferred_skills": []
+      }
+    },
+    {
+      "case_id": 14,
+      "description": "Aging job (10 days old relative to reference_date)",
+      "job": {
+        "source": "SOURCE_A",
+        "job_id": "RANK-JOB-014",
+        "company": "Driftwood Cloud",
+        "title": "Senior Site Reliability Engineer",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/2014",
+        "posted_date": "2026-09-10",
+        "jd_text": "Senior SRE role on AWS and Kubernetes.",
+        "experience_required": "8-12 years",
+        "mandatory_skills": [],
+        "preferred_skills": []
+      }
+    },
+    {
+      "case_id": 15,
+      "description": "Stale job (45 days old relative to reference_date)",
+      "job": {
+        "source": "SOURCE_A",
+        "job_id": "RANK-JOB-015",
+        "company": "Driftwood Cloud",
+        "title": "Senior Site Reliability Engineer",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/2015",
+        "posted_date": "2026-08-06",
+        "jd_text": "Senior SRE role on AWS and Kubernetes.",
+        "experience_required": "8-12 years",
+        "mandatory_skills": [],
+        "preferred_skills": []
+      }
+    },
+    {
+      "case_id": 16,
+      "description": "Missing posted date",
+      "job": {
+        "source": "SOURCE_A",
+        "job_id": "RANK-JOB-016",
+        "company": "Driftwood Cloud",
+        "title": "Senior Site Reliability Engineer",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/2016",
+        "posted_date": "",
+        "jd_text": "Senior SRE role on AWS and Kubernetes.",
+        "experience_required": "8-12 years",
+        "mandatory_skills": [],
+        "preferred_skills": []
+      }
+    },
+    {
+      "case_id": 17,
+      "description": "Malformed posted date -- not a real date and not a recognized relative phrase",
+      "job": {
+        "source": "SOURCE_A",
+        "job_id": "RANK-JOB-017",
+        "company": "Driftwood Cloud",
+        "title": "Senior Site Reliability Engineer",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/2017",
+        "posted_date": "Sometime recently-ish",
+        "jd_text": "Senior SRE role on AWS and Kubernetes.",
+        "experience_required": "8-12 years",
+        "mandatory_skills": [],
+        "preferred_skills": []
+      }
+    },
+    {
+      "case_id": 18,
+      "description": "Future posted date -- 5 days ahead of reference_date, handled conservatively as UNKNOWN",
+      "job": {
+        "source": "SOURCE_A",
+        "job_id": "RANK-JOB-018",
+        "company": "Driftwood Cloud",
+        "title": "Senior Site Reliability Engineer",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/2018",
+        "posted_date": "2026-09-25",
+        "jd_text": "Senior SRE role on AWS and Kubernetes.",
+        "experience_required": "8-12 years",
+        "mandatory_skills": [],
+        "preferred_skills": []
+      }
+    },
+    {
+      "case_id": 19,
+      "description": "Cross-source mirror of case 1 -- same job posted by a second source, to exercise duplicate-candidate detection in the offline report",
+      "job": {
+        "source": "SOURCE_B",
+        "job_id": "RANK-JOB-001-MIRROR",
+        "company": "Example Technologies",
+        "title": "Senior Site Reliability Engineer",
+        "location": "Bengaluru",
+        "work_model": "Hybrid",
+        "job_url": "https://source-b.example.com/careers/9001",
+        "posted_date": "2026-09-19",
+        "jd_text": "We are looking for a Senior Site Reliability Engineer / DevOps engineer to own production reliability across AWS and Azure. You will run Kubernetes (EKS/AKS) clusters, manage infrastructure as code with Terraform and Ansible, build CI/CD pipelines with Jenkins and GitHub Actions, and drive incident management, SLO/SLI/error budget practices, and root cause analysis. Observability via Prometheus and Grafana is core. You will work across our cloud platform and distributed systems, supporting production infrastructure at scale.",
+        "experience_required": "8-12 years",
+        "mandatory_skills": ["Kubernetes", "Terraform"],
+        "preferred_skills": ["Prometheus", "Grafana"]
+      }
+    }
+  ]
+}

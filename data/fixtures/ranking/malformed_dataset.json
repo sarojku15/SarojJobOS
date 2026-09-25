@@ -1,0 +1,62 @@
+{
+  "reference_date": "2026-09-20",
+  "candidate_profile": {
+    "candidate": {"name": "Test Candidate", "experience_years": 11},
+    "target_locations": ["Bengaluru", "Hyderabad", "Pune", "Chennai", "Remote"],
+    "cloud": ["AWS", "Azure"],
+    "kubernetes": ["Kubernetes", "EKS", "AKS", "Helm"],
+    "iac_and_automation": ["Terraform", "Ansible"],
+    "cicd_and_devops": ["Jenkins", "GitHub Actions", "ArgoCD"],
+    "observability": ["Prometheus", "Grafana", "Splunk", "Dynatrace", "OpenTelemetry"],
+    "sre": ["SLO", "SLI", "SLA", "Error Budgets", "Incident Management", "RCA"],
+    "programming_and_scripting": ["Python", "Shell", "PowerShell"],
+    "tools": ["Linux"]
+  },
+  "cases": [
+    {
+      "case_id": 1,
+      "description": "Malformed -- missing required 'title' field entirely",
+      "job": {
+        "source": "SOURCE_A",
+        "job_id": "MALFORMED-JOB-001",
+        "company": "Ghost Corp"
+      }
+    },
+    {
+      "case_id": 2,
+      "description": "Malformed -- missing required 'company' field entirely",
+      "job": {
+        "source": "SOURCE_A",
+        "job_id": "MALFORMED-JOB-002",
+        "title": "Senior Site Reliability Engineer"
+      }
+    },
+    {
+      "case_id": 3,
+      "description": "Minimal but structurally valid -- only source/company/title present, everything else missing/unknown",
+      "job": {
+        "source": "SOURCE_A",
+        "company": "Minimal Co",
+        "title": "SRE"
+      }
+    },
+    {
+      "case_id": 4,
+      "description": "Genuinely good job, included to prove the pipeline keeps processing after skipping the malformed entries above",
+      "job": {
+        "source": "SOURCE_A",
+        "job_id": "MALFORMED-JOB-004",
+        "company": "Example Technologies",
+        "title": "Senior Site Reliability Engineer",
+        "location": "Bengaluru",
+        "work_model": "Hybrid",
+        "job_url": "https://source-a.example.com/jobs/4004",
+        "posted_date": "2026-09-19",
+        "jd_text": "We are looking for a Senior Site Reliability Engineer to own production reliability across AWS and Azure, Kubernetes, Terraform, Jenkins, GitHub Actions, Prometheus, Grafana, incident management, SLO/SLI/error budget practices, and root cause analysis across our cloud platform and distributed systems.",
+        "experience_required": "8-12 years",
+        "mandatory_skills": [],
+        "preferred_skills": []
+      }
+    }
+  ]
+}

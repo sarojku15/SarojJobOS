@@ -1,0 +1,9 @@
+{
+  "_comment": "Generic ATS/career-page board registry consumed by greenhouse_adapter.py / lever_adapter.py / ashby_adapter.py. Empty by default -- no company is hardcoded into the product. To use, add entries like the example below (left commented via the _example key, which the loader ignores) and configure the corresponding adapter's search()/health_check() phased validation before ever setting its AdapterStatus to ENABLED.",
+  "_example": [
+    {"platform": "greenhouse", "board_token": "examplecompany"},
+    {"platform": "lever", "board_token": "examplecompany"},
+    {"platform": "ashby", "board_token": "examplecompany"}
+  ],
+  "boards": []
+}

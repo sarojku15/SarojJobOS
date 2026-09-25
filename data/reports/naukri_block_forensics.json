@@ -1,0 +1,111 @@
+{
+  "task": "Forensic investigation of the Naukri search-page BLOCKED result from the advisory-health-check live validation",
+  "no_new_live_naukri_requests": true,
+  "no_browser_launch_against_naukri": true,
+  "one_offline_browser_launch_against_local_fixture_for_diagnostic_verification": true,
+  "q1_block_classification_evidence": {
+    "classification_detail_at_time_of_run": "block phrase matched (UNKNOWN_BLOCK)",
+    "mechanism": "detect_block_reason() matching one of 5 hardcoded phrases against human-visible text only (title + body, script/style excluded)",
+    "phrase_list": ["access denied", "you don't have permission to access", "request blocked", "unusual traffic", "edgesuite.net"],
+    "exact_matched_phrase_for_this_run": "NOT_DETERMINABLE - raw HTML was not saved by the live-test driver, only html_len",
+    "signal_source": "response body/title text only, not HTTP status/headers/URL",
+    "label": "FACT (mechanism), NOT_DETERMINABLE (exact phrase for this run)"
+  },
+  "q2_captured_http_browser_evidence": {
+    "status_code": {"captured_before_this_task": false, "captured_after_this_task_diagnostic": true},
+    "response_final_url": {"captured_before_this_task": false, "captured_after_this_task_diagnostic": true},
+    "redirects": {"captured": false},
+    "response_body": {"fetched_but_not_persisted": true},
+    "title": {"extracted_internally_not_surfaced": true},
+    "headers": {"captured": false},
+    "timing_duration": {"captured": "partial - start timestamp only, no duration measurement anywhere in pipeline"},
+    "browser_channel_headless": {"captured_this_run": true, "channel": "chromium (full binary confirmed, 327 clean process observations)", "headless": true, "headless_shell_observed": false}
+  },
+  "q3_comparison_with_prior_runs": [
+    {"run": "first 5-query test (headed, pre-headless/3-day work)", "browser_mode": "headed", "binary": "full chromium (necessarily)", "jobAge_param": "none (feature not built yet)", "health_check": "succeeded", "search_attempted": true, "search_outcome": "5x VALID_RESULTS, 100 raw jobs"},
+    {"run": "5-query + 3-day, headless (default binary)", "browser_mode": "headless", "binary": "chromium_headless_shell", "jobAge_param": "jobAge=3", "health_check": "FAILED (UNKNOWN_BLOCK)", "search_attempted": false, "search_outcome": null},
+    {"run": "5-query + channel=chromium, headless", "browser_mode": "headless", "binary": "full chromium (confirmed offline; live-run process evidence self-contaminated)", "jobAge_param": "jobAge=3", "health_check": "FAILED (UNKNOWN_BLOCK)", "search_attempted": false, "search_outcome": null},
+    {"run": "1-query advisory architecture (subject of this investigation)", "browser_mode": "headless", "binary": "full chromium (confirmed cleanly, 327 observations)", "jobAge_param": "jobAge=3", "health_check": "FAILED (UNKNOWN_BLOCK)", "search_attempted": true, "search_outcome": "BLOCKED (UNKNOWN_BLOCK)"}
+  ],
+  "q3_key_facts": [
+    "3/3 headless attempts failed the homepage health check with identical UNKNOWN_BLOCK",
+    "100% of headed attempts succeeded at both homepage and every search query",
+    "The one search attempted under headless conditions was also BLOCKED",
+    "Every headless attempt occurred later in the session (higher cumulative request volume) than every headed success -- headless-vs-headed and early-vs-late-session are perfectly confounded in the data collected so far",
+    "The homepage URL (no query parameters) has failed on every headless attempt, independent of jobAge",
+    "This run made only 2 live requests total (1 health check + 1 search) and still failed -- evidence against a same-call request-volume cause"
+  ],
+  "q4_hypotheses": {
+    "A_categorical_block_of_this_url": {"verdict": "NOT_DETERMINABLE", "reason": "Only one data point for this exact URL+jobAge combination exists; no comparison URL tried under the same conditions"},
+    "B_fingerprint_block": {"verdict": "PARTIALLY_CONTRADICTED_NARROW_NOT_DETERMINABLE_BROAD", "reason": "channel='chromium' (full binary) still blocked -- contradicts the narrow 'headless-shell binary' sub-hypothesis specifically; a broader fingerprint (e.g. --headless flag runtime effects) remains not determinable, confounded with D"},
+    "C_naukri_blocks_headless_categorically": {"verdict": "NOT_DETERMINABLE", "reason": "Consistent with the observed pattern but perfectly confounded with D (timing/volume) in the available data"},
+    "D_rate_or_request_threshold": {"verdict": "NOT_DETERMINABLE", "reason": "Same confound as C"},
+    "E_classifier_too_broad_misclassifying": {"verdict": "NOT_DETERMINABLE_no_supporting_evidence", "reason": "Phrase list was fixture-validated against known false-positive sources (dormant CSS/class names); raw HTML from this run was not saved to confirm or refute a false positive"},
+    "F_jobAge_causes_block": {"verdict": "CONTRADICTED", "reason": "The homepage (no jobAge parameter at all) was also blocked, and blocked first, on every headless attempt including this one"},
+    "G_url_construction_invalid": {"verdict": "CONTRADICTED_by_inference", "reason": "The base URL pattern was already proven to produce VALID_RESULTS in headed mode this session; the observed BLOCKED outcome (an access-denied phrase match) is more consistent with WAF interception than PARSE_FAILURE, which would suggest an invalid/unrecognized request"},
+    "H_cause_not_determinable": {"verdict": "PARTIALLY_TRUE", "reason": "Proximate mechanism (genuine WAF/access-control interception) is established as FACT; root cause (C vs D vs other) is NOT_DETERMINABLE from current evidence"}
+  },
+  "q5_jobAge_investigation": {
+    "native_ui_evidence": "FACT - real fixture contains filter-freshness-{1,3,7,15,30} dropdown with title='Last 3 days' for value 3",
+    "url_construction_verified": "FACT - jobAge=3 confirmed byte-for-byte in the live-requested URL",
+    "parameter_name_itself": "unverified best-effort guess, documented as such since it was introduced",
+    "returned_listing_freshness_evidence": "none - no search using jobAge=3 has ever returned any job listings",
+    "conclusion": "URL-ONLY / UNVERIFIED (unchanged from the prior live-validation report)"
+  },
+  "q6_diagnostic_improvements": {
+    "changes_made": [
+      {
+        "file": "scripts/naukri_parser.py",
+        "change": "Added _find_matched_unknown_block_phrase(); classify_search_page()'s BLOCKED detail now includes the actual matched phrase. detect_block_reason() signature/behavior unchanged.",
+        "verified_offline_against": "data/fixtures/naukri/blocked_access_denied.html",
+        "verification_result": "detail now reads \"block phrase matched (UNKNOWN_BLOCK): 'access denied'\""
+      },
+      {
+        "file": "scripts/naukri_fetch_bridge.js",
+        "change": "After page.goto(), prints a DIAGNOSTIC line to stderr with requestedUrl, finalUrl, and HTTP status code. stdout (pure HTML) unaffected.",
+        "verified_offline_against": "local file:// URL pointing at blocked_access_denied.html fixture -- zero network request",
+        "verification_result": "DIAGNOSTIC line correctly printed with status=200; stdout confirmed byte-identical to source fixture"
+      },
+      {
+        "file": "scripts/naukri_fetcher.py",
+        "change": "NaukriFetcher.fetch() now forwards bridge stderr to Python's own stderr on the success path too (previously only surfaced on failure). Return value and exceptions unchanged.",
+        "verified_offline_against": "real NaukriFetcher.fetch() called against a local file:// URL",
+        "verification_result": "diagnostic line correctly surfaced"
+      }
+    ],
+    "regression_after_changes": "36/36 pre-existing standalone tests pass, py_compile clean",
+    "classifier_weakened": false
+  },
+  "q7_recommended_next_live_test": {
+    "query": {"role": "Infrastructure Engineer", "location": "Bangalore"},
+    "max_job_age_days": "OMIT (None/unrestricted) -- Hypothesis F already contradicted; removes a variable for a cleaner next data point",
+    "health_check_is_advisory": "remain True, unchanged",
+    "evidence_to_capture": [
+      "health check result",
+      "whether search() is attempted",
+      "exact requested URL",
+      "NEW: bridge DIAGNOSTIC stderr (HTTP status, final/redirect URL) for both fetches",
+      "NEW: exact matched block phrase if BLOCKED",
+      "raw job count and, if any jobs returned, normalized/eligible counts"
+    ],
+    "headless_config": "JOBOS_BROWSER_HEADLESS unset (default headless), channel='chromium' -- unchanged, already proven clean this run",
+    "production_db_guarantee": "fresh isolated temp DB via tempfile.mkdtemp(), production DB opened only in mode=ro for before/after SHA verification, never opened for writing"
+  },
+  "q8_ready_for_multi_query_validation": {
+    "ready": false,
+    "reason": "Architecture is proven correct, but the root cause of the current block (categorical headless block vs. cumulative rate-limiting vs. another factor) remains NOT_DETERMINABLE. Running 5-10 queries now would multiply live requests without resolving the open confound better than one more carefully-instrumented single query would.",
+    "recommendation": "Run the single query specified in q7 first; reassess after analyzing its result."
+  },
+  "production_db": {
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "size_before": 114688,
+    "size_after": 114688,
+    "unchanged": true
+  },
+  "tests": {
+    "full_standalone_suite": "36/36 pass",
+    "py_compile": "clean",
+    "pytest": "not installed in this environment"
+  }
+}

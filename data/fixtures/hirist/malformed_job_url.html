@@ -1,0 +1,23 @@
+<!-- SYNTHETIC fixture: a nested "item" object whose "url" field is not a well-formed http(s) URL. The entry must still be parsed (company+title present) but job_url must be left empty, never fabricated or passed through malformed. -->
+<!DOCTYPE html><html lang="en"><head>
+<title>Search for - Senior Devops Engineer Jobs | hirist.tech</title>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "ItemList",
+  "numberOfItems": 1,
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "item": {
+        "@type": "JobPosting",
+        "title": "Cloud Engineer",
+        "hiringOrganization": {"@type": "Organization", "name": "Broken URL Co"},
+        "url": "not-a-valid-url"
+      }
+    }
+  ]
+}
+</script>
+</head><body></body></html>

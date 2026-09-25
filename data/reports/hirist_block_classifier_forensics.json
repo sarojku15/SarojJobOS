@@ -1,0 +1,148 @@
+{
+  "task": "Phase 6 Step 5 -- Hirist block-classifier forensics, offline only, zero network requests",
+  "live_network_requests_made": 0,
+  "tools_confirmed_not_invoked": ["Playwright", "hirist_fetcher.py", "hirist_fetch_bridge.js", "curl", "wget", "browser", "any HTTP client"],
+  "1_exact_classifier_function": {
+    "file": "scripts/hirist_parser.py",
+    "function": "_find_block_signal(html)",
+    "called_from": "classify_search_page(html, current_url)",
+    "operates_on": "complete raw HTML document source (page.content()), not visible/rendered text",
+    "code": "lowered = html.lower(); for phrase in _HARD_BLOCK_PHRASES: if phrase in lowered: return (\"BLOCKED\", phrase); for phrase in _CHALLENGE_PHRASES: if phrase in lowered: return (\"SOFT_BLOCK_OR_CHALLENGE\", phrase); return (None, None)"
+  },
+  "2_exact_matched_phrase": {
+    "phrase": "captcha",
+    "phrase_list": "_CHALLENGE_PHRASES",
+    "full_list": ["captcha", "checkpoint", "security check", "unusual activity", "verify you are a human", "are you a robot"],
+    "source_of_match_record": "data/reports/hirist_one_query_live_validation.json: matched_phrase=captcha, detail=\"challenge phrase matched: 'captcha'\""
+  },
+  "3_exact_occurrence_context": {
+    "determinable": false,
+    "reason": "the Step 4 validation driver captured and persisted only derived data (html_length, classifier state, matched_block_phrase, parsed job list) -- the actual fetched HTML body was never written to any file; the temporary driver and its output were deleted at the end of Step 4 per standard scratchpad cleanup practice",
+    "categories_requested_but_not_answerable": ["visible page text", "HTML attributes", "JavaScript", "JSON-LD", "metadata", "comments", "scripts", "unrelated content"],
+    "occurrence_count": "not determinable",
+    "what_is_determinable_instead": "the matching mechanism itself scans the entire raw document, so by construction an attribute/script/comment/JSON-LD match is just as possible as a visible-text match -- see section 6"
+  },
+  "4_response_length": {
+    "step4_blocked_page_chars": 312116,
+    "step1_successful_page_chars": 312194,
+    "difference_chars": 78,
+    "difference_percent": 0.025
+  },
+  "5_evidence_from_step1_successful_page": {
+    "probe_script": "scripts/hirist_discovery_probe.js",
+    "probe_is_distinct_from_production_parser": true,
+    "check_performed": "captchaOrChallenge marker against page.locator('body').innerText() (visible/rendered text only)",
+    "code_confirmed": "const bodyText = (await page.locator('body').innerText().catch(() => '')).toLowerCase();",
+    "trigger_word_included_in_this_check": true,
+    "result": false,
+    "result_source": "data/reports/hirist_phase6_inspection.json: captcha=false, captcha_or_challenge_text_present=false",
+    "page_length_at_time_of_this_check": 312194,
+    "caveat": "Step 1 and Step 4 are two separate live requests at different times; page content (especially third-party ad/tracking scripts) can legitimately differ between requests even at near-identical total length -- this is strong circumstantial evidence, not proof that Step 4's raw HTML also lacked the word in visible text"
+  },
+  "6_comparison_of_two_pages": {
+    "step1": {"http_status": 200, "redirect": false, "html_length": 312194, "check_type": "visible text only (exploratory probe)", "result": "no match"},
+    "step4": {"http_status": 200, "redirect": false, "html_length": 312116, "check_type": "entire raw HTML (production parser)", "result": "matched 'captcha'"},
+    "same_test": false,
+    "conclusion": "the differing outcome is consistent with either a genuine content difference between requests, or the same underlying content being present both times but only detectable by the raw-HTML check -- available evidence alone cannot fully distinguish these, but section 7 provides strong independent reason to favor the latter"
+  },
+  "7_does_captcha_occur_in_normal_page_content": {
+    "verified_precedent_in_this_project": {
+      "source": "scripts/naukri_parser.py, pre-existing docstrings (written for unrelated reasons, months before this investigation)",
+      "quote_1": "Classify a captured page as blocked or not, based only on human-visible text (title + body) -- never on raw HTML source, tag attributes, CSS, or script content.",
+      "quote_2": "Guessing at keyword rules for conditions never actually observed is exactly how an earlier naive, raw-HTML keyword check produced false positives on this same search-results fixture.",
+      "quote_3": "On search_results_sre_bengaluru.html, that naive approach 'sees' the words 'captcha' and 'verify' inside a dormant .bot-guard-captcha CSS rule and an otpMobileVerifyContainer class name -- neither of which a human visitor ever sees rendered on the page."
+    },
+    "independently_reverified_this_task": {
+      "method": "plain-text grep against a local, already-present fixture file, zero network access",
+      "file": "data/fixtures/naukri/search_results_sre_bengaluru.html",
+      "command": "grep -io \"captcha[a-z-]*|[a-z-]*captcha[a-z-]*\" ... | sort -u",
+      "matches_found": ["bot-guard-captcha", "bot-guard-captcha-portal", "grecaptcha-badge", "recaptcha"],
+      "confirmed_on_a_real_successful_naukri_page": true
+    },
+    "second_independent_precedent": {
+      "source": "LinkedIn (Phase 5 Step 1), data/reports/linkedin_phase5_inspection.md",
+      "finding": "data-recaptcha-v3-integration-lix-value=\"control\" present in LinkedIn's own page meta config, on a page confirmed reachable with no actual block or challenge shown",
+      "literal_string_present_in_raw_markup": "recaptcha"
+    },
+    "pattern_identified": "major job-board/commercial sites commonly ship reCAPTCHA-family bot-protection tooling (CSS classes, JS libraries, config flags) site-wide, present in raw markup whether or not actively shown to a given visitor -- confirmed across two independent sources (Naukri, LinkedIn) in this same project's own captured data",
+    "decisive_executable_proof_added_this_task": {
+      "file": "scripts/test_hirist_block_classifier_forensics.py",
+      "method": "synthetic, in-memory HTML only, zero network",
+      "finding": "a page with a fully valid, parseable schema.org ItemList (one real job entry) plus a <style> block containing a .bot-guard-captcha-style CSS class name IS, right now, with the current unmodified hirist_parser.py, incorrectly classified as SOFT_BLOCK_OR_CHALLENGE instead of VALID_RESULTS",
+      "positive_control": "a second fixture with the word genuinely in visible body text correctly classifies as SOFT_BLOCK_OR_CHALLENGE, confirming the defect is about WHERE the word appears, not that the word itself is unreliable",
+      "proves_general_mechanism_with_certainty": true,
+      "proves_this_specific_step4_occurrence": false,
+      "note": "does not and cannot prove this specific mechanism is what happened in the actual Step 4 response (section 3's evidence gap remains: the real HTML was never saved), but eliminates doubt that the classifier's design is capable of exactly this false positive on a genuinely valid Hirist-shaped page"
+    }
+  },
+  "8_does_it_represent_an_actual_challenge": {
+    "determinable_with_certainty": false,
+    "supporting_absence_of_corroboration": [
+      "no hard-block phrase (_HARD_BLOCK_PHRASES) also matched",
+      "no CAPTCHA widget/iframe detection was performed or available",
+      "HTTP status remained 200, no redirect to a challenge URL"
+    ]
+  },
+  "9_classification_conclusion": {
+    "category": "B",
+    "category_meaning": "classifier false positive",
+    "confidence": "strongly supported, not absolutely certain",
+    "not_chosen_merely_from_http_200": true,
+    "reasoning_chain": [
+      "classifier design confirmed with certainty (from code alone) to scan raw HTML, not visible text",
+      "this exact pattern already proven, in this same project, to produce a false positive on the same trigger word, on a real captured page (Naukri)",
+      "the one available apples-to-apples signal (Step 1's visible-text-only check, near-identical page length) found the word absent",
+      "no corroborating hard-block or structural-challenge signal accompanied the Step 4 match"
+    ],
+    "what_prevents_full_confirmation": "the actual raw HTML from the Step 4 response no longer exists to point to the literal matched location; Step 1 and Step 4 are different live moments, so a genuine transient difference cannot be fully ruled out",
+    "category_a_genuine_challenge_supported_by_positive_evidence": false,
+    "category_a_note": "remains possible only in the sense that it cannot be actively disproven without the missing raw HTML, not because anything points toward it"
+  },
+  "10_confidence_and_evidence_limitations": [
+    {"evidence": "classifier scans raw HTML, not visible text", "strength": "certain (code inspection)"},
+    {"evidence": "this exact pattern produced a real false positive before, same word, this project", "strength": "certain (verified against a real, local file)"},
+    {"evidence": "page-length near-match to a confirmed-clean page", "strength": "suggestive, not proof (different live moment)"},
+    {"evidence": "visible-text-only check on a similar page found nothing", "strength": "suggestive, directly relevant, not proof of Step 4 specifically"},
+    {"evidence": "exact match location/context in the Step 4 response", "strength": "not determinable -- raw HTML was never saved"},
+    {"evidence": "whether Hirist's real page contains a similar dormant bot-protection bundle", "strength": "not directly confirmed -- inferred by analogy to Naukri/LinkedIn, not observed on Hirist's own markup"}
+  ],
+  "11_exact_remediation_required": {
+    "specific_bug_identified": true,
+    "classifier_modified_in_this_task": false,
+    "reason_not_modified": "per instruction: diagnosis first, implementation in a separate step",
+    "recommended_fix": [
+      "reuse naukri_parser.py's existing, already-tested _VisibleTextExtractor (HTMLParser subclass extracting only <title>+body text, excluding <script>/<style> content and all tag/attribute markup); apply the same extraction to hirist_parser.py and change _find_block_signal() to check extracted visible text instead of raw HTML",
+      "add an offline regression fixture: 'captcha' present ONLY inside a <style>/CSS class name or <script> block, none in visible body text -- asserts the fixed classifier does NOT return SOFT_BLOCK_OR_CHALLENGE",
+      "keep data/fixtures/hirist/challenge_captcha.html (already exists, phrase in visible <p> text) as the positive-case regression check -- must continue to classify as SOFT_BLOCK_OR_CHALLENGE after the fix",
+      "apply the identical fix to _HARD_BLOCK_PHRASES checking for consistency, even though no evidence yet shows it has produced a false positive -- the underlying design flaw is identical"
+    ],
+    "this_is_not_a_new_design": "it is applying an already-built, already-proven fix that exists elsewhere in this same codebase (naukri_parser.py) to a module that did not yet have it"
+  },
+  "12_another_live_validation_after_remediation": {
+    "recommended_conditionally": true,
+    "authorized_by_this_report": false,
+    "condition": "only after the Section 11 remediation is implemented and passes new offline regression tests, following this project's standing phase discipline (fix offline, test offline, only then re-attempt live)",
+    "scope_if_it_happens": "a single, freshly-authorized live query, identical in scope to Step 4 (same role/location, one query, no retries)",
+    "goal": "determine whether the fixed classifier reaches a different, more informative conclusion -- ideally reaching the JSON-LD parsing step this time, which Step 4 never tested at all"
+  },
+  "files_touched_in_this_task": ["scripts/test_hirist_block_classifier_forensics.py (new diagnostic test only)"],
+  "existing_files_modified": [],
+  "hirist_parser_py_modified": false,
+  "production_safety": {
+    "database_opened": false,
+    "search_worker_modified": false,
+    "source_registry_modified": false,
+    "search_profile_modified": false,
+    "scoring_modified": false,
+    "eligibility_modified": false,
+    "freshness_modified": false,
+    "deduplication_modified": false,
+    "naukri_modified": false,
+    "linkedin_modified": false,
+    "hirist_enabled": false
+  },
+  "stopped_after_this_report": true,
+  "live_request_performed": false,
+  "multi_query_validation_performed": false,
+  "classifier_code_changed": false
+}

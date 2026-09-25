@@ -1,0 +1,163 @@
+{
+  "submission": {
+    "submitted": true,
+    "search_run_id": "db3f245b-5810-4786-b79b-449dae019dbd",
+    "query_count": 11,
+    "sources": [
+      "NAUKRI",
+      "HIRIST",
+      "IIMJOBS",
+      "APNA",
+      "LINKEDIN_SEARCH",
+      "INDEED_SEARCH",
+      "FOUNDIT_SEARCH",
+      "INSTAHYRE_SEARCH",
+      "CUTSHORT_SEARCH",
+      "WELLFOUND_SEARCH",
+      "SHINE_SEARCH"
+    ]
+  },
+  "work_result": {
+    "status": "COMPLETED",
+    "raw_count": 170,
+    "matches_created": 112,
+    "unimplemented_sources": [],
+    "blocked_sources": []
+  },
+  "table": [
+    {
+      "source": "NAUKRI",
+      "board": "NAUKRI",
+      "selected": true,
+      "planned": true,
+      "queries": 1,
+      "attempted": "YES",
+      "health": "reachable=True succeeded=1 failed=0",
+      "raw": 21,
+      "eligible": 5,
+      "displayed": 5
+    },
+    {
+      "source": "HIRIST",
+      "board": "HIRIST",
+      "selected": true,
+      "planned": true,
+      "queries": 1,
+      "attempted": "YES",
+      "health": "reachable=True succeeded=1 failed=0",
+      "raw": 10,
+      "eligible": 7,
+      "displayed": 7
+    },
+    {
+      "source": "IIMJOBS",
+      "board": "IIMJOBS",
+      "selected": true,
+      "planned": true,
+      "queries": 1,
+      "attempted": "YES",
+      "health": "reachable=True succeeded=1 failed=0",
+      "raw": 4,
+      "eligible": 3,
+      "displayed": 3
+    },
+    {
+      "source": "APNA",
+      "board": "APNA",
+      "selected": true,
+      "planned": true,
+      "queries": 1,
+      "attempted": "YES",
+      "health": "reachable=True succeeded=1 failed=0",
+      "raw": 75,
+      "eligible": 69,
+      "displayed": 69
+    },
+    {
+      "source": "LINKEDIN_SEARCH",
+      "board": "LINKEDIN",
+      "selected": true,
+      "planned": true,
+      "queries": 1,
+      "attempted": "YES",
+      "health": "reachable=True succeeded=1 failed=0",
+      "raw": 6,
+      "eligible": 6,
+      "displayed": 6
+    },
+    {
+      "source": "INDEED_SEARCH",
+      "board": "INDEED",
+      "selected": true,
+      "planned": true,
+      "queries": 1,
+      "attempted": "YES",
+      "health": "reachable=True succeeded=1 failed=0",
+      "raw": 0,
+      "eligible": 0,
+      "displayed": 0
+    },
+    {
+      "source": "FOUNDIT_SEARCH",
+      "board": "FOUNDIT",
+      "selected": true,
+      "planned": true,
+      "queries": 1,
+      "attempted": "YES",
+      "health": "reachable=True succeeded=1 failed=0",
+      "raw": 0,
+      "eligible": 0,
+      "displayed": 0
+    },
+    {
+      "source": "INSTAHYRE_SEARCH",
+      "board": "INSTAHYRE",
+      "selected": true,
+      "planned": true,
+      "queries": 1,
+      "attempted": "YES",
+      "health": "reachable=True succeeded=1 failed=0",
+      "raw": 10,
+      "eligible": 10,
+      "displayed": 10
+    },
+    {
+      "source": "CUTSHORT_SEARCH",
+      "board": "CUTSHORT",
+      "selected": true,
+      "planned": true,
+      "queries": 1,
+      "attempted": "YES",
+      "health": "reachable=True succeeded=1 failed=0",
+      "raw": 0,
+      "eligible": 0,
+      "displayed": 0
+    },
+    {
+      "source": "WELLFOUND_SEARCH",
+      "board": "WELLFOUND",
+      "selected": true,
+      "planned": true,
+      "queries": 1,
+      "attempted": "YES",
+      "health": "reachable=True succeeded=1 failed=0",
+      "raw": 10,
+      "eligible": 10,
+      "displayed": 10
+    },
+    {
+      "source": "SHINE_SEARCH",
+      "board": "SHINE",
+      "selected": true,
+      "planned": true,
+      "queries": 1,
+      "attempted": "YES",
+      "health": "reachable=True succeeded=1 failed=0",
+      "raw": 2,
+      "eligible": 2,
+      "displayed": 2
+    }
+  ],
+  "production_db_sha_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+  "production_db_sha_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8"
+}

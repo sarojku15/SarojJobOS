@@ -1,0 +1,106 @@
+[
+  {
+    "source": "NAUKRI",
+    "status": "SUCCESS",
+    "detail": "",
+    "jobs_found": 21,
+    "sample": {
+      "title": true,
+      "company": true,
+      "location": true,
+      "job_url": true,
+      "canonical_url_is_absolute": true,
+      "experience_required": true,
+      "posted_date": true
+    },
+    "pipeline_ok": true,
+    "health_reachable": true,
+    "health_block_reason": "BlockReason.NONE",
+    "pipeline_summary": {
+      "eligible": false,
+      "eligibility": "EXPERIENCE_BELOW_PROFILE",
+      "score": null,
+      "freshness": "HOT",
+      "requirement_type": "UNKNOWN",
+      "canonical_location": "Mumbai"
+    }
+  },
+  {
+    "source": "HIRIST",
+    "status": "SUCCESS",
+    "detail": "",
+    "jobs_found": 9,
+    "sample": {
+      "title": true,
+      "company": true,
+      "location": true,
+      "job_url": true,
+      "canonical_url_is_absolute": true,
+      "experience_required": false,
+      "posted_date": true
+    },
+    "pipeline_ok": true,
+    "health_reachable": true,
+    "health_block_reason": "BlockReason.NONE",
+    "pipeline_summary": {
+      "eligible": true,
+      "eligibility": "ELIGIBLE",
+      "score": 80,
+      "freshness": "UNKNOWN",
+      "requirement_type": "UNKNOWN",
+      "canonical_location": "Remote"
+    }
+  },
+  {
+    "source": "IIMJOBS",
+    "status": "SUCCESS",
+    "detail": "",
+    "jobs_found": 4,
+    "sample": {
+      "title": true,
+      "company": true,
+      "location": true,
+      "job_url": true,
+      "canonical_url_is_absolute": true,
+      "experience_required": false,
+      "posted_date": true
+    },
+    "pipeline_ok": true,
+    "health_reachable": true,
+    "health_block_reason": "BlockReason.NONE",
+    "pipeline_summary": {
+      "eligible": true,
+      "eligibility": "ELIGIBLE",
+      "score": 28,
+      "freshness": "UNKNOWN",
+      "requirement_type": "UNKNOWN",
+      "canonical_location": null
+    }
+  },
+  {
+    "source": "APNA",
+    "status": "SUCCESS",
+    "detail": "",
+    "jobs_found": 75,
+    "sample": {
+      "title": true,
+      "company": true,
+      "location": true,
+      "job_url": true,
+      "canonical_url_is_absolute": true,
+      "experience_required": true,
+      "posted_date": false
+    },
+    "pipeline_ok": true,
+    "health_reachable": true,
+    "health_block_reason": "BlockReason.NONE",
+    "pipeline_summary": {
+      "eligible": true,
+      "eligibility": "ELIGIBLE",
+      "score": 38,
+      "freshness": "UNKNOWN",
+      "requirement_type": "UNKNOWN",
+      "canonical_location": "Bengaluru"
+    }
+  }
+]

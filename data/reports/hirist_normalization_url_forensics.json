@@ -1,0 +1,231 @@
+{
+  "task": "Phase 6 Step 8 -- Hirist JSON-LD normalization + job_url forensics, offline only, zero network requests",
+  "live_network_requests_made": 0,
+  "tools_confirmed_not_invoked": ["Playwright", "hirist_fetcher.py", "hirist_fetch_bridge.js", "curl", "wget", "browser", "any HTTP client"],
+  "hirist_parser_py_modified": false,
+  "evidence_base": {
+    "raw_step7_html_persisted": false,
+    "raw_step1_html_persisted": false,
+    "raw_step4_html_persisted": false,
+    "statement": "The complete raw HTML and raw JSON-LD text from every live Hirist request (Steps 1, 4, and 7) was never persisted to any file in this project. Confirmed by grepping every data/reports/hirist_*.md and *.json file for JSON-LD markers before writing this report.",
+    "only_real_raw_fragment_ever_captured": "{\"@type\": \"ListItem\", \"position\": 1, \"name\": \"Verint - Senior ...\"}",
+    "fragment_source": "data/reports/hirist_phase6_inspection.md (Phase 6 Step 1), repeated verbatim in the Step 2 offline design doc",
+    "fragment_truncated": true,
+    "fragment_truncated_after": "the word 'Senior' inside the name string value",
+    "no_additional_fragment_exists_anywhere": true,
+    "step7_data_type": "derived/aggregate parser output only (counts, final normalized company/title/job_url values) -- not raw captures"
+  },
+  "AJ_field_support_matrix": {
+    "A_job_title": {
+      "populated_in_real_data": true,
+      "confidence": "FACT (Step 7: all 24 real jobs have a title)",
+      "extraction_path": "flat name.split(' - ')[1]",
+      "reliability_caveat": "at least 1/26 normalized entries confirmed wrong (see delimiter_deep_dive)"
+    },
+    "B_company_name": {
+      "populated_in_real_data": true,
+      "confidence": "FACT (Step 7: all 24 real jobs have a company)",
+      "extraction_path": "flat name.split(' - ')[0]",
+      "reliability_caveat": "shares the same wrong-split risk as title -- one bad split corrupts both fields together"
+    },
+    "C_job_url": {
+      "populated_in_real_data": false,
+      "confidence": "FACT (Step 7: job_url null for all 24 real jobs)",
+      "explanation_status": "NOT-DETERMINABLE which of two hypotheses is correct -- see job_url_deep_dive"
+    },
+    "D_location": {
+      "populated_in_real_data": false,
+      "confidence": "FACT (Step 7: location null for all 24 real jobs)",
+      "code_reason": "only set from nested item.jobLocation; flat path (the only path real data exercises) never sets it"
+    },
+    "E_experience": {
+      "populated_in_real_data": false,
+      "confidence": "FACT -- never observed at all, and confirmed by new test C to never be assigned by any code path (nested or flat), including when experienceRequirements is present in a synthetic nested item",
+      "code_gap": true
+    },
+    "F_salary": {
+      "populated_in_real_data": false,
+      "confidence": "FACT -- never observed, and confirmed by new test C to never be extracted by any code path",
+      "docstring_code_mismatch": true,
+      "note": "module docstring (lines 50-52) lists baseSalary as part of the schema.org vocabulary 'applied defensively', but no code in _parse_job_entry() actually reads baseSalary or writes any salary-shaped field"
+    },
+    "G_job_description": {
+      "populated_in_real_data": false,
+      "confidence": "FACT (Step 7: all 24 real jobs took the flat path, which never sets jd_text)",
+      "code_support_exists_but_unexercised": "nested_item.get('description') -- confirmed unexercised by real data"
+    },
+    "H_pagination": {
+      "populated_in_real_data": true,
+      "confidence": "FACT (Step 7: rel=next correctly detected and followed across all 3 real pages)",
+      "status": "the one field/capability with no open question"
+    },
+    "I_stable_job_identifier": {
+      "populated_in_real_data": false,
+      "confidence": "FACT -- no url, @id, or any identifier populated for any of the 24 real jobs",
+      "fallback_used_by_adapter": "in-memory (company, title) tuple for cross-page dedup -- an approximation, not a true stable ID, and only as reliable as the confirmed-imperfect delimiter split"
+    },
+    "J_application_url": {
+      "populated_in_real_data": false,
+      "confidence": "FACT -- confirmed by new test B: application_url is only ever set to '' in _empty_raw_job() and never assigned anywhere else in _parse_job_entry(), for either extraction path",
+      "code_gap": true,
+      "no_real_or_synthetic_evidence_of_source_field": true
+    }
+  },
+  "delimiter_deep_dive": {
+    "reproducible": true,
+    "reproduction_confirmed_by": "new test D -- feeding '\"Senior DevOps Engineer - AWS & Kubernetes\"' deterministically produces company='Senior DevOps Engineer', title='AWS & Kubernetes'",
+    "why_it_happens": {
+      "type": "INTERPRETATION, not confirmed",
+      "hypothesis": "the flat-name branch assumes every name follows 'Company - Title'; the bad entry is consistent with a different, equally plausible convention 'Title - Skills/Tags', but the actual raw name string for that entry was never captured, so this cannot be confirmed"
+    },
+    "deterministic_alternative_exists": false,
+    "alternatives_considered_and_rejected": [
+      {
+        "alternative": "use the nested item object instead of the flat name split",
+        "rejected_because": "Step 7 confirms real data never populates the nested shape at all (0/24 jobs) -- not an alternative, a no-op"
+      },
+      {
+        "alternative": "detect convention via keyword/position heuristics (e.g. 'if second segment looks like a skills list, swap it')",
+        "rejected_because": "explicitly forbidden by task instructions as heuristic guessing to make output look better; no labeled examples of both conventions exist to validate against (only one bad example known)"
+      },
+      {
+        "alternative": "reject entries where the split looks wrong",
+        "rejected_because": "would require fabricating a rule to distinguish 'wrong split' from 'correct split with an unusual title' without further evidence"
+      }
+    ],
+    "conclusion": "no deterministic, evidence-backed alternative exists with current evidence -- documented as an unresolved limitation, not fixed",
+    "scope_of_problem": {
+      "confirmed_wrong_splits": 1,
+      "total_normalized_entries_before_dedup": 26,
+      "minimum_confirmed_error_rate": "~4% (1/26)",
+      "true_rate_among_all_60_raw_entries_not_determinable": true,
+      "reason": "the 34 entries skipped for zero-or-multiple delimiter occurrences were never individually inspected or logged beyond the aggregate count"
+    }
+  },
+  "job_url_deep_dive": {
+    "raw_step7_response_persisted": false,
+    "code_read_confirms": {
+      "nested_branch_reads": "nested_item.get('url') -- a url key INSIDE a nested 'item' sub-object (hirist_parser.py lines 262-297)",
+      "flat_branch_reads_url_at_all": false,
+      "flat_branch_is_the_only_path_real_data_exercises": true,
+      "confirmed_by_test": "new test A -- a synthetic flat-name ListItem with url, @id, and sameAs all set at the top level still produces job_url == ''"
+    },
+    "two_hypotheses": [
+      {
+        "id": "i",
+        "hypothesis": "Hirist's real search-results JSON-LD genuinely does not include any per-item URL -- ListItem entries may only ever carry @type, position, and name; the actual job URL may only exist on a (never-fetched) detail page",
+        "plausibility": "consistent with the one real fragment we have (shows exactly these three keys before truncation)",
+        "why_not_confirmable": "the fragment is truncated -- cannot see whether more keys followed 'name' in the same object"
+      },
+      {
+        "id": "ii",
+        "hypothesis": "a URL-shaped field exists in the real data but at a key/location the current code doesn't check -- e.g. a top-level 'url' or '@id' on the ListItem itself, sibling to 'name', rather than nested inside an 'item' object",
+        "plausibility": "consistent with schema.org's own ItemList conventions, where ListItem.url (sibling to name) is a legitimate, commonly-used alternative to nesting a full item object",
+        "why_not_confirmable": "raw JSON-LD was never persisted past what the parser extracted; the parser was never instrumented to log keys seen but not consumed during the Step 7 run"
+      }
+    ],
+    "which_hypothesis_correct": "NOT-DETERMINABLE from current evidence -- both remain live possibilities",
+    "what_would_be_needed_to_distinguish": [
+      "a fresh, explicitly-authorized live capture with the RAW JSON-LD text persisted to a file (not just derived/normalized output)",
+      "OR instrumenting the parser to log all top-level keys seen on ListItem objects during a live run"
+    ],
+    "either_option_performed_in_this_task": false,
+    "reason_not_performed": "explicit 'offline only, no further live query' instruction",
+    "fix_if_hypothesis_ii_correct": "one-line addition to the flat-name branch: _sane_url_or_none(list_item.get('url') or list_item.get('@id')) before falling back to empty -- NOT implemented in this task, would be guessing at an unconfirmed hypothesis",
+    "fix_if_hypothesis_i_correct": "no parser-level fix possible -- would require a new, separately-authorized per-job detail-page fetch (significant scope increase requiring its own inspection, robots.txt review, and rate-limit design)"
+  },
+  "schema_org_construct_review": {
+    "ItemList_top_level": {"confirmed_present": true, "basis": "FACT -- Step 1 + Step 7"},
+    "itemListElement_array": {"confirmed_present": true, "basis": "FACT -- Step 7 counts consistent (20/page, numberOfItems 20/page)"},
+    "ListItem_with_position": {"confirmed_present": true, "basis": "FACT -- Step 1 fragment + Step 7 per-page counts"},
+    "flat_name_string_on_ListItem": {"confirmed_present": true, "basis": "FACT -- Step 1 fragment; Step 7 (100% of 24 parsed jobs used this path)"},
+    "nested_item_object": {"confirmed_present": false, "basis": "Step 7 positively suggests absence -- 0/24 real jobs took the nested path; report's own conclusion: 'Hirist's real search-results JSON-LD does not appear to use the nested-object shape at all'"},
+    "top_level_url_at_id_sameAs_on_ListItem": {"confirmed_present": "NOT-DETERMINABLE", "basis": "never checked for by the parser, never ruled out by any capture -- central open question of this report"},
+    "JobPosting_fields_hiringOrganization_datePosted_description_employmentType_jobLocation_baseSalary_experienceRequirements": {"confirmed_present": false, "basis": "only ever read from the unconfirmed, apparently-unused nested-item path"}
+  },
+  "assumption_discipline": {
+    "instruction": "Do not assume fields exist merely because Schema.org supports them",
+    "compliance": "every 'not confirmed' row in schema_org_construct_review is treated as unconfirmed, not assumed present; no code change was made based on any unconfirmed field"
+  },
+  "new_characterization_tests": {
+    "file": "scripts/test_hirist_normalization_url_forensics.py",
+    "justification": "evidence-justified per task instruction (not added merely for prettier output) -- each test pins a specific code-level gap identified in this forensic pass to a concrete, runnable, offline example",
+    "check_count": 4,
+    "checks": [
+      {"id": "A", "proves": "flat-name path ignores top-level url/@id/sameAs entirely -- confirms job_url_deep_dive hypothesis (ii)'s code-level mechanism"},
+      {"id": "B", "proves": "application_url is never populated by either extraction path -- confirms category J"},
+      {"id": "C", "proves": "baseSalary/experienceRequirements never read by any code path despite docstring listing baseSalary -- confirms categories E, F and the docstring/code mismatch"},
+      {"id": "D", "proves": "the ' - ' delimiter split reproduces Step 7's exact wrong-split result on a synthetic input -- confirms delimiter_deep_dive's reproducibility finding"}
+    ],
+    "all_pass_against_unmodified_parser": true,
+    "hirist_parser_py_modified_by_adding_these_tests": false,
+    "fix_applied": false,
+    "fix_deliberately_withheld_per_instruction": "Do NOT fix the parser merely to make the test output prettier. If the evidence shows that company/title or job_url cannot currently be extracted reliably, document the limitation and stop."
+  },
+  "confirmations": {
+    "zero_live_requests": true,
+    "hirist_status_not_enabled": true,
+    "hirist_capabilities_empty": true,
+    "production_db_untouched": true,
+    "default_sources_unchanged": ["NAUKRI"],
+    "hirist_parser_py_modified": false,
+    "hirist_adapter_py_modified": false,
+    "hirist_fetcher_py_modified": false,
+    "hirist_fetch_bridge_js_modified": false,
+    "naukri_files_modified": [],
+    "source_registry_modified": false,
+    "search_profile_modified": false,
+    "search_worker_modified": false,
+    "scoring_modified": false,
+    "eligibility_modified": false,
+    "freshness_modified": false,
+    "deduplication_modified": false,
+    "existing_hirist_fixtures_modified": false
+  },
+  "verification_results": {
+    "new_test_file": "test_hirist_normalization_url_forensics.py: 4/4 PASS",
+    "full_standalone_suite": "PASS=44 FAIL=0",
+    "py_compile": "PY_COMPILE_ALL_OK",
+    "json_report_valid": true,
+    "hirist_status": "AdapterStatus.NOT_ENABLED",
+    "hirist_capabilities": [],
+    "default_sources": ["NAUKRI"]
+  },
+  "production_db": {
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "unchanged": true,
+    "row_counts_unchanged": true,
+    "opened_at_all": false
+  },
+  "files_changed": {
+    "new": [
+      "scripts/test_hirist_normalization_url_forensics.py",
+      "data/reports/hirist_normalization_url_forensics.md",
+      "data/reports/hirist_normalization_url_forensics.json"
+    ],
+    "modified": [],
+    "not_modified": [
+      "scripts/hirist_parser.py", "scripts/hirist_adapter.py",
+      "scripts/hirist_fetcher.py", "scripts/hirist_fetch_bridge.js",
+      "scripts/naukri_parser.py", "scripts/naukri_adapter.py",
+      "scripts/naukri_fetcher.py", "scripts/naukri_fetch_bridge.js",
+      "scripts/source_registry.py", "scripts/search_profile.py",
+      "scripts/search_worker.py", "scripts/score_job.py",
+      "scripts/job_eligibility.py", "scripts/experience_eligibility.py",
+      "scripts/location_taxonomy.py", "scripts/freshness.py",
+      "scripts/discover_local.py", "scripts/cross_source_dedup.py",
+      "scripts/canonical_job.py", "data/applications/jobos.db",
+      "any LinkedIn file", "all 11 existing Hirist fixtures"
+    ]
+  },
+  "summary": [
+    "the flat 'Company - Title' delimiter split is not 100% reliable, reproduced deterministically in a new test; no deterministic evidence-backed alternative exists",
+    "job_url (and application_url, salary, experience) cannot currently be extracted reliably; two plausible, mutually exclusive explanations exist and cannot be distinguished without a new live capture that persists raw payload text",
+    "both limitations are documented, not fixed, per explicit instruction"
+  ],
+  "stopped_after_this_task": true,
+  "live_hirist_query_performed": false,
+  "hirist_enabled": false,
+  "awaiting_review_before_next_step": true
+}

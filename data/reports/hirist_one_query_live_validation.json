@@ -1,0 +1,142 @@
+{
+  "task": "Phase 6 Step 4 -- Hirist one-query live validation",
+  "result": "BLOCKED (SOFT_BLOCK_OR_CHALLENGE) on the first and only page -- stopped per instruction, no retry",
+  "hirist_status_after": {"status": "AdapterStatus.NOT_ENABLED", "capabilities": [], "changed_by_this_task": false},
+  "preconditions_confirmed": {
+    "hirist_status_before": "AdapterStatus.NOT_ENABLED",
+    "hirist_capabilities_before": [],
+    "default_sources_before": ["NAUKRI"],
+    "production_db_sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "production_row_counts_before": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+    "all_matched_expected_values": true
+  },
+  "live_fetch_mechanism_built": {
+    "new_permanent_files": ["scripts/hirist_fetch_bridge.js", "scripts/hirist_fetcher.py"],
+    "mirrors": "naukri_fetch_bridge.js / naukri_fetcher.py exact configuration (channel='chromium', JOBOS_BROWSER_HEADLESS-driven headless, no UA/stealth/fingerprint customization)",
+    "hirist_adapter_py_changes": [
+      "removed the Phase 6 Step 3 placeholder HiristFetcher class (raised NotImplementedError unconditionally)",
+      "imports the real, live-capable HiristFetcher from hirist_fetcher.py as the default fetcher",
+      "constructor default rate_limit_seconds changed from 0 to 10, matching robots.txt's observed Crawl-delay: 10",
+      "search() now sleeps self._rate_limit_seconds between successive page fetches (never before the first)"
+    ],
+    "safety_mechanism": "status = AdapterStatus.NOT_ENABLED (registry-level pre-flight gate in discover_from_sources()) -- identical architecture to NaukriAdapter; the fetcher itself is live-capable by design, exactly like NaukriFetcher"
+  },
+  "test_updates_required": {
+    "reason": "two existing offline tests previously asserted the placeholder fetcher's NotImplementedError on a default-constructed HiristAdapter -- with the fetcher now live-capable, that call would have attempted a real network request",
+    "files_updated": ["scripts/test_hirist_adapter.py", "scripts/test_multi_source_adapter_architecture.py"],
+    "fix": "removed the explicit health_check() call on a default-constructed adapter in both files; replaced with a check of the class-level status/capabilities gate and (in test_hirist_adapter.py) the registry's discover_from_sources() zero-call guarantee -- both remain 100% safe (zero live calls) and equally rigorous",
+    "other_tests_in_both_files_required_no_change": true,
+    "offline_test_HiristAdapter_constructions_updated_to_pass_rate_limit_seconds_0": true
+  },
+  "query": {"role": "Senior DevOps Engineer", "location": "Bengaluru"},
+  "entry_point": "HiristAdapter().search(SearchQuery(role='Senior DevOps Engineer', location='Bengaluru')) -- real, unmodified production adapter path",
+  "retries": 0,
+  "additional_role_location_combinations_run": 0,
+  "requests_made": [
+    {
+      "n": 1,
+      "url": "https://www.hirist.tech/search/senior-devops-engineer-jobs?locations=Bengaluru",
+      "http_status": 200,
+      "final_url": "https://www.hirist.tech/search/senior-devops-engineer-jobs?locations=Bengaluru",
+      "redirected": false
+    }
+  ],
+  "total_live_requests": 1,
+  "pages_requested_count": 1,
+  "browser_runtime": {
+    "headless": true,
+    "channel": "chromium",
+    "user_agent_override": false,
+    "started_at": "2026-09-20T14:30:49.786233+00:00",
+    "ended_at": "2026-09-20T14:30:54.341919+00:00",
+    "total_elapsed_seconds": 4.6,
+    "crawl_delay_triggered": false,
+    "crawl_delay_triggered_reason": "no second page was ever attempted -- the 10-second inter-page delay only applies between successive page fetches"
+  },
+  "page_classification": {
+    "state": "SOFT_BLOCK_OR_CHALLENGE",
+    "matched_phrase": "captcha",
+    "detail": "challenge phrase matched: 'captcha'",
+    "html_length": 312116,
+    "job_count_parsed": 0,
+    "pagination_link_evaluated": false,
+    "reason_pagination_not_evaluated": "pagination-link discovery never runs after a block classification"
+  },
+  "comparison_to_phase6_step1_inspection": {
+    "phase6_step1_http_status": 200,
+    "phase6_step1_html_length": 312194,
+    "this_validation_http_status": 200,
+    "this_validation_html_length": 312116,
+    "length_difference_chars": 78,
+    "interpretation_not_confirmed_fact": "the near-identical page length is suggestive that this was substantively the same kind of page both times, and that the 'captcha' match in this run may be a false positive (e.g. a routine reCAPTCHA script reference or footer text) rather than an actual interactive challenge -- NOT confirmed or refuted in this task; no second request was made to investigate further, per the explicit no-retries instruction"
+  },
+  "error_raised": {
+    "type": "AdapterBlockedError",
+    "reason": "UNKNOWN_BLOCK",
+    "detail": "SOFT_BLOCK_OR_CHALLENGE: challenge phrase matched: 'captcha'",
+    "expected_designed_behavior": true,
+    "note": "the adapter did not crash, did not return fabricated or partial data, and did not attempt any workaround -- it failed exactly as designed for a detected challenge signal"
+  },
+  "validation_objectives_results": {
+    "1_search_url_construction": {"result": "validated", "basis": "constructed URL exactly matched the live request made; site returned HTTP 200 at that exact URL with no redirect"},
+    "2_http_accessibility": {"result": "validated", "basis": "HTTP 200 reached"},
+    "3_json_ld_parsing": {"result": "not exercised", "basis": "block-phrase check runs before JSON-LD extraction in classify_search_page(); this run never reached that code path"},
+    "4_job_extraction": {"result": "not exercised", "basis": "same as above"},
+    "5_title_company_extraction": {"result": "not exercised", "basis": "same as above"},
+    "6_url_extraction": {"result": "not exercised", "basis": "same as above"},
+    "7_pagination_detection": {"result": "not exercised", "basis": "pagination-link discovery never runs after a block classification"},
+    "8_pagination_handling": {"result": "not exercised", "basis": "only 1 page was ever requested"},
+    "9_duplicate_suppression": {"result": "not exercised (trivially)", "basis": "zero jobs"},
+    "10_block_challenge_detection": {"result": "validated", "basis": "the safety mechanism fired correctly and prevented the adapter from proceeding; whether the specific trigger was a true or false positive is separately unresolved"},
+    "11_error_handling": {"result": "validated", "basis": "AdapterBlockedError raised with the correct reason/detail, exactly matching the documented contract"},
+    "12_no_fabricated_fields": {"result": "validated", "basis": "zero fields fabricated; adapter returned nothing rather than guessing"}
+  },
+  "fields_actually_observed_live_this_run": [],
+  "fields_promoted_from_inferred_to_observed": [],
+  "rate_limit_safety_compliance": {
+    "crawl_delay_10_respected": true,
+    "retries": 0,
+    "parallel_requests": 0,
+    "detail_page_requests": 0,
+    "application_requests": 0,
+    "authentication_attempted": 0,
+    "captcha_interaction_attempted": 0,
+    "anti_bot_bypass_attempted": 0
+  },
+  "pass_fail_assessment": {
+    "overall": "FAILURE (documented, useful evidence per instruction)",
+    "criteria": {
+      "live_page_reachable": true,
+      "no_block_challenge": false,
+      "parser_produces_valid_results": false,
+      "no_fabricated_required_fields": true,
+      "pagination_handled_correctly": "N/A -- never began",
+      "no_unexpected_exceptions": true,
+      "production_db_unchanged": true,
+      "no_prohibited_network_behavior": true,
+      "exact_request_count_documented": true
+    }
+  },
+  "production_db_after": {
+    "sha256": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "unchanged": true,
+    "row_counts_unchanged": true,
+    "database_opened_at_all": false,
+    "reason_no_db_needed": "this validation exercised HiristAdapter.search() directly (the adapter path only), which has no persistence step -- no temporary DB was needed since nothing scores, matches, or tracks a job"
+  },
+  "final_verification": {
+    "hirist_specific_tests": "14/14 PASS",
+    "shared_architecture_test": "15/15 PASS",
+    "full_standalone_suite": "PASS=42 FAIL=0",
+    "py_compile": "PY_COMPILE_ALL_OK",
+    "json_validation": "valid",
+    "hirist_status_reverified": "AdapterStatus.NOT_ENABLED",
+    "hirist_capabilities_reverified": [],
+    "default_sources_reverified": ["NAUKRI"]
+  },
+  "recommendation_not_performed": "an OFFLINE investigation (no live request) reviewing whether hirist_parser.py's _CHALLENGE_PHRASES list is too broad (e.g. whether 'captcha' alone, without additional context, is a reliable signal versus a routine, always-present script/footer reference) -- should be evaluated and, if warranted, fixed offline with regression tests before any future live re-attempt; not decided or implemented in this task",
+  "stopped_after_this_validation": true,
+  "retry_performed": false,
+  "multi_query_validation_performed": false,
+  "hirist_enabled": false
+}

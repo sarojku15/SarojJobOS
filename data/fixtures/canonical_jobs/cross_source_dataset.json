@@ -1,0 +1,467 @@
+[
+  {
+    "case_id": 1,
+    "description": "Exact same job from two sources",
+    "expect_cross_source_duplicate": true,
+    "jobs": [
+      {
+        "source": "SOURCE_A",
+        "job_id": "SOURCE_A-JOB-001",
+        "company": "Example Technologies",
+        "title": "Senior Site Reliability Engineer",
+        "location": "Bengaluru",
+        "work_model": "Hybrid",
+        "job_url": "https://source-a.example.com/jobs/1001",
+        "posted_date": "2026-09-15",
+        "jd_text": "We are looking for a Senior Site Reliability Engineer to own production reliability across AWS and Kubernetes, drive SLO/error-budget practice, and lead incident response for our platform team.",
+        "experience_required": "8-10 years",
+        "mandatory_skills": ["AWS", "Kubernetes", "Terraform"],
+        "preferred_skills": ["Prometheus", "Grafana"]
+      },
+      {
+        "source": "SOURCE_B",
+        "job_id": "SOURCE_B-JOB-9001",
+        "company": "Example Technologies",
+        "title": "Senior Site Reliability Engineer",
+        "location": "Bengaluru",
+        "work_model": "Hybrid",
+        "job_url": "https://source-b.example.com/careers/9001",
+        "posted_date": "2026-09-16",
+        "jd_text": "We are looking for a Senior Site Reliability Engineer to own production reliability across AWS and Kubernetes, drive SLO and error-budget practice, and lead incident response for our platform team.",
+        "experience_required": "8-10 years",
+        "mandatory_skills": ["AWS", "Kubernetes", "Terraform"],
+        "preferred_skills": ["Prometheus", "Grafana"]
+      }
+    ]
+  },
+  {
+    "case_id": 2,
+    "description": "Same job with slightly different title",
+    "expect_cross_source_duplicate": true,
+    "jobs": [
+      {
+        "source": "SOURCE_A",
+        "job_id": "SOURCE_A-JOB-002",
+        "company": "Northwind Cloud",
+        "title": "Senior Site Reliability Engineer",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/1002",
+        "posted_date": "2026-09-10",
+        "jd_text": "Own reliability engineering for our core platform: incident response, SLOs, chaos testing, and automation across our AWS estate.",
+        "experience_required": "9-12 years",
+        "mandatory_skills": ["AWS", "Kubernetes"],
+        "preferred_skills": ["Splunk"]
+      },
+      {
+        "source": "SOURCE_B",
+        "job_id": "SOURCE_B-JOB-9002",
+        "company": "Northwind Cloud",
+        "title": "Sr. SRE",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-b.example.com/careers/9002",
+        "posted_date": "2026-09-11",
+        "jd_text": "Own reliability engineering for our core platform: incident response, SLOs, chaos testing, and automation across our AWS estate.",
+        "experience_required": "9-12 years",
+        "mandatory_skills": ["AWS", "Kubernetes"],
+        "preferred_skills": ["Splunk"]
+      }
+    ]
+  },
+  {
+    "case_id": 3,
+    "description": "Same job with Bangalore/Bengaluru location variation",
+    "expect_cross_source_duplicate": true,
+    "jobs": [
+      {
+        "source": "SOURCE_A",
+        "job_id": "SOURCE_A-JOB-003",
+        "company": "Solstice Systems",
+        "title": "Lead DevOps Engineer",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/1003",
+        "posted_date": "2026-09-12",
+        "jd_text": "Lead our DevOps practice: CI/CD pipeline ownership, Kubernetes platform operations, and infrastructure automation with Terraform and Ansible.",
+        "experience_required": "10+ years",
+        "mandatory_skills": ["Kubernetes", "Terraform", "Ansible"],
+        "preferred_skills": ["Jenkins"]
+      },
+      {
+        "source": "SOURCE_B",
+        "job_id": "SOURCE_B-JOB-9003",
+        "company": "Solstice Systems",
+        "title": "Lead DevOps Engineer",
+        "location": "Bangalore, Karnataka",
+        "work_model": "",
+        "job_url": "https://source-b.example.com/careers/9003",
+        "posted_date": "2026-09-13",
+        "jd_text": "Lead our DevOps practice: CI/CD pipeline ownership, Kubernetes platform operations, and infrastructure automation with Terraform and Ansible.",
+        "experience_required": "10+ years",
+        "mandatory_skills": ["Kubernetes", "Terraform", "Ansible"],
+        "preferred_skills": ["Jenkins"]
+      }
+    ]
+  },
+  {
+    "case_id": 4,
+    "description": "Same company with legal suffix variation",
+    "expect_cross_source_duplicate": true,
+    "jobs": [
+      {
+        "source": "SOURCE_A",
+        "job_id": "SOURCE_A-JOB-004",
+        "company": "Example Technologies",
+        "title": "Platform Engineer",
+        "location": "Pune",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/1004",
+        "posted_date": "2026-09-14",
+        "jd_text": "Build and operate our internal developer platform on Kubernetes, with a focus on self-service tooling and golden-path automation.",
+        "experience_required": "6-9 years",
+        "mandatory_skills": ["Kubernetes"],
+        "preferred_skills": ["ArgoCD"]
+      },
+      {
+        "source": "SOURCE_B",
+        "job_id": "SOURCE_B-JOB-9004",
+        "company": "Example Technologies Pvt Ltd",
+        "title": "Platform Engineer",
+        "location": "Pune",
+        "work_model": "",
+        "job_url": "https://source-b.example.com/careers/9004",
+        "posted_date": "2026-09-14",
+        "jd_text": "Build and operate our internal developer platform on Kubernetes, with a focus on self-service tooling and golden-path automation.",
+        "experience_required": "6-9 years",
+        "mandatory_skills": ["Kubernetes"],
+        "preferred_skills": ["ArgoCD"]
+      }
+    ]
+  },
+  {
+    "case_id": 5,
+    "description": "Two genuinely different jobs with similar titles (different company)",
+    "expect_cross_source_duplicate": false,
+    "jobs": [
+      {
+        "source": "SOURCE_A",
+        "job_id": "SOURCE_A-JOB-005",
+        "company": "Alpha Corp",
+        "title": "Senior Site Reliability Engineer",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/1005",
+        "posted_date": "2026-09-01",
+        "jd_text": "Alpha Corp is hiring a Senior SRE to support our fintech payments platform, focusing on uptime and observability.",
+        "experience_required": "8-10 years",
+        "mandatory_skills": ["AWS"],
+        "preferred_skills": []
+      },
+      {
+        "source": "SOURCE_B",
+        "job_id": "SOURCE_B-JOB-9005",
+        "company": "Beta Systems",
+        "title": "Senior Site Reliability Engineer",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-b.example.com/careers/9005",
+        "posted_date": "2026-09-02",
+        "jd_text": "Beta Systems is hiring a Senior SRE for our e-commerce logistics platform, focusing on scalability and cost efficiency.",
+        "experience_required": "8-10 years",
+        "mandatory_skills": ["Azure"],
+        "preferred_skills": []
+      }
+    ]
+  },
+  {
+    "case_id": 6,
+    "description": "Same company/title but different locations",
+    "expect_cross_source_duplicate": false,
+    "jobs": [
+      {
+        "source": "SOURCE_A",
+        "job_id": "SOURCE_A-JOB-006",
+        "company": "Gamma Cloud",
+        "title": "Senior DevOps Engineer",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/1006",
+        "posted_date": "2026-09-05",
+        "jd_text": "Gamma Cloud's Bengaluru team is hiring a Senior DevOps Engineer for our core infrastructure group.",
+        "experience_required": "7-9 years",
+        "mandatory_skills": ["Kubernetes"],
+        "preferred_skills": []
+      },
+      {
+        "source": "SOURCE_B",
+        "job_id": "SOURCE_B-JOB-9006",
+        "company": "Gamma Cloud",
+        "title": "Senior DevOps Engineer",
+        "location": "Hyderabad",
+        "work_model": "",
+        "job_url": "https://source-b.example.com/careers/9006",
+        "posted_date": "2026-09-06",
+        "jd_text": "Gamma Cloud's Hyderabad team is hiring a Senior DevOps Engineer for our core infrastructure group.",
+        "experience_required": "7-9 years",
+        "mandatory_skills": ["Kubernetes"],
+        "preferred_skills": []
+      }
+    ]
+  },
+  {
+    "case_id": 7,
+    "description": "Same company/title but materially different descriptions",
+    "expect_cross_source_duplicate": false,
+    "jobs": [
+      {
+        "source": "SOURCE_A",
+        "job_id": "SOURCE_A-JOB-007",
+        "company": "Delta Infra",
+        "title": "Lead DevOps Engineer",
+        "location": "Chennai",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/1007",
+        "posted_date": "2026-09-07",
+        "jd_text": "Own our Kubernetes platform, CI/CD pipelines, Terraform automation, on-call rotation, and incident response process for the infrastructure org.",
+        "experience_required": "10+ years",
+        "mandatory_skills": ["Kubernetes", "Terraform"],
+        "preferred_skills": []
+      },
+      {
+        "source": "SOURCE_B",
+        "job_id": "SOURCE_B-JOB-9007",
+        "company": "Delta Infra",
+        "title": "Lead DevOps Engineer",
+        "location": "Chennai",
+        "work_model": "",
+        "job_url": "https://source-b.example.com/careers/9007",
+        "posted_date": "2026-09-08",
+        "jd_text": "Coordinate vendor contracts, manage the annual procurement budget, run quarterly compliance audits, and liaise with facilities and legal teams.",
+        "experience_required": "10+ years",
+        "mandatory_skills": [],
+        "preferred_skills": []
+      }
+    ]
+  },
+  {
+    "case_id": 8,
+    "description": "Missing source job ID (falls back to URL/field-derived ID); still a genuine cross-source duplicate",
+    "expect_cross_source_duplicate": true,
+    "jobs": [
+      {
+        "source": "SOURCE_A",
+        "company": "Ridgeline Systems",
+        "title": "Infrastructure Engineer",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/1008",
+        "posted_date": "2026-09-09",
+        "jd_text": "Ridgeline Systems is hiring an Infrastructure Engineer to manage our on-prem and cloud hybrid environment.",
+        "experience_required": "6-8 years",
+        "mandatory_skills": ["Linux"],
+        "preferred_skills": []
+      },
+      {
+        "source": "SOURCE_B",
+        "company": "Ridgeline Systems",
+        "title": "Infrastructure Engineer",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-b.example.com/careers/9008",
+        "posted_date": "2026-09-09",
+        "jd_text": "Ridgeline Systems is hiring an Infrastructure Engineer to manage our on-prem and cloud hybrid environment.",
+        "experience_required": "6-8 years",
+        "mandatory_skills": ["Linux"],
+        "preferred_skills": []
+      }
+    ]
+  },
+  {
+    "case_id": 9,
+    "description": "Missing location on one side; still a duplicate candidate via title+company alone",
+    "expect_cross_source_duplicate": true,
+    "jobs": [
+      {
+        "source": "SOURCE_A",
+        "job_id": "SOURCE_A-JOB-009",
+        "company": "Vantage Point Inc",
+        "title": "Senior Cloud Engineer",
+        "location": "",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/1009",
+        "posted_date": "2026-09-10",
+        "jd_text": "Vantage Point Inc is hiring a Senior Cloud Engineer for our AWS-based platform team.",
+        "experience_required": "8-10 years",
+        "mandatory_skills": ["AWS"],
+        "preferred_skills": []
+      },
+      {
+        "source": "SOURCE_B",
+        "job_id": "SOURCE_B-JOB-9009",
+        "company": "Vantage Point Inc",
+        "title": "Senior Cloud Engineer",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-b.example.com/careers/9009",
+        "posted_date": "2026-09-10",
+        "jd_text": "Vantage Point Inc is hiring a Senior Cloud Engineer for our AWS-based platform team.",
+        "experience_required": "8-10 years",
+        "mandatory_skills": ["AWS"],
+        "preferred_skills": []
+      }
+    ]
+  },
+  {
+    "case_id": 10,
+    "description": "Missing experience_required -- normalization robustness only (no pairwise dedup claim)",
+    "expect_cross_source_duplicate": null,
+    "jobs": [
+      {
+        "source": "SOURCE_A",
+        "job_id": "SOURCE_A-JOB-010",
+        "company": "Harborlight Data",
+        "title": "DevOps Engineer",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/1010",
+        "posted_date": "2026-09-11",
+        "jd_text": "Harborlight Data is hiring a DevOps Engineer.",
+        "experience_required": "",
+        "mandatory_skills": [],
+        "preferred_skills": []
+      }
+    ]
+  },
+  {
+    "case_id": 11,
+    "description": "Missing salary -- normalization robustness only (no source in this project ever provides salary)",
+    "expect_cross_source_duplicate": null,
+    "jobs": [
+      {
+        "source": "SOURCE_A",
+        "job_id": "SOURCE_A-JOB-011",
+        "company": "Fieldstone Labs",
+        "title": "SRE",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/1011",
+        "posted_date": "2026-09-12",
+        "jd_text": "Fieldstone Labs is hiring an SRE.",
+        "experience_required": "5-7 years",
+        "mandatory_skills": [],
+        "preferred_skills": []
+      }
+    ]
+  },
+  {
+    "case_id": 12,
+    "description": "Remote job -- two remote postings, same company/title, different sources",
+    "expect_cross_source_duplicate": true,
+    "jobs": [
+      {
+        "source": "SOURCE_A",
+        "job_id": "SOURCE_A-JOB-012",
+        "company": "Skylark Networks",
+        "title": "Senior Platform Engineer",
+        "location": "Remote",
+        "work_model": "Remote",
+        "job_url": "https://source-a.example.com/jobs/1012",
+        "posted_date": "2026-09-13",
+        "jd_text": "Skylark Networks is hiring a fully remote Senior Platform Engineer to own our Kubernetes platform.",
+        "experience_required": "8-10 years",
+        "mandatory_skills": ["Kubernetes"],
+        "preferred_skills": []
+      },
+      {
+        "source": "SOURCE_B",
+        "job_id": "SOURCE_B-JOB-9012",
+        "company": "Skylark Networks",
+        "title": "Senior Platform Engineer",
+        "location": "Remote India",
+        "work_model": "",
+        "job_url": "https://source-b.example.com/careers/9012",
+        "posted_date": "2026-09-13",
+        "jd_text": "Skylark Networks is hiring a fully remote Senior Platform Engineer to own our Kubernetes platform.",
+        "experience_required": "8-10 years",
+        "mandatory_skills": ["Kubernetes"],
+        "preferred_skills": []
+      }
+    ]
+  },
+  {
+    "case_id": 13,
+    "description": "Hybrid job -- work model embedded in the location text",
+    "expect_cross_source_duplicate": null,
+    "jobs": [
+      {
+        "source": "SOURCE_A",
+        "job_id": "SOURCE_A-JOB-013",
+        "company": "Ironwood Systems",
+        "title": "Cloud Engineer",
+        "location": "Bengaluru - Hybrid",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/1013",
+        "posted_date": "2026-09-14",
+        "jd_text": "Ironwood Systems is hiring a Cloud Engineer, hybrid work model.",
+        "experience_required": "4-6 years",
+        "mandatory_skills": [],
+        "preferred_skills": []
+      }
+    ]
+  },
+  {
+    "case_id": 14,
+    "description": "Unknown work model -- no explicit work-model signal anywhere",
+    "expect_cross_source_duplicate": null,
+    "jobs": [
+      {
+        "source": "SOURCE_A",
+        "job_id": "SOURCE_A-JOB-014",
+        "company": "Cobblestone Tech",
+        "title": "Site Reliability Engineer",
+        "location": "Chennai",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/1014",
+        "posted_date": "2026-09-15",
+        "jd_text": "Cobblestone Tech is hiring a Site Reliability Engineer.",
+        "experience_required": "5-8 years",
+        "mandatory_skills": [],
+        "preferred_skills": []
+      }
+    ]
+  },
+  {
+    "case_id": 15,
+    "description": "Malformed/minimal listing -- only source, company, title present",
+    "expect_cross_source_duplicate": null,
+    "jobs": [
+      {
+        "source": "SOURCE_A",
+        "company": "Minimal Co",
+        "title": "SRE"
+      }
+    ]
+  },
+  {
+    "case_id": 16,
+    "description": "Completely unrelated job -- must not spuriously match ANY other job anywhere in this dataset (checked against the full flattened dataset, not just within this case)",
+    "expect_cross_source_duplicate": null,
+    "jobs": [
+      {
+        "source": "SOURCE_A",
+        "job_id": "SOURCE_A-JOB-016",
+        "company": "Willowbrook Foods",
+        "title": "Regional Sales Manager",
+        "location": "Mumbai",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/1016",
+        "posted_date": "2026-09-16",
+        "jd_text": "Willowbrook Foods is hiring a Regional Sales Manager to grow our FMCG distribution network across western India.",
+        "experience_required": "6-8 years",
+        "mandatory_skills": [],
+        "preferred_skills": []
+      }
+    ]
+  }
+]

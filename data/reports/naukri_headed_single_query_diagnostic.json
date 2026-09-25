@@ -1,0 +1,158 @@
+{
+  "test_objective": "Isolate Hypothesis A (headless mode) from Hypothesis E (request timing/volume) via one headed diagnostic experiment",
+  "configuration": {
+    "query": {
+      "role": "Infrastructure Engineer",
+      "location": "Bangalore",
+      "max_job_age_days": null
+    },
+    "browser_mode": "headed (JOBOS_BROWSER_HEADLESS=0, deliberate one-time exception)",
+    "channel": "chromium",
+    "advisory_health_check": true,
+    "automated_default_changed": false
+  },
+  "pre_flight_confirmations": {
+    "automated_default_unchanged": true,
+    "experiment_explicitly_headed": true,
+    "channel_chromium_confirmed": true,
+    "max_job_age_days_absent": true,
+    "advisory_health_check_true": true,
+    "production_sha_before_matches_expected": true,
+    "production_rows_before_match_expected": true
+  },
+  "A_homepage_health_check": {
+    "reachable": true,
+    "block_reason": "NONE",
+    "http_status": 200,
+    "detail": "",
+    "label": "FACT"
+  },
+  "B_search": {
+    "attempted": true,
+    "attempt_count": 1,
+    "requested_url": "https://www.naukri.com/infrastructure-engineer-jobs-in-bangalore",
+    "final_url": "https://www.naukri.com/infrastructure-engineer-jobs-in-bangalore",
+    "http_status": 200,
+    "matched_block_phrase": null,
+    "classifier_state": "VALID_RESULTS",
+    "block_reason": "NONE",
+    "job_link_count": 20,
+    "worker_status": "COMPLETED",
+    "label": "FACT"
+  },
+  "C_browser_evidence": {
+    "headless": false,
+    "channel": "chromium",
+    "executable_observed": "chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app",
+    "total_process_observations": 3845,
+    "full_chromium_observations": 3845,
+    "headless_shell_observations": 0,
+    "observations_with_headless_flag": 0,
+    "visible_ui": true,
+    "label": "FACT"
+  },
+  "D_results": {
+    "raw_jobs": 20,
+    "normalized_jobs": 20,
+    "unique_jobs": 20,
+    "eligible": 5,
+    "scored": 5,
+    "matched": 5,
+    "freshness_distribution": {
+      "HOT": 1,
+      "FRESH": 4,
+      "AGING": 2,
+      "OLD": 13
+    }
+  },
+  "E_timing_volume_evidence": {
+    "requests_before_search": 1,
+    "total_requests_this_run": 22,
+    "existing_delays_unchanged": true,
+    "cumulative_session_position": "latest of all runs compared -- occurred after both recent headless 403s, added the most cumulative volume, still succeeded"
+  },
+  "comparison_with_preceding_headless_run": {
+    "headless": {
+      "health_check": "failed, UNKNOWN_BLOCK, HTTP 403",
+      "search": "BLOCKED, HTTP 403, access denied, 0 jobs",
+      "worker_status": "BLOCKED"
+    },
+    "headed_this_experiment": {
+      "health_check": "succeeded, HTTP 200",
+      "search": "VALID_RESULTS, HTTP 200, 20 jobs",
+      "worker_status": "COMPLETED"
+    },
+    "only_variable_changed": "headless -> headed"
+  },
+  "hypothesis_updates": {
+    "A_headless_causes_block": {
+      "prior": "SUPPORTED (confounded with E)",
+      "updated": "SUPPORTED (strengthened)",
+      "evidence": "identical query/URL/channel succeeded headed, failed headless, in a direct controlled comparison"
+    },
+    "B_headless_shell_binary_mismatch": {
+      "prior": "CONTRADICTED",
+      "updated": "CONTRADICTED (unchanged)"
+    },
+    "C_headers_context_differ": {
+      "prior": "NOT_DETERMINABLE",
+      "updated": "NOT_DETERMINABLE (unchanged)",
+      "reason": "full headers still not captured"
+    },
+    "D_session_cookie_state_differs": {
+      "prior": "CONTRADICTED",
+      "updated": "CONTRADICTED (unchanged)"
+    },
+    "E_request_sequence_volume_differs": {
+      "prior": "SUPPORTED (confounded with A)",
+      "updated": "CONTRADICTED (weakened significantly)",
+      "evidence": "this run added the most cumulative volume of any compared run (22 requests, latest in session) and succeeded entirely -- inconsistent with volume alone being the dominant driver"
+    },
+    "F_url_construction_causes_block": {
+      "prior": "CONTRADICTED",
+      "updated": "CONTRADICTED (unchanged)"
+    },
+    "G_naukri_blocks_independent_of_jobAge": {
+      "prior": "SUPPORTED",
+      "updated": "SUPPORTED (refined: true for headless specifically; same path succeeds headed)"
+    },
+    "H_evidence_insufficient": {
+      "prior": "NOT_DETERMINABLE",
+      "updated": "NOT_DETERMINABLE (narrowed further)",
+      "reason": "A-vs-E confound substantially resolved in favor of A; residual uncertainty remains (e.g. a coincidental time-based factor not fully ruled out)"
+    }
+  },
+  "causality_claim": "NOT claimed as definitive -- evidence supports A relative to E, does not prove headless mode is the sole cause",
+  "ready_for_multi_query_validation": {
+    "headless": false,
+    "headed": "evidence now considerably supports it, but requires accepting a visible browser window for multiple queries -- a decision for the user",
+    "note": "proceeding headed does not resolve the original goal of reliable headless background operation, which remains open"
+  },
+  "recommended_next_step": [
+    "Option 1: accept headed mode temporarily and proceed to a controlled multi-query validation headed, while treating headless-specific blocking as a separate, lower-urgency investigation",
+    "Option 2: continue investigating headless specifically (e.g. longer cooldown) before any further multi-query test"
+  ],
+  "further_live_requests_made": false,
+  "automated_default_changed": false,
+  "production_db": {
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "row_counts_before": {
+      "candidates": 1,
+      "candidate_search_profile": 1,
+      "jobs": 9,
+      "candidate_job_matches": 0,
+      "search_runs": 0,
+      "search_queue": 0
+    },
+    "row_counts_after": {
+      "candidates": 1,
+      "candidate_search_profile": 1,
+      "jobs": 9,
+      "candidate_job_matches": 0,
+      "search_runs": 0,
+      "search_queue": 0
+    },
+    "unchanged": true
+  }
+}

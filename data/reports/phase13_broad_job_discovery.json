@@ -1,0 +1,78 @@
+{
+  "report": "phase13_broad_job_discovery",
+  "generated": "2026-09-21",
+  "objective": "Maximize usable job discovery from LinkedIn, Indeed, Foundit, Instahyre, Cutshort, Wellfound, and Shine using legitimate, technically reliable acquisition paths -- not to force all seven direct scrapers to work at any cost.",
+  "production_db": {
+    "path": "data/applications/jobos.db",
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "byte_identical": true,
+    "row_counts_before": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+    "row_counts_after": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0}
+  },
+  "no_production_searches_run": true,
+  "launchd_scheduler_changes": false,
+  "auto_apply_changes": false,
+  "network_calls": {
+    "runtime_note": "The FastAPI backend process made zero network calls to any of the seven sources -- this remains true after this phase's changes exactly as before.",
+    "agent_session_calls": [
+      {"tool": "WebSearch", "query": "site:linkedin.com/jobs/view \"Site Reliability Engineer\" Bangalore", "urls_returned": 9},
+      {"tool": "WebSearch", "query": "site:in.indeed.com/viewjob \"site reliability engineer\" Bangalore", "urls_returned": 9},
+      {"tool": "WebSearch", "query": "site:foundit.in/job \"site reliability engineer\" Bangalore", "urls_returned": 10},
+      {"tool": "WebSearch", "query": "site:instahyre.com/job \"site reliability engineer\" Bangalore", "urls_returned": 10},
+      {"tool": "WebSearch", "query": "site:cutshort.io/job \"site reliability engineer\" Bangalore", "urls_returned": 9},
+      {"tool": "WebSearch", "query": "site:wellfound.com/jobs \"site reliability engineer\" India", "urls_returned": 10},
+      {"tool": "WebSearch", "query": "site:shine.com/jobs \"site reliability engineer\" Bangalore", "urls_returned": 0, "note": "0 shine.com results; other job boards returned instead"},
+      {"tool": "WebSearch", "query": "\"site reliability engineer\" Bangalore site:shine.com", "urls_returned": 0, "note": "retried with reversed operator order, same result"}
+    ],
+    "boundary_note": "These 8 calls were made by the AGENT operating this repository via Claude Code's own WebSearch tool, NOT by the deployed JobOS backend process, which still has WEB_SEARCH_BACKEND=None and cannot invoke web search itself. No robots.txt/CAPTCHA/anti-bot control belonging to any of the 7 target sites was touched by these calls -- WebSearch is a third-party search aggregator, not a direct fetch of linkedin.com/indeed.com/etc."
+  },
+  "sources": {
+    "LINKEDIN": {"direct_search": "NOT_AUTHORIZED", "search_provider": "EVIDENCE_CAPTURED (9/9 URLs normalizable)", "ats_employer_fallback": "SUPPORTED (detector implemented, no match in this sample)", "manual_import": "YES", "final_status": "LIMITED"},
+    "INDEED": {"direct_search": "NOT_AUTHORIZED", "search_provider": "EVIDENCE_CAPTURED_URL_ONLY (9 URLs found, 0 normalizable -- no company name in any Indeed search-result title)", "ats_employer_fallback": "SUPPORTED (no match in this sample)", "manual_import": "YES", "final_status": "LIMITED"},
+    "FOUNDIT": {"direct_search": "NOT_AUTHORIZED", "search_provider": "EVIDENCE_CAPTURED (5/6 URLs normalizable)", "ats_employer_fallback": "SUPPORTED (no match in this sample)", "manual_import": "YES", "final_status": "LIMITED"},
+    "INSTAHYRE": {"direct_search": "NOT_AUTHORIZED", "search_provider": "EVIDENCE_CAPTURED (9/9 URLs normalizable)", "ats_employer_fallback": "SUPPORTED (no match in this sample)", "manual_import": "YES", "final_status": "LIMITED"},
+    "CUTSHORT": {"direct_search": "NOT_AUTHORIZED", "search_provider": "EVIDENCE_CAPTURED (5/5 URLs normalizable)", "ats_employer_fallback": "SUPPORTED (no match in this sample)", "manual_import": "YES", "final_status": "LIMITED"},
+    "WELLFOUND": {"direct_search": "NOT_AUTHORIZED", "search_provider": "EVIDENCE_CAPTURED (3/3 URLs normalizable)", "ats_employer_fallback": "SUPPORTED (no match in this sample)", "manual_import": "YES", "final_status": "LIMITED"},
+    "SHINE": {"direct_search": "NOT_AUTHORIZED", "search_provider": "ATTEMPTED_NO_RESULTS (0 URLs returned by this search backend for 2 query phrasings tried)", "ats_employer_fallback": "SUPPORTED (untested, no candidate URL)", "manual_import": "YES", "final_status": "MANUAL_IMPORT"}
+  },
+  "pipeline_validation": {
+    "captured_evidence_jobs_raw": 31,
+    "normalized": 31,
+    "unique_after_dedup": 31,
+    "duplicates": 0,
+    "eligible_under_saroj_profile": 29,
+    "note": "Scores are low (REJECT-range) because search-provider results carry no jd_text -- an honest consequence of not fabricating a job description, not a scoring engine defect. score_job.py itself was not modified."
+  },
+  "new_files": [
+    "scripts/employer_ats_resolver.py",
+    "scripts/manual_import.py",
+    "scripts/web_search_evidence_capture.py",
+    "scripts/test_phase13_broad_discovery.py",
+    "web/import_job.html"
+  ],
+  "modified_files": [
+    "scripts/discover_local.py",
+    "scripts/source_capabilities.py",
+    "scripts/web_search_discovery_adapter.py",
+    "scripts/search_worker.py",
+    "api/schemas.py",
+    "api/main.py",
+    "web/dashboard.html",
+    "web/search_new.html",
+    "web/app.js"
+  ],
+  "test_suite": {
+    "new_test_file": "scripts/test_phase13_broad_discovery.py",
+    "new_file_checks": 59,
+    "new_file_result": "59 passed, 0 failed",
+    "full_suite_files": 62,
+    "full_suite_result": "all 62 files exit 0"
+  },
+  "deliberate_design_choices": [
+    "Manual import is a human-typed/pasted FORM, not a server-side URL fetch -- avoids any ambiguity around whether a single agent-triggered fetch of a restricted site counts as 'automated means' under that site's own robots.txt language.",
+    "A manually-imported job's `source`/`job_source` is the real platform name (e.g. LINKEDIN), not a synthetic label -- so it shares job_id identity with any future real adapter for that platform and dedupes naturally; `discovery_source=MANUAL_IMPORT` preserves how it was actually found.",
+    "web_search_evidence_capture.py is a one-time, agent-supervised evidence artifact, never imported by api/main.py or wired into the running backend -- the backend's WEB_SEARCH_BACKEND remains None, exactly as honestly documented before this phase.",
+    "No existing saved-search 'sources' checkbox list was extended to include LinkedIn/Indeed/etc., since search_store.validate_sources() only accepts AdapterStatus.ENABLED sources and those seven are not -- adding them as checkboxes that silently discover nothing would violate the project's 'never pretend' rule. Manual import is surfaced instead, with an explicit note in the New Search UI naming which sources it will not include."
+  ]
+}

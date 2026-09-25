@@ -1,0 +1,185 @@
+{
+  "task": "Phase 5 Step 2 -- LinkedIn offline integration design/specification only, no implementation",
+  "based_solely_on": [
+    "existing, unmodified adapter architecture (source_adapter.py, source_registry.py, discover_local.py, canonical_job.py, cross_source_dedup.py, job_id.py, location_taxonomy.py, freshness.py, experience_eligibility.py)",
+    "data/reports/linkedin_phase5_inspection.md (Phase 5 Step 1 factual findings)"
+  ],
+  "live_requests_made": 0,
+  "linkedin_status_after_this_task": {"status": "AdapterStatus.NOT_ENABLED", "capabilities": [], "changed_in_this_task": false},
+  "1_adapter_boundary": {
+    "proposed_class": "LinkedInAdapter(JobSourceAdapter) in scripts/linkedin_adapter.py -- same existing file, extended in place, no new file/class name",
+    "methods": ["health_check(self) -> AdapterHealth", "search(self, query: SearchQuery) -> list[dict]"],
+    "responsibilities_in_scope": [
+      "constructing a LinkedIn-specific query for whatever the eventual official API's request shape is",
+      "making the request via an injectable fetcher object (mirrors NaukriAdapter(fetcher=...))",
+      "classifying the raw response into a small LinkedIn-specific state set, raising AdapterBlockedError/AdapterTimeoutError",
+      "mapping the response into the existing flat raw-job dict shape",
+      "declaring status/capabilities truthfully, only once demonstrated"
+    ],
+    "responsibilities_out_of_scope": [
+      "scoring (score_job.py)",
+      "eligibility (job_eligibility.py, experience_eligibility.py, location_taxonomy.py)",
+      "deduplication (discover_local.deduplicate(), cross_source_dedup.py)",
+      "freshness classification (freshness.py)",
+      "persistence (tracker.py, search_worker.py upsert functions)",
+      "application submission",
+      "retry/escalation/workaround decisions on a block"
+    ]
+  },
+  "2_capabilities": {
+    "SEARCH": {"classification": "potentially available through an official API", "basis": "guest search page returns real results but access path is unauthorized; official API search functionality presumed but not confirmed"},
+    "DETAIL": {"classification": "unknown", "basis": "61 detail links observed, none visited (Phase 5 Step 1)"},
+    "NATIVE_FRESHNESS": {"classification": "unknown", "basis": "a freshness URL parameter is commonly rumored for LinkedIn's consumer search but was not verified live in Step 1"},
+    "PAGINATION": {"classification": "unknown", "basis": "implied by result-count vs. links-shown mismatch, mechanism not determined"},
+    "APPLICATION_URL": {"classification": "not applicable to guest access; unknown for an official API", "basis": "robots.txt explicitly disallows /jobs/view/externalApply/ and /job-apply/ even for named, permitted bots"},
+    "COMPANY_METADATA": {"classification": "unknown", "basis": "not confirmed extractable even from the one guest page visited"},
+    "SALARY": {"classification": "unknown", "basis": "not confirmed on the guest page; canonical_job.CanonicalJob already reserves salary_min/max/currency/period fields, always None today for every source"},
+    "REMOTE_FILTER": {"classification": "unknown", "basis": "not tested at all in Step 1"},
+    "LOCATION_FILTER": {"classification": "confirmed by current inspection (partially)", "basis": "the one guest page visited did honor a location value in its URL/title; not confirmed for an official API or as a structured filter vs. keyword matching"},
+    "none_marked_confirmed_for_real_implementation": true
+  },
+  "3_search_input_mapping": {
+    "role": "would map to the official API's keyword/title-query parameter -- no parameter name proposed, none observed",
+    "location": "would map to the official API's location parameter -- plausible free-text or geo-ID basis per Step 1, official API shape unknown",
+    "experience_years": "LinkedIn's UI is known to use bucketed experience levels (entry/associate/mid-senior/director/executive) rather than raw years -- presumed only, not verified, would need an explicit bucket mapping",
+    "exclude_keywords": "no LinkedIn-side mechanism observed or presumed; would remain a client-side post-fetch filter",
+    "max_job_age_days": "would map to a native freshness parameter only if NATIVE_FRESHNESS is confirmed (currently unknown); otherwise silently unsupported, matching the existing None-means-unrestricted fallback discipline",
+    "extra": "reserved escape hatch, same pattern as naukri_adapter.py's extra['naukri_search_url']",
+    "pagination_as_search_input": "not a SearchQuery field today for any adapter; would require a new field or per-adapter internal loop -- a real, deferred design decision"
+  },
+  "4_normalized_job_mapping": {
+    "target_shape_source": "discover_local.normalize_job() -- unchanged, existing contract",
+    "target_fields_confirmed_real_by_grounding_test": [
+      "source", "company", "title", "location", "work_model", "job_url",
+      "application_url", "posted_date", "jd_text", "experience_required",
+      "mandatory_skills", "preferred_skills", "experience_min_months", "job_id"
+    ],
+    "only_strictly_required_fields": ["company", "title"],
+    "field_mapping": {
+      "source": {"proposed": "literal 'LINKEDIN'", "confidence": "certain -- already registered as an ADAPTERS key"},
+      "company": {"proposed": "official API's company/organization name field", "confidence": "presumed field exists; exact name unknown"},
+      "title": {"proposed": "official API's job title field", "confidence": "presumed field exists; exact name unknown"},
+      "location": {"proposed": "official API's location field as free text, matching location_taxonomy.parse_job_location_and_work_model()'s existing expectations", "confidence": "presumed"},
+      "work_model": {"proposed": "mapped to existing WorkModel enum (REMOTE, HYBRID, ONSITE, UNKNOWN) only if the API exposes a comparable signal", "confidence": "unknown whether source data exists"},
+      "job_url": {"proposed": "canonical public job-detail URL, used by job_id.py's existing job_id_from_url() -- no new ID scheme needed", "confidence": "presumed exists, 61 such URLs seen even in guest mode"},
+      "application_url": {"proposed": "only populated if a genuinely public, compliant application URL is available", "confidence": "unknown"},
+      "posted_date": {"proposed": "official API's raw posted-date field, passed through as-is to the existing freshness.classify_freshness()", "confidence": "presumed exists"},
+      "jd_text": {"proposed": "official API's full description field if provided", "confidence": "unknown whether full vs. truncated text is available"},
+      "experience_required": {"proposed": "converted from LinkedIn's bucketed experience levels to the free-text range shape experience_eligibility.parse_experience_text() already parses", "confidence": "unknown, needs explicit bucket-to-range mapping decision"},
+      "mandatory_skills_preferred_skills": {"proposed": "split from a skills/requirements field if present, never invented if absent", "confidence": "unknown"},
+      "experience_min_months": {"proposed": "derived the same way Naukri already derives it, if a numeric field exists", "confidence": "unknown"}
+    },
+    "salary_fields_note": "canonical_job.CanonicalJob already reserves salary_min/salary_max/salary_currency/salary_period but no adapter populates them today; adding real salary support would require a new, explicit extension to the raw-job dict and possibly the jobs table -- a real, out-of-scope-for-this-document schema question, not decided here",
+    "unmapped_fields_destination": "canonical_job.py's existing, unmodified source_metadata catch-all -- no source-provided information is ever silently dropped"
+  },
+  "5_authentication_authorization_boundary": {
+    "public_guest_access": {"tested": "one anonymous unauthenticated page visit (Phase 5 Step 1)", "credentials": "none", "authorization_basis": "none -- robots.txt catch-all disallow, no partnership"},
+    "official_api_access": {"tested": "nothing -- no official API access exists for this project today", "credentials_needed": "LinkedIn-issued API credentials (client ID/secret or partner token) via LinkedIn's official partner/developer process", "credential_storage": ".env, never committed, same existing project convention", "authorization_basis": "would be LinkedIn's own issued grant/contract for the specific API program"},
+    "never_to_be_bypassed": ["login walls", "CAPTCHA", "robots.txt disallow rules", "rate limits", "any anti-bot control"],
+    "central_boundary_statement": "Sections 2-4 describe a future, officially authorized integration only. None of it authorizes building against the guest/public surface observed in Phase 5 Step 1, which remains explicitly not sanctioned for automated use."
+  },
+  "6_error_status_model": {
+    "no_new_enum_values_proposed": true,
+    "mapping": [
+      {"condition": "today -- no implementation exists", "adapter_status": "NOT_ENABLED (current, unchanged)", "behavior": "discover_from_sources() skips pre-flight, zero network calls (already true, already tested)"},
+      {"condition": "official access sought but not yet granted, or credentials not configured", "adapter_status": "REQUIRES_AUTH", "behavior": "health_check() reports reachable=False; whether REQUIRES_AUTH should also get a pre-flight zero-network skip like NOT_ENABLED is an undecided design question, not resolved here"},
+      {"condition": "credentials configured, API call fails auth", "adapter_status": "AdapterBlockedError raised at request time (existing contract)", "behavior": "state.blocked=True, remaining queries for that source skipped"},
+      {"condition": "API confirms operation not permitted for this project's scope", "adapter_status": "UNSUPPORTED (per-capability) or AdapterBlockedError", "behavior": "needs per-capability granularity decision at implementation time"},
+      {"condition": "access previously worked, now persistently failing", "adapter_status": "BLOCKED", "behavior": "AdapterBlockedError raised; human review before any re-attempt"},
+      {"condition": "rate limited", "adapter_status": "existing BlockReason.RATE_LIMITED via AdapterBlockedError", "behavior": "state.blocked=True; no retry-with-backoff proposed"},
+      {"condition": "API temporarily unavailable (5xx, timeout)", "adapter_status": "n/a (transient)", "behavior": "AdapterTimeoutError -- existing, unmodified semantics, query skipped, source continues"},
+      {"condition": "everything working, fully validated", "adapter_status": "ENABLED", "behavior": "only after Section 8's gate is satisfied"}
+    ]
+  },
+  "7_testing_strategy": {
+    "fixture_scenarios_designed": [
+      "valid search response",
+      "empty response",
+      "malformed/unexpected response shape",
+      "pagination (page 1 / page 2 boundary, no loss or duplication)",
+      "duplicate jobs within or across pages",
+      "missing fields (only company+title present)",
+      "authentication failure",
+      "rate limiting",
+      "API unavailable",
+      "schema changes (fail loud, not silent misattribution)"
+    ],
+    "all_fixtures_static_no_live_calls": true
+  },
+  "8_enablement_gate": {
+    "conditions_all_required": [
+      "official authorization/API access actually obtained (granted, not merely applied for)",
+      "documented permitted use reviewed and understood before any code is written",
+      "credentials/configuration securely stored (.env, never committed), minimal-privilege scope",
+      "offline fixture coverage: all 10 Section 7 scenarios implemented and passing, zero live calls",
+      "one controlled, authorized live validation (single query, mirrors naukri_ua_single_query_live_validation.md's discipline)",
+      "multi-query validation (mirrors naukri_5_query_ua_freshness_live_validation.md's scope)",
+      "production safety checks: DB SHA/row-count verification before and after every live step",
+      "regression tests: full existing suite plus new LinkedIn tests green, proof no other adapter changed"
+    ],
+    "only_then_may_status_become_enabled": true
+  },
+  "9_human_handoff_alternative": {
+    "requires_new_code": false,
+    "requires_new_schema": false,
+    "mechanism": [
+      "candidate finds a LinkedIn job themselves in their own logged-in browser, supplies the URL via existing data/inbox/job_input.txt / scripts/add_job.py (SOURCE: LINKEDIN already a valid free-text value)",
+      "normalization: existing, unmodified discover_local.normalize_job() handles it identically to an adapter-sourced job",
+      "deduplication: existing (source, job_id) identity via job_id_from_url() on the pasted URL already prevents duplicate entry",
+      "scoring: existing, unmodified score_job() scores it identically",
+      "application tracking: existing jobs/candidate_job_matches schema and status lifecycle already support it",
+      "source attribution: source='LINKEDIN' preserved exactly as with any adapter-discovered job"
+    ]
+  },
+  "10_factual_implications_no_ranking": {
+    "A_official_api_authorized_integration": {
+      "technical": "full automated discovery becomes possible with real capability confirmation",
+      "compliance": "resolves the Section 5 authorization gap for whatever scope is granted",
+      "cost_effort": "requires obtaining LinkedIn partnership/API access, typically a business/partner process; no evidence this is practically obtainable at individual-candidate scale, not investigated",
+      "timeline": "entirely dependent on a process outside this project's control"
+    },
+    "B_human_handoff_only_linkedin": {
+      "technical": "zero new adapter code, uses entirely existing mechanisms",
+      "compliance": "fully compliant -- no automated access to LinkedIn occurs",
+      "cost_effort": "lowest of the three, available immediately",
+      "limitation": "no automated discovery -- candidate must find jobs themselves"
+    },
+    "C_leave_linkedin_not_enabled": {
+      "technical": "no change from today's state",
+      "compliance": "fully compliant by construction",
+      "cost_effort": "zero, ongoing",
+      "limitation": "LinkedIn contributes nothing to the candidate's search until A or B is separately pursued"
+    },
+    "ranking_provided": false
+  },
+  "files_changed": {
+    "new_report_files": [
+      "data/reports/linkedin_phase5_offline_design.md",
+      "data/reports/linkedin_phase5_offline_design.json"
+    ],
+    "new_test_file": ["scripts/test_linkedin_phase5_offline_design.py"],
+    "production_files_modified": []
+  },
+  "not_modified": [
+    "scripts/source_registry.py", "scripts/search_profile.py",
+    "scripts/search_worker.py", "scripts/linkedin_adapter.py",
+    "scripts/score_job.py", "scripts/job_eligibility.py",
+    "scripts/experience_eligibility.py", "scripts/location_taxonomy.py",
+    "scripts/freshness.py", "scripts/discover_local.py",
+    "scripts/cross_source_dedup.py", "scripts/canonical_job.py",
+    "config/profile.json", "data/applications/jobos.db",
+    "any existing ENABLED adapter", "Naukri behavior"
+  ],
+  "verification": {
+    "new_test_file_result": "6/6 PASS",
+    "full_standalone_suite_run": true,
+    "py_compile_run": true,
+    "json_validation_run": true,
+    "linkedin_status_verified_not_enabled": true,
+    "default_sources_verified_naukri_only": true,
+    "production_db_sha_verified_unchanged": true,
+    "zero_live_network_requests": true
+  },
+  "stopped_after_this_task": true,
+  "implementation_or_enablement_begun": false
+}

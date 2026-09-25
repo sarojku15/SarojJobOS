@@ -1,0 +1,139 @@
+{
+  "phase": "14.7",
+  "objective": "Restore search-provider job-discovery coverage lost by Phase 14.6's flat consolidation, via adaptive per-source query expansion -- targeting only missing/under-covered configured locations, bounded by a per-source cap and the existing Phase 14.6 global budgets.",
+  "date": "2026-09-22",
+  "candidate_id": "cand_821156a4dfc3",
+  "new_files": ["scripts/test_phase14_7_adaptive_expansion.py"],
+  "modified_files": [
+    "config/search_planner.json (added max_provider_queries_per_source_per_run=2, coverage_min_unique_jobs=5, coverage_min_locations_covered=3, coverage_min_new_jobs=3, coverage_min_completeness=0.4, all env-overridable)",
+    "scripts/daily_search_planner.py (added location-coverage measurement via the existing, unmodified location_taxonomy.py; adaptive round loop in execute_daily_plan(); _job_snapshot() now also captures location+completeness per job)",
+    "scripts/test_phase14_6_daily_planner.py (its own _cfg() fixture updated with the new Phase 14.7 config keys, max_provider_queries_per_source_per_run pinned to 1 so its existing, unmodified assertions continue to exercise exactly the Phase 14.6 behavior they were written for)"
+  ],
+  "not_modified": [
+    "scripts/score_job.py", "scripts/tracker.py", "scripts/canonical_job.py", "scripts/cross_source_dedup.py",
+    "scripts/source_adapter.py", "scripts/source_registry.py", "scripts/search_provider_manager.py",
+    "scripts/search_provider.py", "scripts/restricted_source_registry.py", "scripts/search_provider_adapter.py",
+    "scripts/location_taxonomy.py (reused as-is for city normalization)",
+    "scripts/search_history_store.py (query fingerprinting/cooldown reused unchanged)",
+    "scripts/generate_run_report.py (Phase 14.6's planner_metrics hook reused unchanged, no further edit needed)"
+  ],
+  "baselines": {
+    "phase_14_5_full_matrix": {
+      "search_provider_queries": 28,
+      "search_provider_eligible_scored": 93,
+      "note": "4 locations x 7 boards, one query per (board, location) pair -- the original, most expensive strategy."
+    },
+    "phase_14_6_flat_consolidation": {
+      "search_provider_queries": 7,
+      "search_provider_eligible_scored": 27,
+      "note": "1 OR'd-all-locations query per board -- 75% fewer requests than Phase 14.5, but each provider call is capped at ~10 results regardless of how many locations are combined, losing real coverage."
+    },
+    "phase_14_7_adaptive_expansion": {
+      "search_provider_queries": 12,
+      "search_provider_eligible_scored": 33,
+      "note": "1 consolidated query per board (7) + targeted follow-up queries only for boards with insufficient coverage (5), stopped by the global per-run budget before reaching 2 of the 7 boards."
+    }
+  },
+  "query_counts": {
+    "old_style_44_query_pattern_total": 44,
+    "phase_14_6_total_first_run": 23,
+    "phase_14_7_total_this_run": 28,
+    "phase_14_7_direct_queries": 16,
+    "phase_14_7_search_provider_consolidated": 7,
+    "phase_14_7_search_provider_adaptive": 5,
+    "phase_14_7_search_provider_total": 12,
+    "note": "This run's direct-source count (16) is identical to Phase 14.6's -- Section 10 explicitly leaves direct-source planning unchanged. The search-provider side rose from 7 (Phase 14.6) to 12 (Phase 14.7) queries -- still 57% fewer than Phase 14.5's 28 -- while eligible/scored jobs rose from 27 to 33 (+22%)."
+  },
+  "location_coverage": {
+    "configured_locations": ["Bangalore", "Hyderabad", "Pune", "Chennai"],
+    "per_board": {
+      "LINKEDIN": {"initially_covered": ["Bengaluru"], "filled_by_adaptive": ["Pune"], "still_uncovered": ["Chennai", "Hyderabad"], "queries_used": 2},
+      "WELLFOUND": {"initially_covered": ["Pune"], "filled_by_adaptive": [], "still_uncovered": ["Bengaluru", "Chennai", "Hyderabad"], "queries_used": 1},
+      "SHINE": {"initially_covered": [], "filled_by_adaptive": [], "still_uncovered": ["Bengaluru", "Chennai", "Hyderabad", "Pune"], "queries_used": 1},
+      "INSTAHYRE": {"initially_covered": [], "filled_by_adaptive": [], "still_uncovered": ["Bengaluru", "Chennai", "Hyderabad", "Pune"], "queries_used": 2},
+      "CUTSHORT": {"initially_covered": [], "filled_by_adaptive": [], "still_uncovered": ["Bengaluru", "Chennai", "Hyderabad", "Pune"], "queries_used": 2},
+      "INDEED": {"initially_covered": [], "filled_by_adaptive": [], "still_uncovered": ["Bengaluru", "Chennai", "Hyderabad", "Pune"], "queries_used": 2},
+      "FOUNDIT": {"initially_covered": [], "filled_by_adaptive": [], "still_uncovered": ["Bengaluru", "Chennai", "Hyderabad", "Pune"], "queries_used": 2}
+    },
+    "honest_finding": "Only LinkedIn and Wellfound resolved a usable per-job location for any of their jobs at all -- most of the other 5 boards' real hits produced jobs whose location field did not normalize (via the existing, unmodified location_taxonomy.py) into any single configured city, so they correctly show zero covered cities despite finding real jobs (e.g. Instahyre: 24 unique/14 new jobs, but 0 cities resolved). Nothing was invented to fill this gap -- an uncovered/unresolved location is reported honestly, not guessed."
+  },
+  "why_wellfound_and_shine_got_only_1_query": {
+    "reason": "The global max_search_provider_queries_per_run budget (12) was reached partway through evaluating boards in round 2 -- LinkedIn, Indeed, Foundit, Instahyre, and Cutshort (evaluated first, in config order) consumed all 5 remaining slots (7 consolidated + 5 adaptive = 12), so Wellfound and Shine were never reached for a round-2 evaluation this run. This is Section 6's 'stop cleanly, never exceed budget' behavior working exactly as specified -- not a bug. Both remain due again on a future run (never permanently suppressed)."
+  },
+  "new_jobs_per_source": {"CUTSHORT": 2, "FOUNDIT": 0, "INDEED": 0, "INSTAHYRE": 14, "LINKEDIN": 7, "SHINE": 2, "WELLFOUND": 8},
+  "average_new_jobs_per_provider_query": 2.75,
+  "eligible_scored": {
+    "direct_total": 78,
+    "search_provider_total": 33,
+    "combined_total": 111,
+    "matches_created": 111,
+    "priority_breakdown_all_sources": {"A": 6, "B": 5, "C": 9, "REJECT": 91},
+    "priority_breakdown_search_provider_only": {"C": 4, "REJECT": 29},
+    "ready_for_approval_A_or_B": 11
+  },
+  "provider_requests_saved": {
+    "vs_phase_14_5_baseline": 16,
+    "vs_phase_14_5_baseline_percent": 57.1,
+    "note": "12 search-provider requests this run vs. 28 in the original per-location matrix."
+  },
+  "adaptive_expansion_count": {
+    "consolidated_queries": 7,
+    "adaptive_queries": 5,
+    "boards_that_needed_expansion": ["LINKEDIN", "INDEED", "FOUNDIT", "INSTAHYRE", "CUTSHORT"],
+    "boards_sufficient_after_round_1": [],
+    "boards_never_evaluated_for_round_2_due_to_budget": ["WELLFOUND", "SHINE"]
+  },
+  "budget_behavior": {
+    "max_search_provider_queries_per_run": 12,
+    "used_this_run": 12,
+    "budget_exhausted": true,
+    "exceeded": false,
+    "max_provider_queries_per_source_per_run": 2,
+    "per_source_cap_exceeded": false
+  },
+  "cooldown_behavior": {
+    "search_query_cooldown_hours": 24,
+    "self_collision_fix": "A genuine edge case was found and fixed during test-writing (not the live run): when a board's round-1 consolidated query returns zero coverage for every configured location, the naive round-2 'missing locations' query is textually IDENTICAL to round 1's own query -- which would otherwise collide with the cooldown record round 1 itself just wrote a moment earlier in the SAME execution, silently blocking the retry. Fixed by tracking every distinct city-combination already attempted this execution, per board, and shrinking the target set by one (lowest-priority) city whenever the naive combination was already tried -- producing a genuinely different, cheaper probe instead of a wasted duplicate. Covered by the new offline test's Scenario D.",
+    "verified_offline": "Scenario I/J: an identical query within the cooldown window is skipped on a second immediate plan; estimated_provider_calls == 0."
+  },
+  "serper_handling": {
+    "state": "AUTH_FAILED",
+    "requests_this_phase": 0,
+    "note": "Never called this phase -- You.com (priority order first) succeeded on every one of its 12 requests, so the pool never reached Serper. No code change was made to Serper's credentials or implementation."
+  },
+  "nine_sheet_report_validation": {
+    "sheet_count": 9,
+    "sheets": ["APPLY_TODAY", "ALL_MATCHING_JOBS", "NEW_JOBS", "ALREADY_APPLIED", "REJECTED_EXCLUDED", "DUPLICATES", "APPLICATION_TRACKER", "SOURCE_HEALTH", "RUN_SUMMARY"],
+    "planner_metrics_appended_to_run_summary": true,
+    "workbook_path": "data/reports/phase14_7_adaptive_search_optimization.xlsx"
+  },
+  "test_suite": {
+    "total_files": 69,
+    "all_passed": true,
+    "new_test_file": "scripts/test_phase14_7_adaptive_expansion.py (18 checks, Sections 13.A-K, fully offline, real-evidence-shaped replay fixtures, never touches production DB or network)",
+    "phase_14_6_test_reverified": true
+  },
+  "production_db": {
+    "path": "data/applications/jobos.db",
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "byte_identical": true
+  },
+  "safety_confirmations": {
+    "scheduler_or_launchd_changed": false,
+    "auto_apply_changed": false,
+    "restricted_board_pages_fetched_directly": false,
+    "second_pipeline_created": false,
+    "serper_called": false,
+    "old_28_query_strategy_reverted_to": false,
+    "search_architecture_redesigned": false
+  },
+  "success_target_assessment": {
+    "provider_queries_significantly_below_28": "yes -- 12 (57% fewer)",
+    "materially_better_coverage_than_phase_14_6_27": "yes -- 33 eligible/scored (+22%)",
+    "reasonable_coverage_across_configured_locations": "partial -- 2 of 7 boards (LinkedIn, Wellfound) show at least one resolved city; the other 5 found real jobs but their location text did not resolve to a single configured city via the existing taxonomy, and 2 boards (Wellfound, Shine) were never re-evaluated this run because the run budget was exhausted first",
+    "no_duplicate_query_requests": "yes -- verified via fingerprint history; the one degenerate same-text collision case is handled by the city-set-shrinking fix",
+    "no_budget_violations": "yes -- exactly 12 of 12 allowed search-provider queries used, never exceeded",
+    "note": "No target number was fabricated; every figure above is a real measurement from this run's temp DB and search_provider_usage_store."
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "task": "Investigate whether Naukri's homepage health_check should remain a hard gate before search(), and implement a minimal fix if evidence-justified",
+  "no_network_activity": true,
+  "no_browser_launch": true,
+  "current_flow_before_change": {
+    "health_check_url": "https://www.naukri.com/",
+    "search_url_pattern": "https://www.naukri.com/{role-slug}-jobs-in-{location-slug}[?jobAge=N]",
+    "same_fetch_mechanism": true,
+    "shared_browser_session": false,
+    "health_check_frequency": "once per source per discover_from_sources() call, never per query",
+    "health_check_side_effects": "none beyond its own HTTP request",
+    "search_has_own_classification": true,
+    "search_classification_states": ["VALID_RESULTS", "VALID_EMPTY_RESULT", "BLOCKED", "SOFT_BLOCK_OR_CHALLENGE", "PARSE_FAILURE"]
+  },
+  "evidence_from_prior_live_runs": [
+    {"run": "first single-query live test (headed)", "health_check": "succeeded", "search_attempted": true, "search_outcome": "VALID_RESULTS (0 raw jobs)"},
+    {"run": "classifier hardening live test (headed)", "health_check": "succeeded", "search_attempted": true, "search_outcome": "PARSE_FAILURE (real defect, since fixed)"},
+    {"run": "ranking-integration live test (headed)", "health_check": "succeeded", "search_attempted": true, "search_outcome": "VALID_RESULTS, 20 real jobs"},
+    {"run": "first 5-query test (headed)", "health_check": "succeeded", "search_attempted": true, "search_outcome": "5x VALID_RESULTS, 100 raw jobs"},
+    {"run": "5-query + 3-day filter, headless (headless_shell binary)", "health_check": "failed", "search_attempted": false, "search_outcome": null},
+    {"run": "5-query + channel='chromium', headless", "health_check": "failed", "search_attempted": false, "search_outcome": null}
+  ],
+  "key_finding": "This project has never demonstrated a run where health_check() failed AND search() was also attempted to observe whether it would have succeeded. Every prior success had both succeed together; every recent failure was homepage-only and pre-emptively skipped every query. No evidence exists either way that a homepage block predicts a search-page block for Naukri.",
+  "search_url_verification": {
+    "test_query": {"role": "Infrastructure Engineer", "location": "Bangalore", "max_job_age_days": 3},
+    "resulting_url": "https://www.naukri.com/infrastructure-engineer-jobs-in-bangalore?jobAge=3",
+    "jobAge_present": true,
+    "verified_offline": true,
+    "verified_live": false
+  },
+  "options_evaluated": {
+    "A_mandatory_gate_status_quo": {"correctness": "prevents collecting the missing evidence", "background_compatible": true, "worker_compatible": true},
+    "B_advisory_health_check": {"correctness": "directly closes the evidence gap", "background_compatible": true, "worker_compatible": true, "recommended": true, "adopted": true},
+    "C_search_shaped_health_check": {"correctness": "answers availability but duplicates search() and consumes effort for no extra benefit over B", "adopted": false},
+    "D_remove_health_check_entirely": {"correctness": "loses a free diagnostic signal", "adopted": false},
+    "E_health_check_diagnostics_only_never_gate": {"correctness": "functionally equivalent to B", "note": "B chosen as the smaller, opt-in, per-adapter version of the same idea", "adopted": false}
+  },
+  "recommended_architecture": "Option B: per-adapter opt-in flag (health_check_is_advisory), default False for every adapter, set True only on NaukriAdapter with documented evidence-based justification. discover_from_sources() respects the flag: health_check() still runs and is recorded for diagnostics, but a failure no longer skips the query loop when the adapter opts in.",
+  "code_changes": [
+    {
+      "file": "scripts/source_adapter.py",
+      "change": "Added JobSourceAdapter.health_check_is_advisory = False (class attribute, documented). No other change."
+    },
+    {
+      "file": "scripts/source_registry.py",
+      "change": "discover_from_sources(): gating condition now checks getattr(adapter, 'health_check_is_advisory', False); when True and health failed, state.blocked is NOT set and the query loop proceeds normally. state.health is still populated either way. Docstring updated."
+    },
+    {
+      "file": "scripts/naukri_adapter.py",
+      "change": "Added NaukriAdapter.health_check_is_advisory = True with a docstring citing this report's evidence. health_check() and search() themselves are unchanged."
+    }
+  ],
+  "unchanged_files": [
+    "scripts/naukri_parser.py", "scripts/score_job.py", "scripts/job_eligibility.py",
+    "scripts/freshness.py", "scripts/job_ranking.py", "scripts/query_planner.py",
+    "scripts/search_submission.py", "scripts/naukri_fetch_bridge.js"
+  ],
+  "tests": {
+    "new_file": "scripts/test_advisory_health_check.py",
+    "new_file_scenarios_covered": 10,
+    "new_file_result": "pass",
+    "full_standalone_suite": "36/36 pass",
+    "py_compile": "clean",
+    "pytest": "not installed in this environment"
+  },
+  "remaining_unknowns": [
+    "Whether the Naukri search URL is reachable when the homepage is blocked -- unverified, no live request made this task",
+    "Whether ?jobAge=3 is honored by Naukri -- still unverified",
+    "Whether cumulative session/IP-level rate-limiting explains the recent homepage blocks -- unconfirmed",
+    "Whether search() itself would report SOFT_BLOCK_OR_CHALLENGE, PARSE_FAILURE, or succeed -- unknown until the next live test"
+  ],
+  "next_live_validation_plan": [
+    "Fresh isolated temp DB, Saroj's confirmed profile, max_job_age_days=3, exactly 5 queries via the existing deterministic planner",
+    "JOBOS_BROWSER_HEADLESS left unset (headless default, channel='chromium' already in place)",
+    "Run search_worker.run_once() exactly once -- health_check() still runs/recorded, but all 5 queries will now actually be attempted regardless of its result",
+    "Capture per-query: actual requested URL, classify_search_page() state, raw/normalized/eligible counts, freshness-age evidence for jobAge=3",
+    "This live validation is NOT run as part of this task -- awaiting explicit authorization"
+  ],
+  "production_db": {
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "size": 114688,
+    "unchanged": true
+  }
+}

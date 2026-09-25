@@ -1,0 +1,97 @@
+{
+  "task": "Implement the smallest production-safe change allowing Naukri automation to use the live-validated headed-style User-Agent while remaining genuinely headless",
+  "based_on_live_evidence_from": "data/reports/naukri_headless_ua_isolation.md/.json",
+  "live_naukri_request_made_in_this_task": false,
+  "production_db_write_made": false,
+  "browser_launched_against_naukri": false,
+  "scoring_eligibility_ranking_freshness_dedup_query_planning_worker_logic_changed": false,
+  "files_changed": [
+    {"path": "scripts/naukri_fetch_bridge.js", "change": "Added JOBOS_NAUKRI_USER_AGENT-driven UA computation with default fallback; passed into browser context via userAgent option"},
+    {"path": "config/jobos.env.example", "change": "Documented JOBOS_NAUKRI_USER_AGENT and the pre-existing (previously undocumented) JOBOS_BROWSER_HEADLESS; file was previously empty"},
+    {"path": "scripts/test_naukri_user_agent_config.py", "change": "New offline regression test file, 12 checks, zero network requests"}
+  ],
+  "other_files_modified": [],
+  "configuration_added": {
+    "env_var": "JOBOS_NAUKRI_USER_AGENT",
+    "default_value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "code": "const naukriUserAgent = process.env.JOBOS_NAUKRI_USER_AGENT || DEFAULT_NAUKRI_USER_AGENT;",
+    "behavior": {
+      "unset": "validated default UA is used",
+      "non_empty_value": "used verbatim, passed through exactly, no transformation",
+      "empty_string": "falls back to the validated default via the '||' operator (empty string is falsy) -- an empty User-Agent is never sent to Naukri; this was a deliberate, documented choice per the 'do not silently create malformed browser configuration' instruction"
+    },
+    "scope": "read and applied ONLY inside naukri_fetch_bridge.js -- the one and only Playwright launch point in the real adapter/worker path. Has no effect on any other adapter (MockJobSourceAdapter and any future adapter are unaffected). Verified nowhere else references this variable."
+  },
+  "exact_default_ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+  "default_ua_source": "directly measured from a genuinely headed Chromium launch in data/reports/naukri_browser_runtime_diagnostic.md, and the exact string used in the single successful live isolation experiment in data/reports/naukri_headless_ua_isolation.md (HTTP 200 / VALID_RESULTS / 20 jobs, native headless mode)",
+  "how_ua_is_applied": {
+    "mechanism": "Playwright's standard, documented context-level `userAgent` option only",
+    "code": "const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, userAgent: naukriUserAgent });",
+    "nothing_else_changed": [
+      "no stealth library or fingerprint-spoofing framework",
+      "no JavaScript modification of navigator.* properties",
+      "no WebGL alteration",
+      "no pointer/touch/hover behavior alteration",
+      "no CAPTCHA bypass",
+      "no proxy rotation",
+      "no cookie manipulation",
+      "no other HTTP header (Accept, Accept-Language, Sec-Fetch-*, etc.) touched"
+    ]
+  },
+  "headless_remains_default": {
+    "confirmed": true,
+    "code": "const headless = process.env.JOBOS_BROWSER_HEADLESS !== '0';",
+    "unchanged_from_before_this_task": true
+  },
+  "chromium_channel_unchanged": {
+    "confirmed": true,
+    "value": "chromium",
+    "unchanged_from_before_this_task": true
+  },
+  "no_stealth_or_fingerprint_spoofing_added": {
+    "confirmed": true,
+    "detail": "The only change to browser behavior anywhere in this task is the single, standard, documented Playwright userAgent context option. No stealth plugin, anti-detection library, navigator.webdriver patch, WebGL override, timezone/locale spoofing, canvas fingerprint randomization, or any other evasion mechanism was added, considered, or referenced."
+  },
+  "tests_added": {
+    "file": "scripts/test_naukri_user_agent_config.py",
+    "network_requests_made_by_tests": 0,
+    "checks": [
+      {"id": "3", "description": "Validated default UA string present in source", "type": "static"},
+      {"id": "1/4/A", "description": "JOBOS_NAUKRI_USER_AGENT || DEFAULT_NAUKRI_USER_AGENT fallback expression present", "type": "static"},
+      {"id": "2/7", "description": "userAgent: naukriUserAgent passed into newContext(...)", "type": "static"},
+      {"id": "D", "description": "JOBOS_BROWSER_HEADLESS expression unchanged (headless default preserved)", "type": "static"},
+      {"id": "E", "description": "channel: 'chromium' unchanged", "type": "static"},
+      {"id": "G", "description": "Existing DIAGNOSTIC stderr line still present", "type": "static"},
+      {"id": "G2", "description": "process.stdout.write(html) stdout contract unchanged", "type": "static"},
+      {"id": "F", "description": "JOBOS_NAUKRI_USER_AGENT referenced only in naukri_fetch_bridge.js, not leaked into any other adapter/worker file", "type": "static"},
+      {"id": "H", "description": "No production file references the offline diagnostic probe script", "type": "static"},
+      {"id": "A", "description": "Default behavior: JOBOS_NAUKRI_USER_AGENT unset -> real about:blank browser context's navigator.userAgent equals the validated default", "type": "dynamic (real launch, about:blank only, zero network)"},
+      {"id": "B", "description": "Explicit override: custom UA ('TestAgent/9.9 (isolation-test)') passed through exactly", "type": "dynamic (real launch, about:blank only, zero network)"},
+      {"id": "C", "description": "Empty/malformed configuration: JOBOS_NAUKRI_USER_AGENT='' -> real context's navigator.userAgent equals the validated default, never empty", "type": "dynamic (real launch, about:blank only, zero network)"}
+    ],
+    "each_dynamic_check_also_asserts": "headless === true was preserved for that launch"
+  },
+  "full_test_result": {
+    "full_standalone_suite": "PASS=38 FAIL=0 (37 pre-existing + 1 new)",
+    "py_compile": "PY_COMPILE_ALL_OK",
+    "new_test_file_output_summary": "All 12 checks in scripts/test_naukri_user_agent_config.py passed",
+    "other_naukri_related_tests_reconfirmed_green": [
+      "test_naukri_headless_config.py",
+      "test_advisory_health_check.py",
+      "test_max_job_age_days.py",
+      "test_scoring.py",
+      "test_tracker.py",
+      "test_adapter_pipeline.py",
+      "test_registry_pipeline.py",
+      "test_query_orchestrator.py"
+    ]
+  },
+  "production_db": {
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "row_counts_before": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+    "row_counts_after": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+    "unchanged": true
+  },
+  "no_live_naukri_request_statement": "Confirmed: zero live Naukri or network requests were made anywhere in this task. Every browser launch performed while testing navigated to about:blank only. No production DB write occurred. No browser was ever launched against any naukri.com URL. The live validation of this change is explicitly NOT performed in this task and requires its own separate, future authorization."
+}

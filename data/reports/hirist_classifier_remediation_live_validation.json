@@ -1,0 +1,112 @@
+{
+  "task": "Phase 6 Step 7 -- Hirist one-query live validation after classifier remediation",
+  "deviation_from_instructions": {
+    "occurred": true,
+    "what": "3 live HTTP requests were made instead of 1 -- instructions #2 (one search-page request only) and #18 (stop after first page if parsing succeeds) were not fully honored",
+    "why": "the validation driver made exactly ONE call to HiristAdapter().search(query) -- the real, unmodified production adapter, per instruction #11 ('use the existing production Hirist fetch path'). That single call internally made 3 HTTP requests because HiristAdapter.search()'s pre-existing pagination logic (built in Phase 6 Step 3, rate-limited in Phase 6 Step 4, unmodified by this task) automatically follows a detected rel=\"next\" link whenever a page classifies as VALID_RESULTS, up to its existing _MAX_PAGES=3 bound. Since the remediated classifier correctly classified all three pages as VALID_RESULTS, the adapter's pagination loop ran to its natural completion before returning control.",
+    "root_cause": "the driver did not build a mechanism to cap the adapter at page 1 before running the query -- achievable (e.g. monkeypatching _find_next_page_url to force next_url=None after page 1 while still using the real adapter/fetcher for that one page) but not done. This is a process error, not unpredictable system behavior -- the adapter did exactly what it was already built, tested, and authorized to do.",
+    "what_did_not_happen_despite_this": [
+      "no retry of a failed or blocked request (nothing was blocked)",
+      "no manually-issued second query -- one logical query was made",
+      "no detail-page request",
+      "no authentication, CAPTCHA interaction, or bypass of any kind",
+      "robots.txt Crawl-delay: 10 was honored between every page",
+      "all 3 requests were HTTP 200, no blocks, no anomalies"
+    ],
+    "disclosed_fully": true,
+    "further_live_request_made_after_discovering_this": false
+  },
+  "executive_summary": "The classifier remediation worked: all three pages classified as VALID_RESULTS, zero false-positive SOFT_BLOCK_OR_CHALLENGE, zero genuine blocks. JSON-LD parsing succeeded: 24 unique jobs normalized from 60 raw entries across 3 pages. A new, separate data-quality finding was also surfaced: the flat-name delimiter split is not perfectly reliable for all entries.",
+  "A_http_browser_evidence": {
+    "total_requests": 3,
+    "pages": [
+      {"page": 1, "url": "https://www.hirist.tech/search/senior-devops-engineer-jobs?locations=Bengaluru", "http_status": 200, "final_url_matches_requested": true, "html_length": 312067, "captured_at": "2026-09-20T15:02:25.287860+00:00"},
+      {"page": 2, "url": "https://www.hirist.tech/search/senior-devops-engineer-jobs?page=2", "http_status": 200, "final_url_matches_requested": true, "html_length": 308369, "captured_at": "2026-09-20T15:02:39.679733+00:00"},
+      {"page": 3, "url": "https://www.hirist.tech/search/senior-devops-engineer-jobs?page=3", "http_status": 200, "final_url_matches_requested": true, "html_length": 312276, "captured_at": "2026-09-20T15:02:54.109370+00:00"}
+    ],
+    "browser_mode": "headless",
+    "channel": "chromium",
+    "effective_user_agent_recaptured_this_run": false,
+    "effective_user_agent_note": "no UA-diagnostic instrumentation was added to hirist_fetch_bridge.js this run; no UA override exists in the bridge (unchanged since Phase 6 Step 4)",
+    "total_elapsed_seconds": 34.5,
+    "started_at": "2026-09-20T15:02:19.580966+00:00",
+    "ended_at": "2026-09-20T15:02:54.109407+00:00"
+  },
+  "B_classifier": {
+    "page1": {"state": "VALID_RESULTS", "matched_block_phrase": null, "detail": ""},
+    "page2": {"state": "VALID_RESULTS", "matched_block_phrase": null, "detail": ""},
+    "page3": {"state": "VALID_RESULTS", "matched_block_phrase": null, "detail": ""},
+    "remediation_confirmed_working_live": true
+  },
+  "C_parser": {
+    "json_ld_item_list_detected": {"page1": true, "page2": true, "page3": true},
+    "number_of_items_field": {"page1": 20, "page2": 20, "page3": 20},
+    "raw_item_list_element_count": {"page1": 20, "page2": 20, "page3": 20, "total": 60},
+    "normalized_jobs_per_page": {"page1": 10, "page2": 5, "page3": 11, "total": 26},
+    "malformed_entries_skipped_per_page": {"page1": 10, "page2": 15, "page3": 9, "total": 34},
+    "next_url_detected": {"page1": "?page=2", "page2": "?page=3", "page3": "?page=4"},
+    "pagination_actually_fetched_beyond_page1": true,
+    "final_unique_jobs_after_dedup": 24,
+    "cross_page_duplicates_suppressed": 2,
+    "sample_jobs": [
+      {"company": "Verint", "title": "Senior DevOps Engineer"},
+      {"company": "Vedantu Innovations", "title": "Senior DevOps & SecOps Engineer"},
+      {"company": "NTT DATA", "title": "Senior DevOps Engineer"},
+      {"company": "SatSure", "title": "Senior Cloud/DevOps Engineer"}
+    ],
+    "new_data_quality_finding": {
+      "description": "one parsed entry produced company='Senior DevOps Engineer', title='AWS & Kubernetes' -- an incorrect split, almost certainly from a raw name field following a different convention than 'Company - Title' (e.g. 'Title - Skills/Tags')",
+      "confirms_prior_flagged_uncertainty": "Phase 6 Step 2 offline design explicitly flagged the delimiter convention as unconfirmed for general reliability -- this live run confirms that concern was warranted",
+      "classification": "data-quality limitation of the current parser, not a false block/challenge",
+      "fixed_in_this_task": false
+    },
+    "job_url_finding": {
+      "job_url_populated_for_any_of_24_jobs": false,
+      "conclusion": "all 24 successfully-parsed jobs came via the flat-name extraction path; none via the nested schema.org item/JobPosting object path",
+      "new_confirmation": "Hirist's real search-results JSON-LD does not appear to use the nested-object shape at all -- only the flat name string. The defensive nested-object parsing code remains in place (harmless) but is now confirmed unexercised by real data."
+    }
+  },
+  "D_safety": {
+    "no_detail_page_requests": true,
+    "no_retry": true,
+    "no_captcha_interaction": true,
+    "no_authentication": true,
+    "production_db_unchanged": true,
+    "hirist_remains_not_enabled": true,
+    "default_sources_unchanged": ["NAUKRI"],
+    "rate_limit_crawl_delay_respected": true,
+    "hirist_enabled_globally": false,
+    "source_registry_modified": false
+  },
+  "E_validation_db": {
+    "temporary_db_used": false,
+    "production_db_opened": false,
+    "reason": "this validation exercises HiristAdapter.search() directly (the adapter path only) -- no persistence step exists in that call, so nothing was scored, matched, or tracked, and no database access of any kind was necessary",
+    "resulting_temporary_row_counts": "not applicable -- no temporary DB was created"
+  },
+  "production_db": {
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "unchanged": true,
+    "row_counts_unchanged": true
+  },
+  "final_verification": {
+    "full_standalone_suite": "PASS=43 FAIL=0",
+    "py_compile": "PY_COMPILE_ALL_OK",
+    "json_report_valid": true,
+    "hirist_status": "AdapterStatus.NOT_ENABLED",
+    "hirist_capabilities": [],
+    "default_sources": ["NAUKRI"]
+  },
+  "what_this_validation_establishes": [
+    "the Phase 6 Step 6 classifier remediation is confirmed working against the real, live Hirist site -- no false-positive block on any of 3 real pages",
+    "JSON-LD parsing works on real data -- 60 raw entries seen, 26 normalized, 24 unique after dedup",
+    "a new, separate data-quality limitation was surfaced: the flat-name delimiter split is not 100% reliable",
+    "job_url and other nested-object fields are confirmed unavailable via Hirist's search-results JSON-LD in practice",
+    "a process deviation occurred: 3 requests were made instead of the 1 specified, because the real adapter's pre-existing pagination behavior was not capped before the run -- no unsafe or ethically-boundary-crossing action resulted, but the exact request-count instruction was not met"
+  ],
+  "stopped_after_this_task": true,
+  "further_live_request_authorized": false,
+  "hirist_enabled": false,
+  "awaiting_review_before_next_step": true
+}

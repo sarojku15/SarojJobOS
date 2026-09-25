@@ -1,0 +1,209 @@
+{
+  "task": "Controlled 5-query live Naukri validation: UA configuration reliability + empirical jobAge=3 native freshness filter confirmation",
+  "scope_limit": "exactly five queries; no other job boards, Excel generation, application automation, or scheduler work performed in this task",
+  "queries": [
+    {"role": "Infrastructure Engineer", "location": "Bangalore", "max_job_age_days": 3},
+    {"role": "Infrastructure Engineer", "location": "Bengaluru", "max_job_age_days": 3},
+    {"role": "Infrastructure Engineer", "location": "Chennai", "max_job_age_days": 3},
+    {"role": "Infrastructure Engineer", "location": "Hyderabad", "max_job_age_days": 3},
+    {"role": "Infrastructure Engineer", "location": "Pune", "max_job_age_days": 3}
+  ],
+  "execution_method": {
+    "entry_point": "search_worker.run_once(temp_db_path, candidate_id='saroj', max_items=1)",
+    "batching": "one search_run containing all 5 query entries, processed in one process_queue_item() call -- discover_from_sources() runs one health_check() then adapter.search() once per query, in order, unmodified",
+    "observation_wrappers_runtime_only_no_file_edited": [
+      "naukri_adapter.classify_search_page (pass-through, records classification per call, in order)",
+      "naukri_adapter.NaukriAdapter.search (pass-through, records query/timing/raw_count/error per call, in order)"
+    ],
+    "temp_db_creation_method": "shutil.copy2 of data/applications/jobos.db to a new temp file (read-only access to production)",
+    "env_vars_explicitly_unset_before_run": ["JOBOS_BROWSER_HEADLESS", "JOBOS_NAUKRI_USER_AGENT"],
+    "production_files_modified_for_this_task": []
+  },
+  "pre_flight": {
+    "production_db_sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "production_row_counts_before": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+    "candidate_id": "saroj",
+    "candidate_status": "ACTIVE"
+  },
+  "per_query_results_facts_observed": [
+    {
+      "location": "Bangalore",
+      "requested_url": "https://www.naukri.com/infrastructure-engineer-jobs-in-bangalore?jobAge=3",
+      "final_url": "https://www.naukri.com/infrastructure-engineer-jobs-in-bangalore?jobAge=3",
+      "redirected": false,
+      "http_status": 200,
+      "classifier_state": "VALID_RESULTS",
+      "matched_block_phrase": null,
+      "raw_job_count": 20,
+      "error": null,
+      "elapsed_seconds": 220.7
+    },
+    {
+      "location": "Bengaluru",
+      "requested_url": "https://www.naukri.com/infrastructure-engineer-jobs-in-bengaluru?jobAge=3",
+      "final_url": "https://www.naukri.com/infrastructure-engineer-jobs-in-bengaluru?jobAge=3",
+      "redirected": false,
+      "http_status": 200,
+      "classifier_state": "VALID_RESULTS",
+      "matched_block_phrase": null,
+      "raw_job_count": 20,
+      "error": null,
+      "elapsed_seconds": 213.0
+    },
+    {
+      "location": "Chennai",
+      "requested_url": "https://www.naukri.com/infrastructure-engineer-jobs-in-chennai?jobAge=3",
+      "final_url": "https://www.naukri.com/infrastructure-engineer-jobs-in-chennai?jobAge=3",
+      "redirected": false,
+      "http_status": 200,
+      "classifier_state": "VALID_RESULTS",
+      "matched_block_phrase": null,
+      "raw_job_count": 20,
+      "error": null,
+      "elapsed_seconds": 209.8
+    },
+    {
+      "location": "Hyderabad",
+      "requested_url": "https://www.naukri.com/infrastructure-engineer-jobs-in-hyderabad?jobAge=3",
+      "final_url": "https://www.naukri.com/infrastructure-engineer-jobs-in-hyderabad-secunderabad?jobAge=3",
+      "redirected": true,
+      "redirect_note": "Naukri's own server-side metro-area URL normalization (hyderabad -> hyderabad-secunderabad); classifier still reached VALID_RESULTS on the redirected page; existing, unmodified redirect-following behavior, no code change made",
+      "http_status": 200,
+      "classifier_state": "VALID_RESULTS",
+      "matched_block_phrase": null,
+      "raw_job_count": 20,
+      "error": null,
+      "elapsed_seconds": 208.6
+    },
+    {
+      "location": "Pune",
+      "requested_url": "https://www.naukri.com/infrastructure-engineer-jobs-in-pune?jobAge=3",
+      "final_url": "https://www.naukri.com/infrastructure-engineer-jobs-in-pune?jobAge=3",
+      "redirected": false,
+      "http_status": 200,
+      "classifier_state": "VALID_RESULTS",
+      "matched_block_phrase": null,
+      "raw_job_count": 20,
+      "error": null,
+      "elapsed_seconds": 207.2
+    }
+  ],
+  "malformed_job_note": {
+    "occurred": true,
+    "detail": "Job #3 (index 3 of the combined 100 raw jobs) was missing the required 'company' field and was skipped by discover_local.normalize_job()",
+    "classification": "existing, documented fallback behavior (\"one malformed job is skipped, not fatal\"), NOT a new defect introduced by this task or the prior UA change",
+    "production_code_changed_in_response": false
+  },
+  "jobage_3_empirical_validation": {
+    "previously": "only URL/UI verified -- jobAge=3 parameter construction was confirmed present in the outgoing request, but no successful returned listings had ever been analyzed for it (every prior attempt was blocked pre-UA-fix)",
+    "now": "EMPIRICALLY VALIDATED by returned listings",
+    "unique_jobs_analyzed": 72,
+    "freshness_age_days_range_all_72": "1 to 3",
+    "jobs_exceeding_max_age_days_3": 0,
+    "freshness_label_distribution": {"HOT": 66, "FRESH": 6},
+    "discovery_time_vs_post_retrieval_freshness_distinction": {
+      "discovery_time": "the ?jobAge=3 URL parameter sent to Naukri's own server -- this is what actually reduces the number of jobs Naukri returns",
+      "post_retrieval": "freshness.py's independent classify_freshness() parsing each job's own posted_date text after the fact, unaware of which URL parameter fetched the page",
+      "architecturally_separate_throughout_this_validation": true,
+      "relationship": "the post-retrieval classification's results (all <= 3 days) corroborate that the discovery-time filter worked, rather than being the mechanism that enforced it"
+    },
+    "remaining_uncertainty_interpretation": "one successful 5-query trial does not prove Naukri's jobAge=3 filter behaves identically for every role/location combination, at every time of day, or indefinitely into the future -- only that it worked, verifiably, for these five location queries at this run"
+  },
+  "aggregate_totals": {
+    "total_raw_jobs": 100,
+    "malformed_skipped": 1,
+    "total_normalized_jobs": 99,
+    "duplicate_count_production_dedup": 27,
+    "total_unique_jobs": 72,
+    "excluded_experience": 57,
+    "excluded_location": 0,
+    "total_eligible": 15,
+    "total_scored": 15,
+    "ready_for_approval": 3,
+    "total_candidate_matches": 15,
+    "score_range": {"min": 13, "max": 95},
+    "priority_distribution_scored_jobs": {"A": 2, "B": 1, "C": 3, "REJECT": 9},
+    "jobs_exceeding_3_day_freshness": 0,
+    "timed_out_queries": 0,
+    "succeeded_queries": 5,
+    "total_http_requests_to_naukri": 106,
+    "total_errors": 1,
+    "retries": 0,
+    "http_status_distribution": {"200": 106},
+    "classifier_distribution": {"VALID_RESULTS": 5, "BLOCKED": 0, "SOFT_BLOCK_OR_CHALLENGE": 0, "PARSE_FAILURE": 0}
+  },
+  "scored_jobs_this_run": [
+    {"job_id": "NAUKRI-4f7bcd41148439c4", "company": "Tenarai Technologies", "title": "AWS Cloud Infra and DevOps Engineer", "score": 95, "priority": "A", "freshness_age_days": 2},
+    {"job_id": "NAUKRI-795afb8054ffa58b", "company": "Robosoft Technologies", "title": "Lead DevOps Engineer", "score": 90, "priority": "A", "freshness_age_days": 1},
+    {"job_id": "NAUKRI-8336f2b424fcc7fc", "company": "Head Hunters", "title": "Infrastructure Engineer Lead", "score": 85, "priority": "B", "freshness_age_days": 2},
+    {"job_id": "NAUKRI-71298a7982adfb9c", "company": "RBS Lynk", "title": "Senior Devops Engineer (AWS, Terraform, Kubernetes)", "score": 75, "priority": "C", "freshness_age_days": 1},
+    {"job_id": "NAUKRI-3b51661484622081", "company": "Brose", "title": "Senior Cloud Platform Engineer (AWS & Terraform)", "score": 75, "priority": "C", "freshness_age_days": 2},
+    {"job_id": "NAUKRI-394df19a920df78f", "company": "Conduent", "title": "Infrastructure Systems Engineer III", "score": 70, "priority": "C", "freshness_age_days": 2},
+    {"job_id": "NAUKRI-3745fc5e17e9caa1", "company": "Mastercard", "title": "Senior Platform Engineer", "score": 65, "priority": "REJECT", "freshness_age_days": 2},
+    {"job_id": "NAUKRI-aa12b166f7270c33", "company": "Datamatics", "title": "Cloud Infrastructure Engineer", "score": 60, "priority": "REJECT", "freshness_age_days": 3},
+    {"job_id": "NAUKRI-5cbc8a75598c1ab2", "company": "Birlasoft", "title": "Technical Lead-Cloud & Infra Engg", "score": 60, "priority": "REJECT", "freshness_age_days": 2},
+    {"job_id": "NAUKRI-c2892b0b0d794d40", "company": "Computing Concepts Inc", "title": "Senior Cloud Infrastructure Engineer", "score": 60, "priority": "REJECT", "freshness_age_days": 3},
+    {"job_id": "NAUKRI-d6da657d42ffccd3", "company": "Access Healthcare", "title": "Infrastructure Network Engineer - Tier 3/4", "score": 40, "priority": "REJECT", "freshness_age_days": 2},
+    {"job_id": "NAUKRI-3f980a2d29421b44", "company": "Accenture", "title": "Cloud Platform Engineer", "score": 45, "priority": "REJECT", "freshness_age_days": 3},
+    {"job_id": "NAUKRI-3ac0ec378ff151ea", "company": "Samsara Inc", "title": "Staff Software Engineer - Platform and Infrastructure", "score": 30, "priority": "REJECT", "freshness_age_days": 2},
+    {"job_id": "NAUKRI-f9be4f42109b4a13", "company": "Swits Digital", "title": "Senior / Lead Azure Cloud & Infrastructure Architect", "score": 30, "priority": "REJECT", "freshness_age_days": 2},
+    {"job_id": "NAUKRI-1c4752bb51a60b05", "company": "Birlasoft", "title": "Sr Technical Lead-Cloud & Infra Engg", "score": 13, "priority": "REJECT", "freshness_age_days": 1}
+  ],
+  "cross_query_duplicate_analysis": {
+    "production_pipeline_authoritative_dedup": {
+      "basis": "post-normalization, the number that actually governs what lands in the DB",
+      "normalized_jobs": 99,
+      "duplicates_removed": 27,
+      "unique_jobs": 72
+    },
+    "this_validations_own_raw_pre_normalization_overlap_analysis": {
+      "basis": "observational only, computed from the 5 per-query raw job-URL lists before normalization/dedup ran",
+      "distinct_job_urls_across_all_5_queries": 72,
+      "urls_appearing_in_more_than_one_query": 23,
+      "overlap_by_location_set": {
+        "Bangalore+Bengaluru": 17,
+        "Hyderabad+Pune": 2,
+        "Chennai+Hyderabad": 1,
+        "Bangalore+Bengaluru+Hyderabad": 1,
+        "Bangalore+Bengaluru+Chennai+Hyderabad": 1,
+        "Bangalore+Bengaluru+Chennai+Pune": 1
+      },
+      "interpretation": "the overwhelming majority of cross-query duplicates are the Bangalore/Bengaluru spelling-variant pair for the same city -- confirms production dedup is correctly collapsing the same real-world job posted under two different location-query slugs into one canonical entry"
+    },
+    "note_on_the_two_different_numbers": "27 (post-normalization, of 99) vs 23 (raw, pre-normalization, of 100 including the 1 malformed job that never reached dedup) are not expected to match exactly -- both are consistent with each other and with a real, working cross-query dedup step"
+  },
+  "production_db_after": {
+    "sha256": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "row_counts": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+    "unchanged": true,
+    "write_target_for_this_run": "temporary DB copy only, deleted after validation"
+  },
+  "regression_suite": {
+    "full_standalone_suite_result": "PASS=38 FAIL=0",
+    "py_compile": "PY_COMPILE_ALL_OK",
+    "new_tests_added_this_task": false,
+    "reason_no_new_tests": "this was a live validation task, not an implementation task"
+  },
+  "files_changed": [],
+  "exact_request_counts": {
+    "health_checks": 1,
+    "search_queries": 5,
+    "detail_page_fetches": 100,
+    "total_requests_to_naukri": 106,
+    "retries": 0
+  },
+  "http_status_distribution": {"200": 106},
+  "classifier_distribution": {"VALID_RESULTS": 5, "BLOCKED": 0, "SOFT_BLOCK_OR_CHALLENGE": 0, "PARSE_FAILURE": 0},
+  "naukri_phase_1_validated": {
+    "answer": true,
+    "basis": [
+      "single-query live validation (prior task): 1/1 query succeeded",
+      "this controlled 5-query live validation: 5/5 queries succeeded, 0 blocks, 0 retries",
+      "jobAge=3 empirically confirmed by returned listings, not just URL/UI inspection"
+    ],
+    "remaining_limitation_interpretation": "6 total successful live queries across 2 sessions is evidence of reliability, not a guarantee of indefinite reliability -- Naukri's server-side behavior could change at any time, independent of anything in this codebase. Validated here means validated against the evidence gathered so far, not provably permanent."
+  },
+  "recommended_next_gate": "Phase 4: multi-source adapter architecture (LinkedIn, Indeed, Foundit, Instahyre, Wellfound, career pages), offline-only until each adapter independently passes its own Phase-1/Phase-2/Phase-3 gates exactly as Naukri just did. Naukri daily-scale validation (a later Naukri-specific gate) remains available but was not authorized or started in this task.",
+  "stopped_after_this_validation": true,
+  "no_other_job_board_excel_application_or_scheduler_work_performed": true
+}

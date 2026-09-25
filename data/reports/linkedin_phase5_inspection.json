@@ -1,0 +1,207 @@
+{
+  "task": "Phase 5 -- LinkedIn Jobs discovery/feasibility inspection ONLY, no implementation",
+  "linkedin_adapter_status_after_this_task": {
+    "status": "AdapterStatus.NOT_ENABLED",
+    "capabilities": [],
+    "changed_in_this_task": false
+  },
+  "live_requests_made": [
+    {
+      "n": 1,
+      "type": "robots.txt fetch",
+      "method": "plain HTTP GET via curl, no browser",
+      "url": "https://www.linkedin.com/robots.txt",
+      "http_status": 200
+    },
+    {
+      "n": 2,
+      "type": "single Playwright page navigation",
+      "url": "https://www.linkedin.com/jobs/search?keywords=Site%20Reliability%20Engineer&location=Bengaluru%2C%20Karnataka%2C%20India",
+      "http_status": 200,
+      "final_url": "https://www.linkedin.com/jobs/search?keywords=Site%20Reliability%20Engineer&location=Bengaluru%2C%20Karnataka%2C%20India",
+      "redirected": false
+    }
+  ],
+  "total_live_requests": 2,
+  "retries": 0,
+  "login_attempts": 0,
+  "captcha_solve_attempts": 0,
+  "detail_pages_visited": 0,
+  "pagination_interactions": 0,
+  "application_interactions": 0,
+  "A_inspection_urls": {
+    "browser_inspection": "https://www.linkedin.com/jobs/search?keywords=Site%20Reliability%20Engineer&location=Bengaluru%2C%20Karnataka%2C%20India",
+    "policy_check": "https://www.linkedin.com/robots.txt",
+    "url_verified_against_prior_capture": false,
+    "note": "standard, publicly-documented LinkedIn Jobs search URL shape; this inspection is the first evidence gathered for it in this project"
+  },
+  "B_http_status_and_final_url": {
+    "http_status": 200,
+    "final_url_equals_requested": true,
+    "redirected_http_level": false,
+    "robots_txt_http_status": 200,
+    "evidence_type": "FACT/OBSERVED"
+  },
+  "C_browser_runtime_mode": {
+    "headless": true,
+    "channel": "chromium",
+    "effective_user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+    "user_agent_override_applied": false,
+    "note": "deliberately left at Playwright's true default so the observation reflects LinkedIn's actual behavior toward an unmodified, honestly-identified headless browser"
+  },
+  "D_authentication_requirement_observed": {
+    "hard_login_wall_redirect": false,
+    "sign_in_prompt_present_on_page": true,
+    "password_input_present_in_dom": true,
+    "forms_present_count": 6,
+    "detail_page_auth_requirement": "NOT DETERMINABLE -- not tested, no detail page visited",
+    "full_result_set_auth_requirement": "NOT DETERMINABLE -- not tested"
+  },
+  "E_block_challenge_status": {
+    "login_wall_url_redirect": false,
+    "captcha_or_challenge_text_present": false,
+    "access_denied_text_present": false,
+    "empty_results_text_present": false,
+    "rate_limit_observed": false,
+    "additional_signals": {
+      "data_is_bot_flag": "false",
+      "data_is_bot_flag_meaning": "LinkedIn's own client-side bot-detection flag did not flag this session as a bot on this occasion",
+      "recaptcha_v3_integration_feature_flag_present": true,
+      "recaptcha_v3_feature_flag_value": "control",
+      "recaptcha_note": "evidence the capability exists in LinkedIn's stack; not evidence it will or will not activate under different conditions"
+    }
+  },
+  "F_result_page_structure": {
+    "served_by": "LinkedIn's own jobs-guest-frontend service (data-multiproduct-name, data-service-name, pageKey=d_jobs_guest_search)",
+    "is_intentional_guest_experience": true,
+    "canonical_url_per_page": "https://in.linkedin.com/jobs/site-reliability-engineer-jobs-bengaluru",
+    "canonical_url_differs_from_requested": true,
+    "canonical_url_mechanism": "link rel=canonical meta tag, not an HTTP redirect",
+    "anchors_to_job_detail_pages_found": 61,
+    "job_card_class_heuristic_matches": 1,
+    "job_card_class_heuristic_reliable": false,
+    "per_card_dom_structure_determined": false,
+    "html_total_length_chars": 305271,
+    "html_excerpt_captured_chars": 4000
+  },
+  "G_detail_page_availability": {
+    "detail_links_found_in_search_page": 61,
+    "detail_link_pattern": "a[href*=\"/jobs/view/\"]",
+    "any_detail_page_visited": false,
+    "auth_requirement_for_detail_pages": "NOT DETERMINABLE"
+  },
+  "H_extractable_fields": {
+    "job_title": "likely extractable, not individually confirmed",
+    "company": "not confirmed",
+    "location": "likely extractable (reflected in page title/meta), not individually confirmed per-card",
+    "posted_date": "not confirmed",
+    "job_id": "presumed embedded in /jobs/view/<id> URLs, not individually extracted",
+    "description_jd_text": "not confirmed on this page",
+    "application_url": "not confirmed",
+    "salary": "not confirmed",
+    "remote_work_model_info": "not confirmed",
+    "note": "every 'not confirmed' is an honest gap from a single, extraction-logic-free observation pass, not a negative finding"
+  },
+  "I_freshness_filter_feasibility": {
+    "tested": false,
+    "reason": "would require a second request to compare against; out of scope for this single-page inspection",
+    "general_knowledge_unverified": "LinkedIn's standard job search URLs are publicly known to support a time-posted-range parameter in general web use, but this was NOT verified live in this task",
+    "status": "UNKNOWN, requires validation"
+  },
+  "J_pagination_feasibility": {
+    "tested": false,
+    "observed_result_count_claim": "6,000+",
+    "detail_links_on_one_page": 61,
+    "mechanism": "UNKNOWN, requires validation -- could be numbered pages, infinite scroll, offset parameter, or a guest-mode result cap"
+  },
+  "K_application_url_feasibility": {
+    "tested": false,
+    "confirmed_not_by_direct_test_but_by_robots_txt": "robots.txt disallows /jobs/view/externalApply/ and /job-apply/ for every named bot, and via the catch-all rule for unrecognized agents too"
+  },
+  "L_rate_limit_antibot_observations": {
+    "rate_limiting_observed": false,
+    "rate_limiting_expected_from_single_request": false,
+    "concrete_signals_observed": ["data-is-bot=false", "recaptcha-v3 feature flag present but inactive (control group)"],
+    "sustained_access_behavior_tested": false,
+    "sustained_access_behavior_will_be_tested_by_escalating_volume": false
+  },
+  "M_terms_policy_considerations": {
+    "robots_txt": {
+      "fetched_live_this_task": true,
+      "url": "https://www.linkedin.com/robots.txt",
+      "http_status": 200,
+      "total_lines": 4862,
+      "named_user_agent_blocks": 77,
+      "catch_all_rule": {
+        "user_agent": "*",
+        "disallow": "/",
+        "meaning": "disallows the entire site for any user agent not explicitly named in the file"
+      },
+      "generic_playwright_session_matches_a_named_agent": false,
+      "explicit_notice_in_file": "If you would like to crawl LinkedIn, please email whitelist-crawl@linkedin.com to apply for white listing.",
+      "additional_disallowed_paths_for_named_bots": [
+        "/jobs-guest/", "/jobs?runSearch*", "/api/jobPostings/jobs*",
+        "/jsearch*", "/job-apply/", "/jobs/view/externalApply/", "/authwall"
+      ]
+    },
+    "general_policy_knowledge": {
+      "label": "INTERPRETATION -- general knowledge carried into this task, not independently re-verified by reading LinkedIn's current full User Agreement live in this session",
+      "summary": "LinkedIn's User Agreement and Professional Community Policies are widely known to prohibit automated scraping without express permission, with a documented history of technical and legal enforcement (e.g. hiQ Labs v. LinkedIn, whose outcome did not establish a general right to scrape against LinkedIn's terms)"
+    }
+  },
+  "N_technical_feasibility": {
+    "reaching_public_search_page_without_login": "feasible, observed once",
+    "reliability_over_time_volume_or_for_detail_pages": "not established by a single visit"
+  },
+  "O_compliance_authorization_assessment": {
+    "technically_possible": true,
+    "permitted_authorized": false,
+    "basis_for_not_permitted": "robots.txt's catch-all Disallow: / rule for unrecognized user agents, plus its explicit invitation to email for whitelisting -- this project has not sought or obtained whitelisting",
+    "remaining_uncertainty": "whether a single, human-paced, non-bulk, read-only visit would be viewed differently in practice than a bulk crawler -- robots.txt draws no such distinction (its rule is agent-based, not volume-based), and this project has no basis to assume a more permissive reading",
+    "overall_assessment": "technically possible but not established as authorized"
+  },
+  "P_unknowns_requiring_validation": [
+    "whether individual job detail pages require login",
+    "whether the full/unpaginated result set is reachable without an account, and what mechanism governs pagination",
+    "whether a freshness/date filter parameter is honored on this URL shape",
+    "exact per-card DOM structure (title/company/location/date selectors)",
+    "exact /jobs/view/<id> URL/ID structure",
+    "whether behavior changes under repeated or higher-volume access (not to be tested by escalating volume without fresh explicit authorization)",
+    "whether LinkedIn's enforcement of robots.txt differs in practice from its literal text (not to be tested via violation)",
+    "whether a compliant alternative (e.g. an official LinkedIn Jobs/Talent API partnership) is practically available to an individual candidate"
+  ],
+  "Q_recommendation": {
+    "proceed_to_offline_implementation_now": false,
+    "reasoning": "robots.txt's explicit, site-wide disallow for unrecognized agents is a direct, public statement against building an automated crawler without authorization; consistent with this project's own principle of preferring compliant discovery and human handoff over bypassing access controls",
+    "recommended_paths": [
+      "(a) pursue LinkedIn's official, sanctioned access path (a Jobs/Talent API partnership) if practically available to an individual candidate -- likely not, but should be explicitly ruled out rather than assumed",
+      "(b) treat LinkedIn as a human-handoff-only source: the candidate manually searches/applies via their own browser and account, and SarojJobOS records/tracks what they find rather than discovering it automatically"
+    ],
+    "status_change_made": false,
+    "status_change_recommended_without_further_explicit_decision": false,
+    "advisory_only": true
+  },
+  "regression_and_safety": {
+    "new_files": ["scripts/linkedin_discovery_probe.js"],
+    "new_file_is_diagnostic_only": true,
+    "new_file_referenced_by_production_code": false,
+    "linkedin_adapter_py_modified": false,
+    "source_registry_py_modified": false,
+    "search_profile_py_modified": false,
+    "search_worker_py_modified": false,
+    "scoring_eligibility_freshness_dedup_modified": false,
+    "full_standalone_suite_result": "PASS=39 FAIL=0",
+    "py_compile": "PY_COMPILE_ALL_OK"
+  },
+  "production_db": {
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "row_counts_before": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+    "row_counts_after": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+    "unchanged": true,
+    "database_ever_opened_for_writing": false,
+    "temporary_db_needed": false
+  },
+  "stopped_after_this_report": true,
+  "phase_5_step_2_offline_implementation_authorized_by_this_report": false
+}

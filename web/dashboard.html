@@ -1,0 +1,168 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Job Search OS — Dashboard</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<header>
+  <span class="brand">Job Search OS</span>
+  <a href="/">Home</a>
+  <a href="/profile">Profile</a>
+  <a href="/searches">Searches</a>
+  <a href="/dashboard" class="active">Dashboard</a>
+</header>
+<main>
+  <h1>Dashboard</h1>
+  <div id="profile-status" class="hint"></div>
+  <div id="msg"></div>
+  <div id="content"><div class="loading-state">Loading...</div></div>
+</main>
+<script src="/static/app.js"></script>
+<script>
+let candidateId = null;
+
+async function load() {
+  const content = document.getElementById("content");
+  const msg = document.getElementById("msg");
+
+  candidateId = await resolveActiveCandidate();
+  if (!candidateId) {
+    showEmpty(content, "No candidate selected yet.");
+    const cta = el(`<div style="text-align:center;margin-top:16px"><button onclick="window.location.href='/'">Go to Home</button></div>`);
+    content.appendChild(cta);
+    return;
+  }
+
+  try {
+    const [data, providerSummary] = await Promise.all([
+      api(`/api/candidates/${candidateId}/dashboard`),
+      api("/api/settings/search-providers").catch(() => null),
+    ]);
+    document.getElementById("profile-status").innerHTML =
+      `Profile status: ${badgeHtml(data.profile_status || "DRAFT")}`;
+
+    content.innerHTML = `
+      <div class="card">
+        <h2>Summary</h2>
+        <div id="summary"></div>
+      </div>
+      <div class="card">
+        <h2>Your saved searches</h2>
+        <div id="search-list"></div>
+        <button class="secondary" onclick="window.location.href='/searches/new'">+ New search</button>
+      </div>
+      <div class="card">
+        <h2>Sources</h2>
+        <div id="sources-block"></div>
+        <div class="button-row">
+          <button class="secondary" onclick="window.location.href='/import'">+ Import a job manually</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Excel report</h2>
+        <p class="hint">Every matched job across every search, in the standard 9-sheet workbook.</p>
+        <button id="download-btn">Download Excel report</button>
+      </div>
+    `;
+
+    const summaryEl = document.getElementById("summary");
+    if (data.summary) {
+      summaryEl.innerHTML = `
+        <div class="summary-grid">
+          <div class="summary-tile"><div class="value">${data.summary.total_jobs_in_scope}</div><div class="label">Jobs Found</div></div>
+          <div class="summary-tile"><div class="value">${data.summary.eligible_count}</div><div class="label">Matching</div></div>
+          <div class="summary-tile"><div class="value">${data.summary.apply_today_count}</div><div class="label">Apply Today</div></div>
+          <div class="summary-tile"><div class="value">${data.summary.duplicate_candidate_pairs}</div><div class="label">Duplicate Pairs</div></div>
+          <div class="summary-tile"><div class="value">${data.summary.new_jobs_count}</div><div class="label">New Since Last Check</div></div>
+        </div>
+      `;
+    } else {
+      showEmpty(summaryEl, "Confirm your profile and run a search to see summary metrics.");
+    }
+
+    if (data.sources) {
+      renderSourceStatus(document.getElementById("sources-block"), data.sources, providerSummary);
+    }
+
+    const list = document.getElementById("search-list");
+    if (!data.searches.length) {
+      showEmpty(list, "No saved searches yet.");
+    } else {
+      list.innerHTML = data.searches
+        .map((s) => {
+          const runInfo = s.latest_run
+            ? `${badgeHtml(s.latest_run.status)} last run: ${s.latest_run.jobs_ready ?? 0} ready / ${s.latest_run.jobs_eligible ?? 0} eligible`
+            : `<span class="hint">never run</span>`;
+          // Which sources were actually searched/zero/failed on the
+          // most recent run (Phase 1's search_run_sources audit) --
+          // answers "which sources returned zero?" / "which failed?"
+          // right on the dashboard, not just on the results page.
+          const sourceAudit = s.latest_run ? sourceAuditSummaryHtml(s.latest_run.sources) : "";
+          return `
+            <div class="search-list-item">
+              <div>
+                <b>${escapeHtml(s.name)}</b>
+                <div class="meta">${escapeHtml(s.target_roles.join(", "))} &mdash; ${escapeHtml(s.target_locations.join(", "))}</div>
+                <div class="meta">${runInfo}</div>
+                ${sourceAudit ? `<div class="meta source-audit-summary">${sourceAudit}</div>` : ""}
+              </div>
+              <div class="button-row" style="margin-top:0">
+                <button class="small" data-run="${s.saved_search_id}">Run now</button>
+                <button class="secondary small" onclick="window.location.href='/searches/${s.saved_search_id}/results'">View results</button>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+
+      list.querySelectorAll("[data-run]").forEach((btn) => {
+        btn.addEventListener("click", () => runSearch(btn.dataset.run, btn));
+      });
+    }
+
+    document.getElementById("download-btn").addEventListener("click", () => {
+      window.location.href = `/api/candidates/${candidateId}/report`;
+    });
+  } catch (err) {
+    showError(msg, err);
+  }
+}
+
+async function runSearch(searchId, btn) {
+  const msg = document.getElementById("msg");
+  btn.disabled = true;
+  btn.textContent = "Starting...";
+  try {
+    const { run_id, status } = await api(`/api/searches/${searchId}/run?candidate_id=${candidateId}`, { method: "POST" });
+    showSuccess(msg, `Run started: ${status}`);
+    pollRun(run_id, btn);
+  } catch (err) {
+    showError(msg, err);
+    btn.disabled = false;
+    btn.textContent = "Run now";
+  }
+}
+
+async function pollRun(runId, btn) {
+  try {
+    const run = await api(`/api/runs/${runId}?candidate_id=${candidateId}`);
+    btn.textContent = `Status: ${run.status}`;
+    if (["COMPLETED", "PARTIAL", "FAILED", "BLOCKED"].includes(run.status)) {
+      btn.disabled = false;
+      btn.textContent = "Run now";
+      load();
+      return;
+    }
+    setTimeout(() => pollRun(runId, btn), 4000);
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = "Run now";
+  }
+}
+
+load();
+</script>
+</body>
+</html>

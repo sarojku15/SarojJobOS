@@ -1,0 +1,49 @@
+{
+  "task": "Phase 8 PART A -- Daily Queue Generation Fix, architecture design",
+  "architecture_questions": {
+    "1_who_creates_search_queue_rows": "search_submission.submit_search() (and build_search_plan()) exclusively; CLI: scripts/submit_search.py",
+    "2_who_consumes_search_queue_rows": "search_worker.claim_next_queue_item() + process_queue_item() exclusively; CLI: scripts/run_search_worker.py --once",
+    "3_what_completes_a_queue_item": "search_worker._finalize_queue_item(), called unconditionally at the end of process_queue_item() including every early-failure path -- sets status to COMPLETED/PARTIAL/BLOCKED/FAILED",
+    "4_what_happens_after_exhaustion": "claim_next_queue_item() finds nothing QUEUED, run_once() breaks immediately, prints 'No eligible QUEUED work found' -- safe, non-destructive. BEFORE this fix, nothing recreated a new item.",
+    "5_one_shot_or_recurring": "one-shot per submission by design -- not a defect in search_submission.py/search_worker.py; the gap was that nothing else in the chain called submit_search() recurringly",
+    "6_existing_safe_submission_function": "search_submission.submit_search(), already built, already tested (25 tests in test_search_submission.py), already exposed via scripts/submit_search.py",
+    "7_can_be_made_idempotent": "already is and always was -- submit_search()'s existing fingerprint-based duplicate-submission policy, proven by pre-existing test_search_submission.py test 20 and re-proven end-to-end by this phase's test_phase8_daily_queue.py"
+  },
+  "architecture_before": "launchd -> run_daily_search.sh -> run_search_worker.py --once (ONLY consumes, never produces; queue exhausted after first successful run, forever)",
+  "architecture_after": "launchd -> run_daily_search.sh -> submit_search.py --candidate-id saroj --max-job-age-days 3 --confirm (existing, unmodified, already-idempotent submit_search()) -> run_search_worker.py --once -> generate_run_report.py (existing) -> run_summary.json (existing)",
+  "fix": {
+    "files_modified": ["scripts/submit_search.py", "scripts/run_daily_search.sh"],
+    "submit_search_py_change": "added one new optional flag --max-job-age-days N, passed through to the existing submit_search() parameter of the same name",
+    "run_daily_search_sh_change": "added one call to submit_search.py --candidate-id saroj --max-job-age-days 3 --confirm immediately before the existing run_search_worker.py --once call",
+    "sources_hardcoded": false,
+    "reason_sources_not_hardcoded": "omitted, letting submit_search()'s own default (search_profile._default_sources(), every ENABLED adapter) resolve dynamically -- Hirist/LinkedIn automatically included the moment they are actually enabled, zero further code change needed",
+    "new_queue_table": false,
+    "new_status_values": false,
+    "new_locking_mechanism": false,
+    "search_worker_py_modified": false,
+    "search_submission_py_modified": false,
+    "schema_modified": false,
+    "submission_step_failure_aborts_run": false,
+    "reason": "worker step is always safe to attempt regardless; failure is logged, not fatal to the overall run"
+  },
+  "queue_safety_requirements": {
+    "idempotent": "inherited from submit_search()'s existing fingerprint policy, re-proven end-to-end",
+    "candidate_scoped": "candidate_id always explicit and required, confirmed by test_search_submission.py test 23 and Phase 8 test 5",
+    "source_aware": "sources=None resolves to _default_sources() (ENABLED-only), confirmed by Phase 8 test 6 via safe registry isolation",
+    "snapshot_aware": "search_runs.query freezes the exact query plan at submission time (pre-existing, unchanged), confirmed deterministic by Phase 8 test 7",
+    "safe_for_repeated_daily_execution": "confirmed by Phase 8 PART C's full RUN 1/RUN 2/next-day cycle test",
+    "compatible_with_duplicate_policy": "not reimplemented -- the existing policy IS the mechanism used",
+    "compatible_with_existing_semantics": "no schema or state-machine change of any kind"
+  },
+  "historical_data_untouched": {
+    "confirmed": true,
+    "mechanism": "submit_search() only ever INSERTs new rows; nothing in this fix ever UPDATEs or DELETEs an existing jobs/candidate_job_matches/search_runs row",
+    "production_db_byte_identical": true
+  },
+  "offline_test_proof": {
+    "file": "scripts/test_phase8_daily_queue.py",
+    "checks": 11,
+    "all_passing": true
+  },
+  "see_also": "data/reports/phase8_multisource_validation.md -- full Phase 8 results, including one disclosed safety deviation caught and fixed before this design was finalized"
+}

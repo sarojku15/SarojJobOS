@@ -1,0 +1,55 @@
+{
+  "schedule": {
+    "time": "09:00",
+    "timezone": "Asia/Kolkata"
+  },
+
+  "locations": [
+    "Bengaluru",
+    "Hyderabad",
+    "Pune",
+    "Chennai",
+    "Remote India"
+  ],
+
+  "roles": [
+    "Senior Site Reliability Engineer",
+    "Lead Site Reliability Engineer",
+    "Senior SRE",
+    "Senior DevOps Engineer",
+    "Lead DevOps Engineer",
+    "Senior Cloud Engineer",
+    "Senior Platform Engineer",
+    "Infrastructure Engineer"
+  ],
+
+  "sources": [
+    "LinkedIn",
+    "Naukri",
+    "Hirist",
+    "Indeed",
+    "Foundit",
+    "Instahyre",
+    "Cutshort",
+    "Wellfound",
+    "Shine",
+    "TimesJobs",
+    "Iimjobs"
+  ],
+
+  "experience_years": 11,
+
+  "minimum_score": 80,
+
+  "exclude_keywords": [
+    "Intern",
+    "Internship",
+    "Junior",
+    "Associate Developer",
+    "Frontend",
+    "React Developer",
+    "Android Developer",
+    "iOS Developer",
+    "QA Tester"
+  ]
+}

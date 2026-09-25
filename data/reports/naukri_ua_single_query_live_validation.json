@@ -1,0 +1,143 @@
+{
+  "task": "Single controlled live validation of the newly implemented JOBOS_NAUKRI_USER_AGENT production change, through the real production search_worker/adapter path",
+  "scope_limit": "exactly one query; no multi-query validation, no other job boards, no Excel generation, no application automation performed in this task",
+  "execution_method": {
+    "entry_point": "search_worker.run_once(temp_db_path, candidate_id='saroj', max_items=1)",
+    "real_production_code_paths_exercised": [
+      "source_registry.discover_from_sources()",
+      "naukri_adapter.NaukriAdapter.health_check()",
+      "naukri_adapter.NaukriAdapter.search()",
+      "naukri_fetcher.NaukriFetcher.fetch()",
+      "scripts/naukri_fetch_bridge.js (unmodified, real production file, including the JOBOS_NAUKRI_USER_AGENT change from the prior task)",
+      "naukri_parser.classify_search_page()",
+      "discover_local.normalize_job()",
+      "discover_local.deduplicate()",
+      "job_eligibility.assess_job_eligibility()",
+      "score_job.score_job()",
+      "job_ranking.build_ranking_record()",
+      "tracker.upsert_job()"
+    ],
+    "production_files_modified_for_this_task": [],
+    "temp_db_creation_method": "shutil.copy2 of data/applications/jobos.db to a new temp file (read-only access to production, write only to the new temp file)",
+    "query_injection_method": "exactly one search_runs + search_queue row inserted directly into the temp DB copy, containing exactly one query entry (source=NAUKRI, role='Infrastructure Engineer', location='Bangalore', max_job_age_days=null) -- deliberately not using the automatic full role x location x source query-plan builder",
+    "env_vars_explicitly_unset_before_run": ["JOBOS_BROWSER_HEADLESS", "JOBOS_NAUKRI_USER_AGENT"],
+    "env_vars_reason": "guarantee true defaults (headless=true, validated default UA) regardless of ambient shell state"
+  },
+  "pre_flight": {
+    "production_db_sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "production_row_counts_before": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+    "candidate_id": "saroj",
+    "candidate_status": "ACTIVE"
+  },
+  "query": {
+    "source": "NAUKRI",
+    "role": "Infrastructure Engineer",
+    "location": "Bangalore",
+    "max_job_age_days": null,
+    "max_job_age_days_note": "deliberately omitted per instruction -- isolating the UA change first"
+  },
+  "live_request_diagnostics_facts_observed": {
+    "health_check": {"url": "https://www.naukri.com/", "http_status": 200},
+    "search": {
+      "requested_url": "https://www.naukri.com/infrastructure-engineer-jobs-in-bangalore",
+      "final_url": "https://www.naukri.com/infrastructure-engineer-jobs-in-bangalore",
+      "redirected": false,
+      "http_status": 200,
+      "jobage_parameter_present": false
+    },
+    "detail_pages": {"count": 20, "all_http_status": 200},
+    "total_requests_to_naukri": 22,
+    "search_request_count": 1,
+    "detail_request_count": 20,
+    "retries": 0
+  },
+  "effective_user_agent": {
+    "interpretation_not_fact_this_run": "Because JOBOS_NAUKRI_USER_AGENT was unset, the unmodified naukri_fetch_bridge.js computes naukriUserAgent = process.env.JOBOS_NAUKRI_USER_AGENT || DEFAULT_NAUKRI_USER_AGENT -> the validated default UA. This is a reading of the production source's own logic, not a fresh page.evaluate() measurement in this specific run -- the production bridge's diagnostic contract was deliberately left unmodified for this live-validation task.",
+    "default_ua_value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "carried_over_fact_from_separate_prior_run": "data/reports/naukri_headless_ua_isolation.md directly measured navigator.userAgent for this exact default value/config in a separate live run and confirmed it matched exactly; this run's identical HTTP 200 outcome is consistent with, but is not itself a second direct measurement of, that header",
+    "label": "INTERPRETATION (design-guaranteed) for this run; FACT for the separate prior isolation run"
+  },
+  "browser_diagnostics_fact_observed": {
+    "headless_flag_present_in_live_process": true,
+    "channel": "chromium",
+    "executable": "chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
+    "visible_ui": false,
+    "confirmed_via": "full, untruncated ps aux capture taken mid-flight during the search request"
+  },
+  "classifier_result": {
+    "state": "VALID_RESULTS",
+    "state_basis": "inferred conclusively: adapter.search() raised no AdapterBlockedError/AdapterTimeoutError, blocked_sources=[], and 20 non-empty jobs were returned -- the only classify_search_page() state consistent with that combination in the unmodified production search() method",
+    "matched_block_phrase": null,
+    "worker_level_status": "COMPLETED",
+    "errors_count": 0,
+    "blocked_queries": 0
+  },
+  "pipeline_results": {
+    "raw_count": 20,
+    "malformed_count": 0,
+    "normalized_count": 20,
+    "duplicate_count": 0,
+    "unique_count": 20,
+    "inserted_jobs": 20,
+    "existing_jobs": 0,
+    "excluded_experience": 15,
+    "excluded_location": 0,
+    "eligible_count": 5,
+    "scored_count": 5,
+    "ready_count": 0,
+    "matches_created": 5,
+    "matches_updated": 0,
+    "timed_out_queries": 0,
+    "succeeded_queries": 1,
+    "errors": [],
+    "score_range": {"min": 35, "max": 70},
+    "candidate_matches": [
+      {"job_id": "NAUKRI-bd37539119ff67c9", "company": "Cradlepoint", "title": "Infrastructure Engineer", "fit_score": 70, "priority": "C", "experience_eligibility": "MATCH"},
+      {"job_id": "NAUKRI-294fc43398b45f23", "company": "Cisco", "title": "AI Infrastructure Engineer", "fit_score": 60, "priority": "REJECT", "experience_eligibility": "MATCH"},
+      {"job_id": "NAUKRI-551b61c54c707f22", "company": "Rarr Technologies", "title": "AI Infrastructure Engineer", "fit_score": 65, "priority": "REJECT", "experience_eligibility": "ABOVE_PROFILE"},
+      {"job_id": "NAUKRI-f08dc042eea0f871", "company": "IG Group", "title": "Infrastructure Engineer", "fit_score": 50, "priority": "REJECT", "experience_eligibility": "MATCH"},
+      {"job_id": "NAUKRI-fffbd26836b276ef", "company": "Accenture", "title": "Infrastructure Engineer", "fit_score": 35, "priority": "REJECT", "experience_eligibility": "ABOVE_PROFILE"}
+    ],
+    "freshness_range_all_20_unique_jobs": "HOT (2 days) to OLD (21 days) -- computed by unmodified freshness.py regardless of eligibility, independent of the intentionally-omitted max_job_age_days discovery filter",
+    "excluded_experience_note": "15 of 20 discovered jobs were excluded at the eligibility gate on experience before scoring ran -- expected, unmodified job_eligibility.py behavior given this candidate's confirmed profile, not a defect introduced by this task"
+  },
+  "scoring_eligibility_ranking_freshness_dedup_query_planning_worker_logic_modified": false,
+  "database_schema_modified": false,
+  "production_db_after": {
+    "sha256": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "row_counts": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+    "unchanged": true,
+    "write_target_for_this_run": "temporary DB copy only, deleted after validation"
+  },
+  "regression_suite": {
+    "full_standalone_suite_result": "PASS=38 FAIL=0",
+    "py_compile": "PY_COMPILE_ALL_OK",
+    "new_tests_added_this_task": false,
+    "reason_no_new_tests": "this was a live validation task, not an implementation task"
+  },
+  "files_changed": [],
+  "exact_live_request_counts": {
+    "health_checks": 1,
+    "search_queries": 1,
+    "detail_page_fetches": 20,
+    "total_requests_to_naukri": 22,
+    "retries": 0
+  },
+  "summary": {
+    "http_status_search": 200,
+    "classifier": "VALID_RESULTS",
+    "jobs_found_raw": 20,
+    "jobs_found_unique": 20,
+    "eligible_jobs": 5,
+    "score_range": "35-70",
+    "production_db_sha_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "production_db_sha_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "production_row_counts_before_after_identical": true,
+    "full_regression_suite": "38/38 pass",
+    "py_compile": "clean",
+    "validation_succeeded": true,
+    "next_gate": "controlled multi-query Naukri validation (Phase 3) -- not started in this task"
+  },
+  "stopped_after_this_validation": true,
+  "no_multi_query_or_later_phase_work_performed": true
+}

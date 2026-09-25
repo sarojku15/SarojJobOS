@@ -1,0 +1,187 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Job Search OS</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<header>
+  <span class="brand">Job Search OS</span>
+  <a href="/" class="active">Home</a>
+  <a href="/profile">Profile</a>
+  <a href="/searches">Searches</a>
+  <a href="/dashboard">Dashboard</a>
+  <span class="spacer"></span>
+</header>
+<main id="app">
+  <div class="loading-state">Loading...</div>
+</main>
+
+<!-- Onboarding view: no valid candidate on this browser yet -->
+<template id="tpl-onboarding">
+  <div class="onboarding-hero">
+    <h1>Job Search OS</h1>
+    <p class="lede">Find jobs that match your profile.</p>
+  </div>
+  <div id="msg"></div>
+  <div class="onboarding-choices">
+    <div class="onboarding-choice">
+      <div class="icon">&#128196;</div>
+      <h3>Upload Resume</h3>
+      <p>Automatically extract your profile from your resume.</p>
+      <input type="file" id="resume-file" accept="application/pdf" />
+      <button id="upload-btn">Upload Resume</button>
+    </div>
+    <div class="onboarding-choice">
+      <div class="icon">&#9997;</div>
+      <h3>Continue Without Resume</h3>
+      <p>Create your profile manually.</p>
+      <button class="secondary" id="manual-btn">Enter profile manually</button>
+    </div>
+  </div>
+</template>
+
+<!-- Welcome-back view: a valid candidate already exists -->
+<template id="tpl-welcome-back">
+  <h1>Welcome back<span id="wb-name"></span></h1>
+  <div id="wb-msg"></div>
+
+  <div class="card">
+    <h2>Profile</h2>
+    <div id="wb-profile-status" class="hint"></div>
+    <button class="secondary" id="wb-review-profile">Review Profile</button>
+  </div>
+
+  <div class="card">
+    <h2>Saved Searches</h2>
+    <div class="summary-tile" style="max-width:160px">
+      <div class="value" id="wb-search-count">0</div>
+      <div class="label">Saved searches</div>
+    </div>
+
+    <div id="wb-latest-search-block"></div>
+
+    <div class="button-row">
+      <button id="wb-new-search">New Search</button>
+      <button class="secondary" id="wb-view-searches">View All Searches</button>
+    </div>
+  </div>
+</template>
+
+<script src="/static/app.js"></script>
+<script>
+const app = document.getElementById("app");
+
+function csv(str) { return str.split(",").map((s) => s.trim()).filter(Boolean); }
+
+async function renderOnboarding() {
+  app.innerHTML = "";
+  app.appendChild(document.getElementById("tpl-onboarding").content.cloneNode(true));
+
+  document.getElementById("upload-btn").addEventListener("click", handleResumeUpload);
+  document.getElementById("manual-btn").addEventListener("click", handleManualStart);
+}
+
+async function handleResumeUpload() {
+  const msg = document.getElementById("msg");
+  const fileInput = document.getElementById("resume-file");
+  if (!fileInput.files.length) {
+    showError(msg, new Error("Choose a PDF resume file first."));
+    return;
+  }
+
+  const btn = document.getElementById("upload-btn");
+  btn.disabled = true;
+  btn.textContent = "Uploading...";
+
+  try {
+    // A candidate must exist before a resume can be attached to it --
+    // created here with a generic placeholder name that the resume's
+    // own extracted identity will overwrite (save_resume_extracted_profile()
+    // only backfills a BLANK extracted field from the current one, so a
+    // successfully-extracted real name always wins over this placeholder).
+    const candidate = await api("/api/candidates", { method: "POST", body: { name: "New Candidate" } });
+    setCandidateId(candidate.candidate_id);
+
+    const form = new FormData();
+    form.append("file", fileInput.files[0]);
+    await api(`/api/candidates/${candidate.candidate_id}/resume`, { method: "POST", body: form });
+
+    window.location.href = "/profile";
+  } catch (err) {
+    showError(msg, err);
+    btn.disabled = false;
+    btn.textContent = "Upload Resume";
+  }
+}
+
+async function handleManualStart() {
+  const msg = document.getElementById("msg");
+  const btn = document.getElementById("manual-btn");
+  btn.disabled = true;
+  try {
+    const candidate = await api("/api/candidates", { method: "POST", body: { name: "New Candidate" } });
+    setCandidateId(candidate.candidate_id);
+    window.location.href = "/profile";
+  } catch (err) {
+    showError(msg, err);
+    btn.disabled = false;
+  }
+}
+
+async function renderWelcomeBack(candidateId) {
+  app.innerHTML = "";
+  app.appendChild(document.getElementById("tpl-welcome-back").content.cloneNode(true));
+
+  const msg = document.getElementById("wb-msg");
+  try {
+    const [candidate, dashboard] = await Promise.all([
+      api(`/api/candidates/${candidateId}`),
+      api(`/api/candidates/${candidateId}/dashboard`),
+    ]);
+
+    document.getElementById("wb-name").textContent = candidate.name ? `, ${candidate.name}` : "";
+
+    const status = dashboard.profile_status || "DRAFT";
+    document.getElementById("wb-profile-status").innerHTML = `Profile status: ${badgeHtml(status)}`;
+    document.getElementById("wb-search-count").textContent = dashboard.searches.length;
+
+    const latestBlock = document.getElementById("wb-latest-search-block");
+    const withRuns = dashboard.searches.filter((s) => s.latest_run);
+    if (withRuns.length) {
+      const latest = withRuns[0];
+      const run = latest.latest_run;
+      latestBlock.innerHTML = `
+        <div class="hint" style="margin-top:10px">
+          <b>Latest search:</b> ${escapeHtml(latest.name)} &mdash;
+          ${run.jobs_ready ?? 0} jobs found | ${run.jobs_eligible ?? 0} matching | ${badgeHtml(run.status)}
+        </div>
+      `;
+    } else {
+      latestBlock.innerHTML = `<div class="hint" style="margin-top:10px">No searches run yet.</div>`;
+    }
+
+    document.getElementById("wb-review-profile").addEventListener("click", () => (window.location.href = "/profile"));
+    document.getElementById("wb-new-search").addEventListener("click", () => (window.location.href = "/searches/new"));
+    document.getElementById("wb-view-searches").addEventListener("click", () => (window.location.href = "/searches"));
+  } catch (err) {
+    showError(msg, err);
+  }
+}
+
+(async () => {
+  try {
+    const candidateId = await resolveActiveCandidate();
+    if (candidateId) {
+      await renderWelcomeBack(candidateId);
+    } else {
+      await renderOnboarding();
+    }
+  } catch (err) {
+    await renderOnboarding();
+  }
+})();
+</script>
+</body>
+</html>

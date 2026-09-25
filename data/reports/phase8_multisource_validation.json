@@ -1,0 +1,261 @@
+{
+  "task": "Phase 8 -- Fix Daily Queue Generation + Complete Multi-Source Validation",
+  "production_db_byte_identical_throughout": true,
+  "launchd_installed": false,
+  "launchd_loaded": false,
+  "launchd_started": false,
+  "hirist_enabled": false,
+  "linkedin_enabled": false,
+  "applications_submitted": 0,
+  "disclosed_safety_deviation": {
+    "occurred": true,
+    "what": "an early draft of scripts/test_phase8_daily_queue.py made 14 unauthorized live HTTP requests to naukri.com before being caught mid-run and killed",
+    "why": "the test called submit_search() (via its CLI) without an explicit --source restriction; sources=None resolves to search_profile._default_sources(), which returns every ENABLED adapter in the REAL shared registry -- and NaukriAdapter genuinely is ENABLED there (the test only added a fake adapter alongside it, never disabled the real one)",
+    "exact_impact": {
+      "total_requests": 14,
+      "breakdown": "1 homepage health check + 1 search-results page + 12 job-detail-page fetches",
+      "http_status_all": 200,
+      "blocks": 0,
+      "captcha_interactions": 0,
+      "retries": 0
+    },
+    "production_db_impact": "none -- every call used an explicit --db pointing at a disposable temp database, confirmed by SHA-256 check immediately after",
+    "root_cause": "reusing a shared, process-wide adapter registry (source_registry.ADAPTERS) without accounting for the fact that adding a fake adapter does not isolate away the real, always-present ones",
+    "fix": "every submit_search.py call in every Phase 8 test file now explicitly passes --source <fake-adapter-name>; the one test needing to exercise _default_sources()'s real filtering logic was redesigned to safely monkeypatch only source_registry.list_sources() (never get_adapter_status() or _default_sources() itself), verified network-free",
+    "included_in_all_live_request_tallies": true
+  },
+  "part1_queue_architecture_before": "run_search_worker.py --once only consumed already-queued work; nothing in the daily chain ever produced new queued work",
+  "part2_queue_architecture_after": "run_daily_search.sh now calls submit_search.py --candidate-id saroj --max-job-age-days 3 --confirm (existing, unmodified, already-idempotent submit_search()) before run_search_worker.py --once; sources never hardcoded, tracks AdapterStatus.ENABLED dynamically",
+  "part3_idempotency_proof": {
+    "file": "scripts/test_phase8_daily_queue.py",
+    "checks": 11,
+    "all_pass": true,
+    "checklist": [
+      "empty queue + run creates today's work",
+      "already-QUEUED submission not duplicated",
+      "idempotent across 3 repeated attempts",
+      "COMPLETED prior run does not block fresh submission",
+      "candidate isolation",
+      "source isolation (ENABLED-only, safe monkeypatch technique)",
+      "deterministic snapshot",
+      "production DB never referenced",
+      "only expected job status values present",
+      "human approval boundary intact",
+      "launchd still not installed/loaded/started"
+    ]
+  },
+  "part4_repeated_daily_run_proof": {
+    "file": "scripts/test_phase8_repeated_daily_run.py",
+    "checks": 7,
+    "all_pass": true,
+    "summary": "RUN 1 creates+executes+reports; RUN 2 (two back-to-back submissions before processing) produces exactly 1 new item, processes deterministically, generates a new report without corrupting RUN 1's; rediscovered job produces exactly 1 jobs row; simulated next-day fresh submission correctly discovers new work"
+  },
+  "part5_naukri_validation": {
+    "mechanism": "full real chain: run_daily_search.sh (with new queue-prep step) -> submit_search.py --confirm -> run_search_worker.py --once -> real unmodified NaukriAdapter -> normalize -> dedup -> freshness -> eligibility -> score -> priority -> match -> generate_run_report.py -> workbook + run_summary.json",
+    "db": "disposable temp DB via JOBOS_DAILY_DB_OVERRIDE (Phase 7.3 mechanism, preserved unmodified)",
+    "candidate": "saroj (real skills from config/profile.json, query narrowed to one role/location)",
+    "query": {"role": "Infrastructure Engineer", "location": "Bangalore", "max_job_age_days": 3, "source": "NAUKRI"},
+    "exact_http_request_count": 22,
+    "breakdown": {"health_check": 1, "search_page": 1, "detail_pages": 20},
+    "http_status_all": 200,
+    "retries": 0,
+    "captcha_interaction": 0,
+    "metrics": {
+      "raw_results": 20, "normalized": 20, "duplicates_removed_intra_source": 0,
+      "excluded_experience": 16, "excluded_location": 0, "eligible": 4, "scored": 4,
+      "ready_for_approval": 1, "matches_created": 4, "apply_today_count": 1,
+      "new_jobs_count": 1, "already_applied_count": 0, "rejected_excluded_count": 19,
+      "duplicates_count": 0
+    },
+    "workbook_path": "data/daily/2026-09-20/job_search_report.xlsx",
+    "workbook_size_bytes": 26301,
+    "workbook_sheets_valid": true,
+    "run_summary_path": "data/daily/2026-09-20/run_summary.json",
+    "search_run_id": "ac937d3e-fb17-40f8-bf40-c6f66198abd1",
+    "fresh_search_run_confirmed": true,
+    "note": "search_run_id is fresh, created by the new queue-prep step, NOT reused from Phase 7.3's run -- proves the fix works end-to-end for real",
+    "naukri_enabled": true,
+    "naukri_live_validated": true,
+    "naukri_report_integrated": true
+  },
+  "part6_hirist_validation": {
+    "code_reverified_fresh": true,
+    "code_unchanged_since_phase6": true,
+    "existing_tests_rerun": "all 5 existing Hirist test files, all still passing",
+    "new_offline_gate_file": "scripts/test_hirist_phase8_offline_gate.py",
+    "new_fixtures": [
+      "data/fixtures/hirist/missing_url.html (synthetic)",
+      "data/fixtures/hirist/duplicate_url.html (synthetic)",
+      "data/fixtures/hirist/company_title_ambiguity_real_capture.html (REAL -- verbatim Phase 6 Step 9 capture)"
+    ],
+    "decisive_finding": {
+      "confirmed_wrong_splits": 3,
+      "examples": [
+        {"company": "Senior DevOps Engineer", "title": "AWS & Kubernetes"},
+        {"company": "Senior DevOps Engineer", "title": "Cloud Infrastructure"},
+        {"company": "Senior DevOps Engineer", "title": "AWS & Kubernetes"}
+      ],
+      "entries_silently_skipped": 10,
+      "entries_total": 20,
+      "root_cause": "real name values mix at least 3 conventions (bare title / Company - Title / Company - Title - Tags) with no deterministic disambiguation rule"
+    },
+    "other_findings_reverified_unchanged": [
+      "JSON-LD ItemList extraction", "top-level ListItem.url extraction (10/10 unique non-empty job_url)",
+      "pagination", "visible-text challenge detection",
+      "location/experience/description confirmed absent from real data",
+      "missing-URL handling fails safely", "duplicate-URL handling fails safely"
+    ],
+    "offline_gate_passed": false,
+    "reason_offline_gate_failed": "company/title quality materially unreliable on real data",
+    "proceeded_to_live_gate": false,
+    "reason_no_live_gate": "per instruction: offline gate must pass first; it did not",
+    "live_requests_this_part": 0,
+    "hirist_enabled": false,
+    "hirist_live_validated_this_phase": false,
+    "hirist_report_integrated": false,
+    "remaining_blocker": "company/title extraction from Hirist's name field is structurally ambiguous; would require a real site-structure change or an explicitly-approved heuristic (neither exists)"
+  },
+  "part7_linkedin_result": {
+    "live_requests_made": 0,
+    "authorized_mechanism_search_performed": true,
+    "authorized_mechanism_found": false,
+    "mechanism_checked": "Windsor.ai LinkedIn Ads connector -- campaign/budget management, unrelated product surface, not job-discovery authorization; using it for job data would itself be a workaround",
+    "linkedin_adapter_py_reverified": "unchanged, offline skeleton, status=NOT_ENABLED, health_check()/search() raise AdapterNotEnabledError unconditionally",
+    "governing_evidence_rechecked": "data/reports/linkedin_phase5_inspection.md -- robots.txt catch-all Disallow: / for unrecognized agents, unchanged, static, no re-fetch needed",
+    "http_200_interpreted_as_authorization": false,
+    "decision": "no authorized mechanism exists -> LinkedIn remains NOT_ENABLED",
+    "workaround_implemented": false,
+    "linkedin_enabled": false,
+    "authorized_access": false,
+    "live_validated": false,
+    "report_integrated": false,
+    "remaining_blocker": "no authorized access mechanism exists (robots.txt disallows generic automated access; no official API/connector available to this project)"
+  },
+  "part8_cross_source_dedup": {
+    "file": "scripts/test_phase8_multisource_dedup.py",
+    "network_requests": 0,
+    "mechanism": "cross_source_dedup.py/canonical_job.py are source-agnostic; safely tested with Naukri-shaped and Hirist-shaped synthetic data, no adapter needs to be enabled",
+    "cases": [
+      {"case": "1. Naukri-only job", "result": "correctly no duplicate"},
+      {"case": "2. Hirist-only job", "result": "correctly no duplicate"},
+      {"case": "3/4. same job on Naukri + Hirist", "result": "correctly detected, both sides flagged"},
+      {"case": "5. same job, tracking-parameter URL difference", "result": "still correctly detected -- job_url never compared by compare_pair()"},
+      {"case": "6. similar title, different company", "result": "correctly not flagged"},
+      {"case": "7. same company/title text, different location", "result": "correctly not flagged, canonical_location mismatch overrides"}
+    ],
+    "reconciliation": "exactly 2 duplicate-candidate pairs across 10 synthetic jobs -- matches the 2 genuine cases exactly, zero false positives, zero false negatives",
+    "unsafe_double_counting": false,
+    "validated": true
+  },
+  "part9_nine_sheet_report": {
+    "generated_from": "same PART F multi-source dataset",
+    "sheets_present_exact_match": true,
+    "apply_today_required_columns_present": ["Priority", "Score", "Title", "Company", "Location", "Source", "Job URL", "Freshness", "Eligible", "Report Status", "Application Status", "Duplicate (Suppressed from Apply Today)"],
+    "duplicates_sheet_row_count": 2,
+    "apply_today_never_contains_both_sides_of_duplicate": true,
+    "verified_from_actual_workbook_content": true,
+    "validated": true
+  },
+  "part10_production_db_integrity_checkpoints": [
+    {"point": "Phase 8 start", "sha256": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8"},
+    {"point": "after disclosed deviation", "sha256": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8"},
+    {"point": "before PART B live validation", "sha256": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8"},
+    {"point": "after PART B live validation", "sha256": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8"},
+    {"point": "end of Phase 8 (final)", "sha256": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8"}
+  ],
+  "production_db_size_bytes": 114688,
+  "production_db_row_counts": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+  "production_db_status_distribution": [["FOUND","TEST",1],["INTERVIEW_1","TEST",1],["READY_FOR_APPROVAL","MOCK",3],["READY_FOR_APPROVAL","TEST",1],["REJECTED","TEST",3]],
+  "exact_live_request_counts": {
+    "naukri_disclosed_deviation_unauthorized": 14,
+    "naukri_part_b_intentional": 22,
+    "hirist": 0,
+    "linkedin": 0,
+    "total": 36,
+    "authorized_total": 22,
+    "disclosed_error_total": 14
+  },
+  "part11_test_results": {
+    "full_standalone_suite": "PASS=53 FAIL=0 (.venv)",
+    "py_compile": "PY_COMPILE_ALL_OK",
+    "bash_n": "SHELL_SYNTAX_OK",
+    "plist_validation": "OK",
+    "json_validation": "valid",
+    "xlsx_structural_validation": "all 9 sheets confirmed (PART B live workbook + PART G synthetic multi-source workbook)",
+    "source_registry_status_validation": {"naukri": "ENABLED", "hirist": "NOT_ENABLED", "linkedin": "NOT_ENABLED", "default_sources": ["NAUKRI"]},
+    "queue_idempotency_tests": "11/11 PASS",
+    "daily_wrapper_tests": "15/15 PASS (re-confirmed unmodified behavior)",
+    "atomic_write_tests": "re-confirmed passing, untouched this phase",
+    "lock_tests": "re-confirmed passing, untouched this phase",
+    "new_files_this_phase": 4,
+    "total_test_files": 53
+  },
+  "part12_exact_files_modified": {
+    "modified": [
+      "scripts/submit_search.py",
+      "scripts/run_daily_search.sh",
+      "scripts/test_daily_scheduler_offline.py",
+      "scripts/test_phase7_4_production_readiness.py"
+    ],
+    "new": [
+      "scripts/test_phase8_daily_queue.py",
+      "scripts/test_phase8_repeated_daily_run.py",
+      "scripts/test_hirist_phase8_offline_gate.py",
+      "scripts/test_phase8_multisource_dedup.py",
+      "data/fixtures/hirist/missing_url.html",
+      "data/fixtures/hirist/duplicate_url.html",
+      "data/fixtures/hirist/company_title_ambiguity_real_capture.html",
+      "data/reports/phase8_daily_queue_design.md",
+      "data/reports/phase8_daily_queue_design.json",
+      "data/reports/phase8_multisource_validation.md",
+      "data/reports/phase8_multisource_validation.json"
+    ],
+    "generated_gitignored": ["data/daily/2026-09-20/*"],
+    "not_modified": [
+      "scripts/search_worker.py", "scripts/search_submission.py", "scripts/generate_run_report.py",
+      "scripts/naukri_adapter.py", "scripts/naukri_fetcher.py", "scripts/naukri_fetch_bridge.js",
+      "scripts/hirist_parser.py", "scripts/hirist_adapter.py", "scripts/linkedin_adapter.py",
+      "scripts/source_registry.py", "scripts/score_job.py", "config/profile.json",
+      "config/searches.json", "config/site_adapters.json",
+      "launchd/com.sarojjobos.dailysearch.plist", "data/applications/jobos.db"
+    ]
+  },
+  "part13_source_enablement_status": {
+    "naukri": {"status": "AdapterStatus.ENABLED", "changed_this_phase": false},
+    "hirist": {"status": "AdapterStatus.NOT_ENABLED", "changed_this_phase": false},
+    "linkedin": {"status": "AdapterStatus.NOT_ENABLED", "changed_this_phase": false}
+  },
+  "part14_scheduler_readiness": {
+    "safety_conditions_met": true,
+    "operational_capability_conditions_met": true,
+    "decision": "READY_FOR_SCHEDULER_ACTIVATION"
+  },
+  "part15_remaining_limitations": [
+    "Hirist company/title extraction structurally unreliable (3 wrong splits + 10/20 entries lost on real data), not enabled",
+    "LinkedIn has no authorized access mechanism, not enabled",
+    "node PATH availability under launchd's minimal environment unresolved (Phase 7.4 finding, unchanged)",
+    "no log rotation (Phase 7.4 finding, unchanged, not urgent)",
+    "disclosed Part A test-safety deviation fixed in test code; stands as a reminder that any future test touching source_registry/submit_search() must explicitly restrict sources"
+  ],
+  "part16_human_approval_boundary": {
+    "intact": true,
+    "verified_by": ["PART A test 10", "direct grep across entire daily chain including new submit_search.py call"],
+    "process_queue_item_ends_at": "jobs/candidate_job_matches persistence + optional reporting",
+    "submit_search_py_confirm_meaning": "queues a search query, never a job application -- confirmed distinct in every test and in actual code"
+  },
+  "part17_application_submission": {
+    "count": 0,
+    "verified_by": ["static analysis", "PART B live run's observed Application Status values: FOUND, NOT_QUALIFIED, READY_FOR_APPROVAL only"]
+  },
+  "part18_launchd_status": {
+    "installed": false,
+    "loaded": false,
+    "started": false,
+    "plist_in_launchagents": false,
+    "launchctl_list_shows_sarojjobos": false
+  },
+  "stopped_after_this_task": true,
+  "proceeded_to_linkedin": false,
+  "proceeded_to_another_phase_automatically": false,
+  "launchd_activated": false
+}

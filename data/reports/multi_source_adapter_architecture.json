@@ -1,0 +1,231 @@
+{
+  "task": "Phase 4 -- offline-only multi-source adapter architecture",
+  "live_requests_made": {
+    "naukri": 0,
+    "linkedin": 0,
+    "hirist": 0,
+    "indeed": 0,
+    "foundit": 0,
+    "instahyre": 0,
+    "cutshort": 0,
+    "wellfound": 0,
+    "shine": 0,
+    "timesjobs": 0,
+    "iimjobs": 0,
+    "career_pages": 0,
+    "total": 0
+  },
+  "final_adapter_inventory": [
+    {"source": "NAUKRI", "registered": true, "adapter_status": "ENABLED", "note": "real, live-validated job source"},
+    {"source": "MOCK", "registered": true, "adapter_status": "ENABLED", "note": "test adapter only"},
+    {"source": "LINKEDIN", "registered": true, "adapter_status": "NOT_ENABLED"},
+    {"source": "HIRIST", "registered": true, "adapter_status": "NOT_ENABLED"},
+    {"source": "INDEED", "registered": true, "adapter_status": "NOT_ENABLED"},
+    {"source": "FOUNDIT", "registered": true, "adapter_status": "NOT_ENABLED"},
+    {"source": "INSTAHYRE", "registered": true, "adapter_status": "NOT_ENABLED"},
+    {"source": "CUTSHORT", "registered": true, "adapter_status": "NOT_ENABLED"},
+    {"source": "WELLFOUND", "registered": true, "adapter_status": "NOT_ENABLED"},
+    {"source": "SHINE", "registered": true, "adapter_status": "NOT_ENABLED"},
+    {"source": "TIMESJOBS", "registered": true, "adapter_status": "NOT_ENABLED"},
+    {"source": "IIMJOBS", "registered": true, "adapter_status": "NOT_ENABLED"},
+    {"source": "CAREER_PAGE", "registered": true, "adapter_status": "NOT_ENABLED"},
+    {"source": "GLASSDOOR", "registered": false, "adapter_status": null, "note": "not part of the agreed target list; no adapter file; not in config/searches.json or config/site_adapters.json"}
+  ],
+  "counts": {
+    "total_registered_adapters": 13,
+    "enabled_count": 2,
+    "enabled_sources": ["MOCK", "NAUKRI"],
+    "real_live_job_sources_enabled": 1,
+    "not_enabled_count": 11,
+    "not_enabled_sources": ["CAREER_PAGE", "CUTSHORT", "FOUNDIT", "HIRIST", "IIMJOBS", "INDEED", "INSTAHYRE", "LINKEDIN", "SHINE", "TIMESJOBS", "WELLFOUND"]
+  },
+  "default_search_sources": {
+    "function": "search_profile._default_sources()",
+    "result": ["NAUKRI"],
+    "generalization_verified": "a regression test registers a brand-new synthetic NOT_ENABLED adapter at runtime and confirms it is also excluded, proving the ENABLED-only filter holds for any future source, not just the 11 named ones"
+  },
+  "common_adapter_contract": {
+    "file": "scripts/source_adapter.py",
+    "additions": [
+      "AdapterStatus enum: ENABLED, NOT_ENABLED, REQUIRES_AUTH, BLOCKED, UNSUPPORTED",
+      "AdapterCapability enum: SEARCH, DETAIL, NATIVE_FRESHNESS, PAGINATION, APPLICATION_URL, COMPANY_METADATA, SALARY, REMOTE_FILTER, LOCATION_FILTER",
+      "AdapterNotEnabledError exception",
+      "JobSourceAdapter.status default = ENABLED (preserves all existing adapters)",
+      "JobSourceAdapter.capabilities default = empty frozenset",
+      "SourceRunState extended with not_enabled: bool, adapter_status: AdapterStatus | None (both default False/None)",
+      "SourceHealthRecord dataclass -- in-memory-only future reporting shape, not persisted to any database table"
+    ],
+    "behavior_change_to_existing_enabled_adapters": false
+  },
+  "source_registry_changes": {
+    "file": "scripts/source_registry.py",
+    "pre_flight_gate": "discover_from_sources() checks adapter.status before calling health_check() -- a NOT_ENABLED adapter is skipped with zero network calls, recorded as SourceRunState(not_enabled=True, adapter_status=...)",
+    "helper_functions_added": ["get_adapter_status(source)"],
+    "source_status_extended_with": "adapter_status field",
+    "self_check_verifies": "ENABLED / registered-NOT_ENABLED / not-registered-at-all across the complete 13-adapter roadmap, including explicit confirmation that GLASSDOOR remains absent",
+    "adapters_dict_entry_count": 13,
+    "duplicate_keys": false
+  },
+  "adapters_added": {
+    "count": 11,
+    "files": [
+      "scripts/linkedin_adapter.py", "scripts/hirist_adapter.py",
+      "scripts/indeed_adapter.py", "scripts/foundit_adapter.py",
+      "scripts/instahyre_adapter.py", "scripts/cutshort_adapter.py",
+      "scripts/wellfound_adapter.py", "scripts/shine_adapter.py",
+      "scripts/timesjobs_adapter.py", "scripts/iimjobs_adapter.py",
+      "scripts/career_page_adapter.py"
+    ],
+    "each_adapter": {
+      "clear_source_identity": true,
+      "status": "AdapterStatus.NOT_ENABLED",
+      "capabilities": "empty frozenset -- no already-implemented/tested capability exists for any of these",
+      "health_check_raises": "AdapterNotEnabledError",
+      "search_raises": "AdapterNotEnabledError",
+      "network_calls_possible": false,
+      "invented_selectors_apis_endpoints_cookies_headers_antibot_scraping": false
+    },
+    "all_registered_in_adapters_dict": true
+  },
+  "capability_matrix": {
+    "NAUKRI": {"status": "ENABLED", "capabilities": ["SEARCH", "DETAIL", "NATIVE_FRESHNESS", "APPLICATION_URL"]},
+    "MOCK": {"status": "ENABLED", "capabilities": ["SEARCH"]},
+    "LINKEDIN": {"status": "NOT_ENABLED", "capabilities": []},
+    "HIRIST": {"status": "NOT_ENABLED", "capabilities": []},
+    "INDEED": {"status": "NOT_ENABLED", "capabilities": []},
+    "FOUNDIT": {"status": "NOT_ENABLED", "capabilities": []},
+    "INSTAHYRE": {"status": "NOT_ENABLED", "capabilities": []},
+    "CUTSHORT": {"status": "NOT_ENABLED", "capabilities": []},
+    "WELLFOUND": {"status": "NOT_ENABLED", "capabilities": []},
+    "SHINE": {"status": "NOT_ENABLED", "capabilities": []},
+    "TIMESJOBS": {"status": "NOT_ENABLED", "capabilities": []},
+    "IIMJOBS": {"status": "NOT_ENABLED", "capabilities": []},
+    "CAREER_PAGE": {"status": "NOT_ENABLED", "capabilities": []}
+  },
+  "job_model_pipeline_unchanged": {
+    "flow": "source result -> normalization -> canonical URL -> deduplication -> freshness -> eligibility -> scoring -> candidate match -> ranking",
+    "scoring_rubric_modified": false,
+    "eligibility_rules_modified": false,
+    "location_rules_modified": false,
+    "experience_rules_modified": false,
+    "freshness_semantics_modified": false,
+    "candidate_profile_semantics_modified": false,
+    "database_schema_modified": false,
+    "verified_by": ["test_scoring.py", "test_job_eligibility.py", "test_job_eligibility_integration.py", "test_experience_eligibility.py", "test_freshness.py", "test_job_ranking.py"]
+  },
+  "cross_source_dedup_review": {
+    "cross_source_dedup_py_modified": false,
+    "canonical_job_py_modified": false,
+    "discover_local_deduplicate_scope": "intra-source only, keyed on (source, job_id)",
+    "cross_source_dedup_scope": "candidate detection for ranking/human review only -- never removes or merges rows",
+    "confirmed_behaviors": [
+      "Bangalore vs Bengaluru cross-source jobs correctly flagged as duplicate candidates (same canonical_location via location_taxonomy.py)",
+      "a genuinely different job (different city, unrelated description) correctly not flagged",
+      "same-source pairs correctly skipped"
+    ],
+    "true_cross_source_consolidation_status": "not yet built, deliberately deferred until a second live source exists"
+  },
+  "source_health_model": {
+    "dataclass": "SourceHealthRecord",
+    "persisted_to_database": false,
+    "fabricates_data_for_untested_sources": false
+  },
+  "excel_reporting": {
+    "excel_generation_code_added": false,
+    "new_schema_defined": false,
+    "reason": "existing dataclasses (RankingRecord, WorkItemResult, SourceHealthRecord) already carry every field a future workbook would need"
+  },
+  "tests": {
+    "file": "scripts/test_multi_source_adapter_architecture.py",
+    "check_count": 14,
+    "checks": [
+      "adapter interface shapes (AdapterStatus/AdapterCapability/AdapterNotEnabledError)",
+      "source registration: all 11 skeletons registered, MOCK/NAUKRI unaffected, GLASSDOOR confirmed absent",
+      "capability declarations (Naukri/Mock real; all 11 skeletons empty)",
+      "unsupported adapter behavior: every skeleton raises AdapterNotEnabledError",
+      "adapter selection: get_adapter() correct for all 11; fictional unregistered name rejected",
+      "_default_sources() excludes all NOT_ENABLED skeletons",
+      "source_status()/get_adapter_status() distinguish ENABLED/NOT_ENABLED/unregistered, including explicit Glassdoor-must-remain-unregistered assertion",
+      "discover_from_sources() skips NOT_ENABLED with a spy-proven zero-call guarantee",
+      "Naukri compatibility unchanged",
+      "old-shape (pre-Phase-4) search-run snapshot still reconstructs correctly",
+      "cross-source dedup: Bangalore/Bengaluru flagged, unrelated job not flagged, same-source pairs skipped",
+      "SourceHealthRecord fabricates no data",
+      "future extensibility: a brand-new synthetic NOT_ENABLED adapter excluded from default search plan and skipped with zero calls",
+      "all touched modules (all 13 registered adapter modules included) import/reload cleanly together"
+    ],
+    "live_network_calls_made_by_tests": 0,
+    "tests_weakened_or_deleted": false
+  },
+  "verification_results": {
+    "phase4_architecture_test": "14/14 PASS",
+    "full_standalone_suite": "PASS=39 FAIL=0",
+    "py_compile": "PY_COMPILE_ALL_OK",
+    "config_searches_json": {"valid_json": true, "source_count": 11, "glassdoor_present": false},
+    "config_site_adapters_json": {"valid_json": true, "naukri_enabled": true, "all_other_sources_enabled": false, "glassdoor_present": false, "duplicate_keys": false},
+    "this_report_json_file": {"valid_json": true, "parsed_with": "json.load"},
+    "source_registry_self_check": "PASS"
+  },
+  "production_db": {
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "row_counts_before": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+    "row_counts_after": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+    "unchanged": true,
+    "db_migration_occurred": false
+  },
+  "files_touched_across_phase_4": {
+    "new_adapter_files": [
+      "scripts/linkedin_adapter.py", "scripts/hirist_adapter.py",
+      "scripts/indeed_adapter.py", "scripts/foundit_adapter.py",
+      "scripts/instahyre_adapter.py", "scripts/cutshort_adapter.py",
+      "scripts/wellfound_adapter.py", "scripts/shine_adapter.py",
+      "scripts/timesjobs_adapter.py", "scripts/iimjobs_adapter.py",
+      "scripts/career_page_adapter.py"
+    ],
+    "new_test_files": ["scripts/test_multi_source_adapter_architecture.py"],
+    "modified_files_additive_only": [
+      "scripts/source_adapter.py",
+      "scripts/source_registry.py",
+      "scripts/naukri_adapter.py",
+      "scripts/search_profile.py"
+    ],
+    "config_files_corrected": [
+      "config/searches.json",
+      "config/site_adapters.json"
+    ],
+    "documentation_updated": [
+      "CLAUDE.md",
+      ".claude/skills/jobos/SKILL.md"
+    ],
+    "not_touched_anywhere_in_phase_4": [
+      "scripts/score_job.py", "scripts/job_eligibility.py",
+      "scripts/experience_eligibility.py", "scripts/location_taxonomy.py",
+      "scripts/freshness.py", "scripts/discover_local.py",
+      "scripts/canonical_job.py", "scripts/cross_source_dedup.py",
+      "scripts/search_worker.py", "scripts/job_ranking.py",
+      "scripts/tracker.py", "config/profile.json",
+      "data/applications/jobos.db", ".claude/commands/jobos.md"
+    ]
+  },
+  "confirmations": {
+    "zero_live_requests_any_source_including_naukri": true,
+    "naukri_status_enabled_unchanged": true,
+    "naukri_health_check_is_advisory_unchanged": true,
+    "naukri_search_health_check_url_building_logic_unmodified": true,
+    "glassdoor_fully_absent": {
+      "not_registered": true,
+      "no_adapter_file": true,
+      "not_in_config_searches_json": true,
+      "not_in_config_site_adapters_json": true,
+      "not_in_claude_md_roadmap": true,
+      "not_in_skill_md_roadmap": true,
+      "regression_test_asserts_absence": true
+    },
+    "linkedin_implementation_started": false,
+    "linkedin_live_validation_started": false
+  },
+  "exact_next_gate": "Phase 5: implement and validate one specific new source adapter (starting with LinkedIn per the agreed roadmap), following the same phased process Naukri completed -- inspect live site + ethical-automation policy review, offline implementation + fixtures + unit tests, one live query, controlled multi-query validation, only then mark ENABLED and declare real capabilities.",
+  "phase_5_started": false,
+  "stopped_after_this_task": true
+}

@@ -1,0 +1,256 @@
+{
+  "task": "Phase 7 -- Main Job Search Objective / End-to-End Reporting Gate",
+  "scope": "Audit + complete the reporting/output layer using NAUKRI as the only enabled real source. Hirist and LinkedIn not enabled, not implemented further.",
+  "live_network_requests_total_this_task": 1,
+  "live_network_request_location": "SIXTH step only -- one Naukri search via search_worker.process_queue_item() against a temporary DB",
+  "production_db_opened_for_write": false,
+  "adapter_status_final": {
+    "NAUKRI": "AdapterStatus.ENABLED",
+    "HIRIST": "AdapterStatus.NOT_ENABLED",
+    "LINKEDIN": "AdapterStatus.NOT_ENABLED",
+    "default_sources": ["NAUKRI"]
+  },
+  "first_architecture_audit": {
+    "1_search_results_storage": {
+      "jobs_table": "global, flat, single system of record for every source; score/priority written by tracker.upsert_job() (eligible) or minimal identity-only by search_worker._upsert_job_identity_only() (ineligible)",
+      "candidate_job_matches_table": "per-candidate-correct, written only by search_worker.upsert_candidate_job_match(); 0 rows in production -- no real candidate run has gone through search_worker.py against production yet"
+    },
+    "2_candidate_job_matches_generation": "search_worker.process_queue_item() is the sole writer -- confirmed by grep, no other file inserts into this table",
+    "3_score_freshness_priority_persistence": {
+      "score_priority": "jobs.score/jobs.priority via tracker.upsert_job() -- NOT per-candidate, documented limitation inherited from reusing a single-candidate-era function (harmless today, single real candidate)",
+      "freshness": "jobs.freshness column exists (added by migrate_v2_schema.py) but is NEVER written by any pipeline code -- confirmed by grep across scripts/. search_worker.py computes it via job_ranking.build_ranking_record() but only attaches it to an in-memory RankingRecord, discarded on process exit. This was the largest single gap found."
+    },
+    "4_application_status_representation": {
+      "column": "jobs.status, one column, application_schema.json's 16-value lifecycle (doc says 15-state -- stale count, not a code bug)",
+      "status_protected_from_reingest_overwrite": true,
+      "evidence": "tracker.upsert_job()'s ON CONFLICT DO UPDATE SET clause deliberately excludes status from overwritten columns",
+      "real_finding_status_rejected_ambiguous": {
+        "description": "score_job() itself writes status='REJECTED' for any eligible-but-<70-scored job at first-insert time; application_schema.json's lifecycle ALSO defines REJECTED to mean a real employer rejection after applying. No code anywhere currently advances a job's status through the application lifecycle at all (confirmed by tracing every writer of the status column -- exactly two, neither implements an approval/application workflow, consistent with CLAUDE.md's own gap list). Today every real REJECTED row got there via the score bucket, never a real rejection.",
+        "resolution_in_generate_run_report": "status='REJECTED' is treated as an exclusion signal (REJECTED_EXCLUDED sheet), not ALREADY_APPLIED -- documented explicitly in the module's own docstring",
+        "fixed_at_schema_level": false,
+        "reason_not_fixed": "would require changing score_job.py's status vocabulary -- out of this task's scope, not requested"
+      }
+    },
+    "5_duplicate_job_representation": {
+      "intra_source": "discover_local.deduplicate(), keyed (source, job_id), collapsed before persistence, never visible in DB",
+      "cross_source": "cross_source_dedup.find_cross_source_duplicate_candidates() over canonical_job.derive_canonical_job() -- a CANDIDATE detector, never auto-merges; computed but never persisted by search_worker.py (same in-memory-only path as freshness). generate_run_report.py re-runs this at report time."
+    },
+    "6_already_applied_separation": "only jobs.status -- no dedicated flag/table; entirely manual today, no code path sets it beyond initial insert",
+    "7_excluded_ineligible_representation": {
+      "eligibility_gate_rejects": "_upsert_job_identity_only() inserts identity/descriptive fields ONLY -- score/priority/matched_skills/missing_skills/hard_reject_reasons never set. Per-job exclusion reason NEVER persisted anywhere -- only an aggregate count (search_runs.jobs_experience_excluded) survives. generate_run_report.py recovers it by re-running job_eligibility.assess_job_eligibility() fresh.",
+      "score_gate_rejects": "eligible-but-<70-scored jobs ARE persisted with real score/priority=REJECT/hard_reject_reasons via tracker.upsert_job() -- answerable directly from the DB, unlike the eligibility-gate case"
+    },
+    "8_job_url_application_url_storage": "plain jobs columns, populated by every adapter's normalized output, unchanged",
+    "9_existing_reporting_export_code": "scripts/generate_daily_report.py -- HTML+CSV, reads jobs.score/priority/status directly (score>=70, active statuses only). Does NOT consult candidate_job_matches, freshness, or cross-source dedup. Left completely unmodified by this task.",
+    "10_excel_generation_exists": false,
+    "11_markdown_json_run_report_exists": "only one-off engineering live-validation reports (data/reports/naukri_*, hirist_*) -- none are daily job-search reports; no standing search_worker run report existed before this task",
+    "12_run_summary_completeness": {
+      "persisted_search_runs_table": "queries_total, queries_completed, jobs_discovered, jobs_deduplicated, jobs_experience_excluded, jobs_eligible, jobs_scored, jobs_ready, errors_count, blocked_queries -- NO score/priority/freshness distribution persisted anywhere",
+      "in_memory_only_WorkItemResult": "everything search_runs has, plus ranking_records (score/freshness/dedup detail) -- never written anywhere, gone when process exits",
+      "resolution": "generate_run_report.py's RUN_SUMMARY sheet is the first place both halves are combined into one persisted-to-disk artifact"
+    },
+    "13_can_distinguish_new_applied_rejected_duplicate_ineligible_before_this_task": false,
+    "14_clickable_excel_links": {
+      "existed_before": false,
+      "html_report_clickable": true,
+      "new_workbook_clickable": "yes -- real openpyxl hyperlinks confirmed programmatically"
+    },
+    "15_actionable_sort_order": {
+      "existing_html_csv": "score desc, then priority, then posted date desc -- unchanged",
+      "new_workbook": "APPLY_TODAY/ALL_MATCHING_JOBS/NEW_JOBS: priority then score desc; ALREADY_APPLIED/APPLICATION_TRACKER: last-seen desc; REJECTED_EXCLUDED: score desc"
+    }
+  },
+  "second_required_daily_output": {
+    "new_module": "scripts/generate_run_report.py",
+    "generate_daily_report_py_modified": false,
+    "sheets": [
+      {"name": "APPLY_TODAY", "source": "current DB state, re-scored live", "filter": "qualifying (priority A/B/C) AND status in active set", "sort": "priority then score desc", "clickable_urls": true},
+      {"name": "ALL_MATCHING_JOBS", "source": "current DB state, re-scored live", "filter": "qualifying, any status", "sort": "priority then score desc", "clickable_urls": true},
+      {"name": "NEW_JOBS", "source": "current DB state, re-scored live", "filter": "qualifying AND created_at >= since cutoff", "sort": "priority then score desc", "clickable_urls": true},
+      {"name": "ALREADY_APPLIED", "source": "current DB state", "filter": "status in applied-lifecycle set (excludes REJECTED)", "sort": "last seen desc", "clickable_urls": true},
+      {"name": "REJECTED_EXCLUDED", "source": "current DB state, re-scored live", "filter": "not qualifying AND not already-applied", "sort": "score desc", "clickable_urls": true},
+      {"name": "DUPLICATES", "source": "cross_source_dedup over current batch", "filter": "rows in >=1 duplicate candidate pair", "sort": "pair order", "clickable_urls": true},
+      {"name": "APPLICATION_TRACKER", "source": "current DB state, unfiltered", "filter": "none -- every row", "sort": "last seen desc", "clickable_urls": true},
+      {"name": "SOURCE_HEALTH", "source": "search_runs table, raw", "filter": "candidate-scoped if given", "sort": "created_at desc", "clickable_urls": false},
+      {"name": "RUN_SUMMARY", "source": "latest search_runs row + computed distributions", "filter": "n/a", "sort": "n/a", "clickable_urls": false}
+    ],
+    "apply_today_required_columns_present": [
+      "priority", "score", "title", "company", "location", "source",
+      "job_url", "application_url_with_fallback_to_job_url", "experience_required",
+      "freshness", "matched_skills_and_reasons", "exclusion_reason_if_applicable",
+      "application_status", "first_discovered_date", "last_seen_date"
+    ],
+    "no_field_invented": true
+  },
+  "third_scoring_contract": {
+    "weights_verified": {"core_role": 20, "sre_devops": 15, "aws_azure": 15, "kubernetes": 10, "terraform_iac": 10, "cicd": 10, "observability": 5, "experience": 5, "location_work_model": 5, "overall_domain_fit": 5, "total": 100},
+    "matches_claude_md": true,
+    "priority_thresholds_verified": {"A": ">=90", "B": ">=80", "C": ">=70", "REJECT": "<=69"},
+    "score_job_py_modified": false,
+    "reporting_layer_recalculates_score_differently": false,
+    "reporting_layer_score_source": "job_ranking.build_ranking_record() -> score_job.score_job(), same function search_worker.py itself calls"
+  },
+  "fourth_freshness_verification": {
+    "categories_in_code": ["HOT", "FRESH", "AGING", "OLD", "STALE", "UNKNOWN"],
+    "categories_in_task_text": ["HOT", "FRESH", "AGING", "OLD", "UNKNOWN"],
+    "discrepancy": "code has STALE as an additional category (>30 days) -- a strict superset, not a conflict; not altered, per 'do not alter freshness semantics without evidence'",
+    "thresholds": {"HOT": "<=2 days", "FRESH": "<=7 days", "AGING": "<=14 days", "OLD": "<=30 days", "STALE": ">30 days", "UNKNOWN": "unparseable or future-dated"},
+    "report_distinguishes_all_categories": true,
+    "max_job_age_days_default_confirmed": 3,
+    "freshness_py_modified": false
+  },
+  "fifth_offline_end_to_end_test": {
+    "new_file": "scripts/test_generate_run_report.py",
+    "pattern_reused": "_new_isolated_db()/_seed_confirmed_candidate() from test_search_worker_ranking_integration.py's own established convention",
+    "network_requests": 0,
+    "production_db_touched": false,
+    "job_scenarios": [
+      {"job_id": "A-HIGH-001", "scenario": "eligible, rich JD", "score": 100, "priority": "A", "hand_verified_components": "20+15+15+10+10+10+5+5+5+5=100"},
+      {"job_id": "A-MED-002", "scenario": "eligible, moderate JD, no application_url", "score": 80, "priority": "B", "hand_verified_components": "20+10+15+5+10+5+0+5+5+5=80"},
+      {"job_id": "A-LOW-003", "scenario": "eligible, minimal JD", "score": 75, "priority": "C", "hand_verified_components": "20+5+10+5+10+5+0+5+5+5=75"},
+      {"job_id": "A-STALE-004", "scenario": "eligible, rich JD, posted_date 111 days old", "score": 100, "freshness": "STALE", "result": "still in ALL_MATCHING_JOBS"},
+      {"job_id": "A-LOWEXP-005", "scenario": "1-3 yrs required, candidate has 11", "eligible": false, "result": "REJECTED_EXCLUDED, reason captured verbatim"},
+      {"job_id": "A-HIGH-001 + B-HIGH-MIRROR-001", "scenario": "cross-source duplicate pair (same title/company/location)", "result": "both flagged DUPLICATES, 1 pair detected"},
+      {"job_id": "A-APPLIED-006", "scenario": "status manually set to APPLIED post-ingestion", "result": "ALREADY_APPLIED only, not APPLY_TODAY/ALL_MATCHING_JOBS"},
+      {"job_id": "A-PREVSEEN-007", "scenario": "created_at backdated before since cutoff", "result": "ALL_MATCHING_JOBS, not NEW_JOBS"}
+    ],
+    "workbook_sheet_names_exact_match": true,
+    "hyperlink_confirmed_on_spot_checked_cell": true,
+    "result": "100% pass, all assertions green"
+  },
+  "sixth_naukri_tempdb_live_validation": {
+    "live_requests": 1,
+    "mechanism": "real, unmodified search_worker.process_queue_item() via submit_search() + claim_next_queue_item() + one process_queue_item() call, against a TEMPORARY db only (data/applications/jobos.db never opened)",
+    "candidate_profile_source": "real skills/experience/certifications loaded directly from config/profile.json, never fabricated; target_roles/target_locations narrowed to exactly one query",
+    "query_plan_confirmed_offline_before_live_call": "dry_run=True showed exactly 1 query: NAUKRI / Infrastructure Engineer / Bangalore / max_job_age_days=3",
+    "url_used": "https://www.naukri.com/infrastructure-engineer-jobs-in-bangalore?jobAge=3",
+    "retries": 0,
+    "metrics": {
+      "raw_jobs_discovered": 20,
+      "normalized": 20,
+      "malformed": 0,
+      "deduplicated_intra_source": 0,
+      "unique": 20,
+      "experience_excluded": 16,
+      "eligible": 4,
+      "scored": 4,
+      "ready_for_approval": 1,
+      "score_min": 8,
+      "score_max": 90,
+      "priority_counts": {"A": 1, "REJECT": 3, "INELIGIBLE": 16},
+      "freshness_distribution": {"HOT": 14, "FRESH": 6},
+      "cross_source_duplicate_pairs": 0,
+      "apply_today_count": 1,
+      "new_jobs_count": 1,
+      "already_applied_count": 0,
+      "rejected_excluded_count": 19,
+      "errors_count": 0,
+      "blocked_queries": 0
+    },
+    "workbook_path": "data/reports/phase7_naukri_tempdb_validation/NON_PRODUCTION_naukri_tempdb_report.xlsx",
+    "dump_path": "data/reports/phase7_naukri_tempdb_validation/NON_PRODUCTION_naukri_tempdb_validation_dump.json",
+    "bug_caught_and_fixed": {
+      "description": "generate_run_report.py's NEW_JOBS cutoff used raw STRING comparison between an ISO since cutoff ('...T00:00:00') and jobs.created_at, which SQLite's own DEFAULT CURRENT_TIMESTAMP writes as a SPACE-separated format ('2026-09-20 16:04:48'). Space (0x20) sorts before 'T' (0x54), so a same-day SQLite-formatted timestamp always string-compared as earlier than an ISO cutoff on the same date, regardless of actual time-of-day.",
+      "caught_by": "this live run -- new_jobs_count came back 0 when it should have been 1, since the one new job was created the same day as the since cutoff",
+      "why_fifth_step_test_missed_it": "the FIFTH step's since cutoffs crossed a day boundary, which masked the bug (differing day digits resolve the string comparison before reaching the space-vs-T character)",
+      "fix": "added generate_run_report._parse_timestamp(), parses both formats into timezone-aware datetime objects (UTC assumed for the naive SQLite form) and compares those, never raw strings",
+      "fix_verified": "offline, by re-running generate_run_report.generate() against the SAME already-fetched temp DB (zero new network calls) -- new_jobs_count became 1, correctly",
+      "saved_artifacts_reflect_fixed_code": true,
+      "naukri_discovery_logic_touched": false
+    },
+    "production_db_sha_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "production_db_sha_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "production_db_unchanged": true,
+    "naukri_remained_enabled_no_status_change": true
+  },
+  "seventh_report_quality_acceptance_test": {
+    "questions_answerable_from_workbook_alone": {
+      "1_what_to_look_at_today": true,
+      "2_why_each_job_qualified": true,
+      "3_what_is_the_score": true,
+      "4_how_fresh": true,
+      "5_where_is_the_job": true,
+      "6_which_source": true,
+      "7_new_or_already_seen": true,
+      "8_already_applied": true,
+      "9_clickable_link": true,
+      "10_why_others_excluded": true,
+      "11_source_failed_or_zero_results": true,
+      "12_discovered_and_survived_each_stage": true
+    },
+    "answerable_before_this_task": {
+      "3_score": true, "5_location": true, "6_source": true, "9_clickable_link_html_only": true,
+      "1_2_4_7_8_10_11_12": false
+    }
+  },
+  "new_local_dependency": {
+    "package": "openpyxl",
+    "version": "3.1.5",
+    "reason": "no .xlsx writer library was available; system Python is Homebrew-managed and PEP-668-protected against global pip install",
+    "user_confirmed_approach": "create a project-local .venv (already gitignored); system/Homebrew Python never touched",
+    "requirements_txt_updated": true,
+    "scripts_requiring_venv": ["scripts/generate_run_report.py", "scripts/test_generate_run_report.py"],
+    "other_scripts_affected": false
+  },
+  "final_verification": {
+    "full_standalone_suite": "PASS=46 FAIL=0 (.venv -- needed for the one openpyxl-dependent test file)",
+    "py_compile": "PY_COMPILE_ALL_OK",
+    "json_report_valid": true,
+    "naukri_status": "AdapterStatus.ENABLED",
+    "hirist_status": "AdapterStatus.NOT_ENABLED",
+    "linkedin_status": "AdapterStatus.NOT_ENABLED",
+    "default_sources": ["NAUKRI"]
+  },
+  "production_db": {
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "unchanged": true,
+    "row_counts_unchanged": true,
+    "row_counts": {
+      "candidates": 1,
+      "candidate_search_profile": 1,
+      "jobs": 9,
+      "candidate_job_matches": 0,
+      "search_runs": 0,
+      "search_queue": 0
+    },
+    "opened_for_write_this_task": false
+  },
+  "files_changed": {
+    "new": [
+      "scripts/generate_run_report.py",
+      "scripts/test_generate_run_report.py",
+      "data/reports/phase7_naukri_tempdb_validation/NON_PRODUCTION_naukri_tempdb_report.xlsx",
+      "data/reports/phase7_naukri_tempdb_validation/NON_PRODUCTION_naukri_tempdb_validation_dump.json",
+      "data/reports/phase7_naukri_tempdb_validation/README_NON_PRODUCTION.md",
+      "data/reports/phase7_reporting_audit.md",
+      "data/reports/phase7_reporting_audit.json"
+    ],
+    "modified": ["requirements.txt"],
+    "new_untracked_local_only": [".venv/ (gitignored)"],
+    "not_modified": [
+      "scripts/generate_daily_report.py", "scripts/score_job.py", "scripts/tracker.py",
+      "scripts/search_worker.py", "scripts/job_ranking.py", "scripts/score_explanation.py",
+      "scripts/freshness.py", "scripts/job_eligibility.py", "scripts/cross_source_dedup.py",
+      "scripts/canonical_job.py", "scripts/naukri_adapter.py", "scripts/naukri_parser.py",
+      "scripts/naukri_fetcher.py", "scripts/hirist_adapter.py", "scripts/hirist_parser.py",
+      "scripts/hirist_fetcher.py", "scripts/linkedin_adapter.py", "scripts/source_registry.py",
+      "config/profile.json", "config/application_schema.json", "data/applications/jobos.db"
+    ]
+  },
+  "summary": [
+    "core discover->normalize->dedup->eligibility->score->track pipeline was already real, tested, working via search_worker.py",
+    "the gap was entirely in the reporting layer: freshness and cross-source duplicates were computed but silently discarded every run, per-job eligibility-gate exclusion reasons were never persisted, no Excel/workbook generation existed, nothing distinguished NEW/ALREADY-APPLIED/REJECTED/DUPLICATE",
+    "generate_run_report.py closes this gap by reusing every existing pure function unchanged -- pure orchestration + a new xlsx renderer, not a second scoring/eligibility/freshness implementation",
+    "verified offline against a comprehensive 8-scenario synthetic dataset, then verified once more against one real live Naukri query, which caught and led to the fix of one genuine timestamp-comparison bug in the new module before this report was finalized",
+    "scoring contract (100-point rubric, weights) verified unchanged and consumed as-is by the reporting layer",
+    "freshness semantics verified unchanged (six categories, including STALE, a superset of the task's five named ones)"
+  ],
+  "stopped_after_this_task": true,
+  "proceeded_to_hirist_step12": false,
+  "implemented_linkedin": false,
+  "ran_multisource_production_search": false,
+  "hirist_enabled": false,
+  "linkedin_enabled": false,
+  "awaiting_review_before_next_step": true
+}

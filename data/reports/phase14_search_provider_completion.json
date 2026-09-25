@@ -1,0 +1,103 @@
+{
+  "report": "phase14_search_provider_completion",
+  "generated": "2026-09-21",
+  "objective": "Make LinkedIn, Indeed, Foundit, Instahyre, Cutshort, Wellfound and Shine participate in the normal JobOS search automatically, via a real search-provider API (Serper.dev), integrated into the EXISTING pipeline -- no direct scraping of those seven sites, no second scoring/dedup/report implementation.",
+
+  "1_serper_configured": false,
+  "2_live_provider_validation_performed": false,
+  "live_validation_note": "SERPER_API_KEY is not present in this environment's .env or shell. Per explicit instruction, no live request was made and no successful result was faked. Implementation complete; live provider activation pending SERPER_API_KEY.",
+
+  "3_linkedin_result_count": 0,
+  "4_indeed_result_count": 0,
+  "5_foundit_result_count": 0,
+  "6_instahyre_result_count": 0,
+  "7_cutshort_result_count": 0,
+  "8_wellfound_result_count": 0,
+  "9_shine_result_count": 0,
+  "10_total_search_provider_raw_hits": 0,
+  "11_total_valid_job_detail_urls": 0,
+  "12_total_normalized_jobs": 0,
+  "13_total_cross_source_duplicates": 0,
+  "14_total_eligible_jobs": 0,
+  "15_total_scored_jobs": 0,
+  "16_apply_today_count": 0,
+  "live_counts_note": "All of #3-16 are 0/not-run because no live provider call was made this phase (see #1/#2). These are NOT the offline test-fixture numbers below -- conflating the two would be exactly the 'claim live functionality not tested' this report must avoid.",
+
+  "17_provider_errors_retries": "N/A -- no live calls made. SerperProvider's retry/backoff logic (429 and 5xx -> exponential backoff, up to 3 attempts) is implemented and covered by offline tests (test_phase14_search_provider.py, checks 12) using a mocked HTTP layer, not a real request.",
+
+  "18_restricted_source_status": {
+    "LINKEDIN": {"final_status": "SEARCH_PROVIDER_NOT_CONFIGURED", "direct_search": "NOT_AUTHORIZED", "note": "Adapter registered (LINKEDIN_SEARCH), real parser validated against 9 real Phase 13 URLs (89% parse rate). Will report SEARCH_PROVIDER_AVAILABLE once SERPER_API_KEY is configured."},
+    "INDEED": {"final_status": "SEARCH_PROVIDER_NOT_CONFIGURED", "direct_search": "NOT_AUTHORIZED", "note": "Adapter registered (INDEED_SEARCH). Indeed's own search-result titles never carry a company name (verified against 9 real URLs, 0% company parse rate) -- once configured this source will report LIMITED, not SEARCH_PROVIDER_AVAILABLE, honestly reflecting that gap."},
+    "FOUNDIT": {"final_status": "SEARCH_PROVIDER_NOT_CONFIGURED", "direct_search": "NOT_AUTHORIZED", "note": "Adapter registered (FOUNDIT_SEARCH), 83% parse rate on 6 real URLs."},
+    "INSTAHYRE": {"final_status": "SEARCH_PROVIDER_NOT_CONFIGURED", "direct_search": "NOT_AUTHORIZED", "note": "Adapter registered (INSTAHYRE_SEARCH), 100% parse rate on 9 real URLs."},
+    "CUTSHORT": {"final_status": "SEARCH_PROVIDER_NOT_CONFIGURED", "direct_search": "NOT_AUTHORIZED", "note": "Adapter registered (CUTSHORT_SEARCH), 100% parse rate on 5 real URLs."},
+    "WELLFOUND": {"final_status": "SEARCH_PROVIDER_NOT_CONFIGURED", "direct_search": "NOT_AUTHORIZED", "note": "Adapter registered (WELLFOUND_SEARCH), 100% parse rate on 3 real URLs."},
+    "SHINE": {"final_status": "SEARCH_PROVIDER_NOT_CONFIGURED", "direct_search": "NOT_AUTHORIZED", "note": "Adapter registered (SHINE_SEARCH). No real Shine search-provider results were ever obtained (Phase 13: 0 results for 2 query phrasings) -- its title parser is implemented per the reference design but UNVALIDATED against real data; documented as such in restricted_source_registry.py."}
+  },
+
+  "19_direct_source_status": {
+    "NAUKRI": "ENABLED (unchanged)",
+    "HIRIST": "ENABLED (unchanged)",
+    "IIMJOBS": "ENABLED (unchanged)",
+    "APNA": "ENABLED (unchanged)"
+  },
+
+  "20_production_db_sha_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+  "21_production_db_sha_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+  "production_db_byte_identical": true,
+  "production_db_row_counts_before": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+  "production_db_row_counts_after": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+
+  "22_full_test_count": {"files": 63, "result": "all 63 files exit 0 (62 pre-existing including Phase 13's own tests + this phase's new test_phase14_search_provider.py, 76 checks, 0 failed)"},
+
+  "23_scheduler_changed": false,
+  "24_auto_apply_changed": false,
+  "25_restricted_site_pages_fetched_directly": false,
+
+  "offline_validation": {
+    "note": "Real, dated evidence from Phase 13's actual WebSearch captures (scripts/web_search_evidence_capture.py) was replayed through the NEW search_provider_adapter.py + restricted_source_registry.py + the EXISTING, unmodified normalize/canonical/dedup/eligibility/score/report pipeline via a ReplayProvider -- zero network calls, but real (not synthetic) title/URL data.",
+    "per_source": {
+      "LINKEDIN": {"real_urls_found": 9, "valid_job_detail_urls": 9, "company_parse_rate": "89%", "quality_gate": "PASS"},
+      "INDEED": {"real_urls_found": 9, "valid_job_detail_urls": 9, "company_parse_rate": "0%", "quality_gate": "LIMITED (URLs valid, metadata thin -- documented, not discarded)"},
+      "FOUNDIT": {"real_urls_found": 6, "valid_job_detail_urls": 6, "company_parse_rate": "83%", "quality_gate": "PASS"},
+      "INSTAHYRE": {"real_urls_found": 9, "valid_job_detail_urls": 9, "company_parse_rate": "100%", "quality_gate": "PASS"},
+      "CUTSHORT": {"real_urls_found": 5, "valid_job_detail_urls": 5, "company_parse_rate": "100%", "quality_gate": "PASS"},
+      "WELLFOUND": {"real_urls_found": 3, "valid_job_detail_urls": 3, "company_parse_rate": "100%", "quality_gate": "PASS"},
+      "SHINE": {"real_urls_found": 0, "valid_job_detail_urls": 0, "company_parse_rate": "N/A", "quality_gate": "NO REAL DATA -- parser unvalidated"}
+    },
+    "cross_source_dedup_proof": "A synthetic Naukri job and a search-provider-shaped LinkedIn job describing the same real-world posting were both passed through the EXISTING, unmodified canonical_job.derive_canonical_job() + cross_source_dedup.find_cross_source_duplicate_candidates() -- correctly detected as one duplicate candidate pair. No second dedup implementation was built.",
+    "report_integration_proof": "A search-provider-discovered job was scored, persisted via tracker.upsert_job(), and rendered into the EXISTING 9-sheet Excel workbook (generate_run_report.py) with new Discovered_Via/Discovery_Query/Completeness columns appended at the end -- no 10th sheet, no existing column moved."
+  },
+
+  "new_files": [
+    "scripts/search_provider.py",
+    "scripts/restricted_source_registry.py",
+    "scripts/search_provider_adapter.py",
+    "scripts/test_phase14_search_provider.py"
+  ],
+  "modified_files": [
+    "scripts/discover_local.py",
+    "scripts/migrate_v2_schema.py",
+    "scripts/tracker.py",
+    "scripts/search_worker.py",
+    "scripts/source_registry.py",
+    "scripts/source_capabilities.py",
+    "scripts/generate_run_report.py",
+    "scripts/test_phase13_broad_discovery.py"
+  ],
+  "not_modified": [
+    "scripts/score_job.py (protected, untouched)",
+    "config/profile.json (protected, untouched)",
+    "scripts/naukri_adapter.py / hirist_adapter.py / iimjobs_adapter.py / apna_adapter.py (untouched, still ENABLED, unchanged behavior)",
+    "scripts/cross_source_dedup.py / canonical_job.py / freshness.py / job_eligibility.py (reused unmodified, zero duplication)",
+    "linkedin_adapter.py / indeed_adapter.py / foundit_adapter.py / instahyre_adapter.py / cutshort_adapter.py / wellfound_adapter.py / shine_adapter.py (Phase 4 direct-crawl skeletons, still NOT_ENABLED, untouched -- deliberately kept separate from the new *_SEARCH adapters)"
+  ],
+  "regression_fixed_during_this_phase": "tracker.upsert_job() and search_worker._upsert_job_identity_only() initially made the 3 new discovery_* columns unconditional, which broke scripts/test_registry_pipeline.py (a legacy test using an un-migrated schema). Fixed by making both functions detect column presence via PRAGMA table_info(jobs) at call time and building their INSERT column list dynamically -- a database that predates this migration keeps working exactly as before. Full suite re-verified clean after the fix.",
+
+  "architectural_notes": [
+    "Search-provider adapters are registered under NEW keys (LINKEDIN_SEARCH, INDEED_SEARCH, ...), deliberately distinct from the pre-existing LINKEDIN/INDEED/... Phase 4 direct-crawl skeletons (still NOT_ENABLED, reserved for a hypothetical future authorized direct API). Every job record these new adapters emit still carries source='LINKEDIN' (the real board), so job_id.py's URL-derived identity means a manually-imported or future-directly-discovered job for the same URL naturally dedupes against a search-provider-discovered one.",
+    "AdapterStatus for all seven search-provider adapters is fixed once at class-definition/first-import time from search_provider.is_serper_configured() -- the same convention every other adapter in this codebase already uses (a plain class attribute, not re-evaluated per call). This is why _default_sources()/discover_from_sources() automatically include or exclude these sources exactly as they do for every other source, with zero changes to search_profile.py, query_planner.py, or search_worker.py.",
+    "The Claude/agent WebSearch capability (used in Phase 13 purely as one-off evidence capture) is explicitly NOT the production backend here -- SerperProvider talks to Serper.dev's own HTTP API via urllib, independently of any agent session.",
+    "Hostname validation was hardened relative to the uploaded reference implementation, which used a substring check (`domain not in netloc`) vulnerable to a lookalike host like 'notlinkedin.com.evil.example'. restricted_source_registry.is_safe_url() instead requires an exact host match or a genuine dot-separated subdomain."
+  ]
+}

@@ -1,0 +1,211 @@
+{
+  "task": "Phase 6 -- Hirist discovery/feasibility inspection ONLY, no implementation",
+  "hirist_status_after_this_task": {
+    "status": "AdapterStatus.NOT_ENABLED",
+    "capabilities": [],
+    "changed_in_this_task": false
+  },
+  "live_requests_made": [
+    {
+      "n": 1,
+      "type": "robots.txt fetch",
+      "method": "plain HTTP GET via curl, no browser",
+      "url": "https://www.hirist.tech/robots.txt",
+      "http_status": 200
+    },
+    {
+      "n": 2,
+      "type": "single Playwright page navigation",
+      "url": "https://www.hirist.tech/search/senior-devops-engineer-jobs?locations=Bengaluru",
+      "http_status": 200,
+      "final_url": "https://www.hirist.tech/search/senior-devops-engineer-jobs?locations=Bengaluru",
+      "redirected": false
+    }
+  ],
+  "total_live_requests": 2,
+  "retries": 0,
+  "detail_pages_visited": 0,
+  "authentication_attempted": 0,
+  "applications_submitted": 0,
+  "captcha_solve_attempts": 0,
+  "executive_summary": "The single live test succeeded technically with no block, challenge, login wall, or CAPTCHA encountered. Hirist served a real, populated public jobs-search results page containing 20 job listings (of a claimed 3441 total), embedding schema.org JSON-LD structured job data and revealing its real pagination URL pattern via a rel=next link tag. robots.txt is markedly more permissive than LinkedIn's, with no disallow rule on search/job paths. This does not by itself constitute confirmed authorization for automated extraction, which remains unknown.",
+  "2_exact_live_requests": {
+    "robots_txt": {"url": "https://www.hirist.tech/robots.txt", "http_status": 200},
+    "search_page": {"url": "https://www.hirist.tech/search/senior-devops-engineer-jobs?locations=Bengaluru", "http_status": 200}
+  },
+  "3_browser_runtime_configuration": {
+    "headless": true,
+    "channel": "chromium",
+    "effective_user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+    "user_agent_override_applied": false,
+    "identical_to_naukri_and_linkedin_probe_config": true
+  },
+  "4_exact_urls": {
+    "search_page_requested": "https://www.hirist.tech/search/senior-devops-engineer-jobs?locations=Bengaluru",
+    "url_verified_against_prior_capture": false,
+    "note": "best-effort construction by analogy with Naukri's already-verified <role>-jobs-in-<location> pattern; first evidence gathered for Hirist's URL structure in this project",
+    "robots_txt": "https://www.hirist.tech/robots.txt",
+    "canonical_url_per_page": "https://www.hirist.tech/search/senior-devops-engineer-jobs",
+    "canonical_drops_location_query_param": true,
+    "confirmed_page_2_url_via_rel_next": "https://www.hirist.tech/search/senior-devops-engineer-jobs?page=2"
+  },
+  "5_http_status_final_url_redirects": {
+    "http_status": 200,
+    "final_url_equals_requested": true,
+    "redirected_http_level": false,
+    "robots_txt_http_status": 200,
+    "evidence_type": "FACT/OBSERVED"
+  },
+  "6_search_page_accessibility": {
+    "loaded_successfully": true,
+    "login_redirect": false,
+    "captcha": false,
+    "access_denied": false,
+    "page_title": "Search for - Senior Devops Engineer Jobs, 3441 Job Vacancies for Search for - Senior Devops Engineer in September 2026 | hirist.tech",
+    "meta_robots_tag": "index,follow",
+    "password_inputs_in_dom": 0,
+    "comparison_to_linkedin": "LinkedIn's equivalent page had 1 password input (embedded sign-in form); Hirist's had 0"
+  },
+  "7_search_result_structure": {
+    "schema_org_json_ld_present": true,
+    "json_ld_types_found": ["BreadcrumbList", "ItemList"],
+    "item_list_number_of_items": 20,
+    "item_list_first_entry_partial": "Verint - Senior ... (company name confirmed, title cut off in captured excerpt)",
+    "full_json_ld_payload_captured": false,
+    "capture_limitation": "html excerpt bounded at 4000 of 312194 total characters; JSON-LD block cut off mid-entry -- acknowledged gap, not a claim of absence",
+    "job_card_class_heuristic_matches": 0,
+    "job_card_class_heuristic_reliable": false,
+    "anchor_pattern_matches": 20,
+    "anchor_pattern_consistent_with_item_list_count": true,
+    "pagination_hint_element_matches": 16
+  },
+  "8_job_card_fields_observed": {
+    "job_title": "confirmed present (partial JSON-LD entry + page title/breadcrumb)",
+    "company_name": "confirmed present (\"Verint\" in partial JSON-LD entry)",
+    "location": "reflected in page context; not individually confirmed per-listing",
+    "posted_freshness_date": "not confirmed",
+    "experience_requirement": "not confirmed",
+    "salary": "not confirmed",
+    "description_requirements": "not confirmed on this page",
+    "employment_work_model_info": "not confirmed",
+    "job_id_stable_identifier": "not confirmed -- anchors counted but hrefs not individually extracted",
+    "note": "every not-confirmed field is an honest gap from a bounded single observation, not a negative finding"
+  },
+  "9_job_ids_url_structure": {
+    "individually_confirmed": false,
+    "anchor_count_matching_broad_pattern": 20,
+    "specific_href_values_extracted": false,
+    "status": "unknown, requires validation"
+  },
+  "10_freshness_behavior": {
+    "tested": false,
+    "status": "UNKNOWN, requires validation"
+  },
+  "11_pagination_behavior": {
+    "tested_by_navigation": false,
+    "confirmed_via_rel_next_link_tag": true,
+    "mechanism": "?page=N query parameter appended to the same role-slug path",
+    "evidence_type": "FACT/OBSERVED",
+    "note": "strongest, most concrete structural finding alongside the JSON-LD data"
+  },
+  "12_application_url_behavior": {
+    "confirmed": false,
+    "visible_in_captured_excerpt": false,
+    "robots_txt_restriction_on_application_paths": false,
+    "note": "absence of a robots.txt restriction is not the same as confirmed availability or authorization"
+  },
+  "13_robots_txt_policy_observations": {
+    "fetched_live_this_task": true,
+    "url": "https://www.hirist.tech/robots.txt",
+    "http_status": 200,
+    "full_content": "User-agent: *\nDisallow: /components/\nDisallow: /images/\nDisallow: /modules/\nDisallow: /admin/\nDisallow: /administrator/\nDisallow: /dao/\nDisallow: /cache/\nDisallow: /config/\nDisallow: /classes/\nDisallow: /language/\nDisallow: /help/\nDisallow: /util/\nDisallow: /includes/\nDisallow: /installation/\nDisallow: /mambots/\nDisallow: /media/\nDisallow: /templates/\nDisallow: /editor/\nDisallow: /old/\nUser-agent: Yandex\nDisallow: /\n\nSitemap: https://www.hirist.tech/new_sitemap_index.xml\nSitemap: https://www.hirist.tech/blog/sitemap_index.xml\n\nCrawl-delay: 10",
+    "wildcard_user_agent_disallows_search_or_jobs_paths": false,
+    "yandex_specifically_fully_disallowed": true,
+    "sitemaps_published": true,
+    "crawl_delay_seconds": 10,
+    "crawl_delay_binding_ambiguous": true,
+    "explicit_crawl_api_whitelisting_notice_present": false,
+    "not_treated_as_complete_legal_determination": true
+  },
+  "14_authentication_requirements": {
+    "search_page_requires_auth": false,
+    "detail_page_auth_requirement": "not tested"
+  },
+  "15_captcha_challenge_block_behavior": {
+    "login_wall_url": false,
+    "login_wall_text": false,
+    "captcha_or_challenge_text": false,
+    "access_denied_text": false,
+    "empty_results_text": false,
+    "not_found_text": false,
+    "iframes_present": 2,
+    "iframe_purpose_confirmed": false
+  },
+  "16_rate_limit_observations": {
+    "rate_limiting_observed": false,
+    "rate_limiting_expected_from_single_request": false,
+    "concrete_signal": "robots.txt Crawl-delay: 10",
+    "sustained_access_behavior_tested": false
+  },
+  "17_technical_feasibility": {
+    "reaching_public_search_page_without_login": "feasible, observed once, no friction encountered",
+    "structured_data_availability": "favorable -- schema.org JSON-LD present",
+    "reliability_over_time_volume_or_for_detail_pages": "not established by a single visit"
+  },
+  "18_authorization_compliance_observations": {
+    "technically_reachable": true,
+    "publicly_accessible": true,
+    "explicitly_permitted_authorized": "not confirmed",
+    "basis": "robots.txt absence of a Disallow rule is a lack of prohibition, not an affirmative grant of permission; Terms of Service not read or verified in this task",
+    "unknowns": [
+      "content of Hirist's Terms of Service regarding automated access",
+      "whether Crawl-delay's ambiguous binding matters in practice",
+      "whether sustained/repeated access would be treated differently"
+    ],
+    "authorization_inferred_from_http_200": false,
+    "overall_comparison_to_linkedin": "more favorable technical and robots.txt picture, but 'more favorable' is not the same as 'confirmed authorized'"
+  },
+  "19_unknowns": [
+    "whether the locations=Bengaluru query parameter actually filters results, or is silently ignored (canonical tag dropped it)",
+    "complete schema.org JSON-LD payload for all 20 listed jobs (only partially captured)",
+    "exact href values / ID structure for individual job-detail pages",
+    "whether job-detail pages require login or show different anti-bot behavior",
+    "whether a freshness/date filter is supported and its parameter",
+    "whether remote/work-model filtering is supported",
+    "application-URL availability and structure",
+    "salary and experience-requirement field availability",
+    "precise binding of the Crawl-delay: 10 directive",
+    "content of Hirist's Terms of Service regarding automated access",
+    "behavior under repeated or higher-volume access"
+  ],
+  "20_recommended_next_gate_no_ranking": [
+    "A. additional offline analysis of already-inspected evidence categories -- e.g. a fresh, separately-authorized single live pass with a larger HTML-capture bound to retrieve the complete JSON-LD payload, or a design-only step mirroring the LinkedIn Phase 5 Step 2 pattern using only what has already been observed",
+    "B. a policy/scope review of Hirist's Terms of Service (not performed in this task) to resolve the 'explicitly permitted/authorized' unknown before further technical work"
+  ],
+  "regression_and_safety": {
+    "new_files": ["scripts/hirist_discovery_probe.js"],
+    "new_file_is_diagnostic_only": true,
+    "new_file_referenced_by_production_code": false,
+    "hirist_adapter_py_modified": false,
+    "source_registry_py_modified": false,
+    "search_profile_py_modified": false,
+    "search_worker_py_modified": false,
+    "scoring_eligibility_freshness_dedup_modified": false,
+    "naukri_behavior_modified": false,
+    "linkedin_behavior_or_design_modified": false,
+    "full_standalone_suite_result": "PASS=40 FAIL=0",
+    "py_compile": "PY_COMPILE_ALL_OK",
+    "default_sources_verified": ["NAUKRI"],
+    "hirist_status_verified": "AdapterStatus.NOT_ENABLED",
+    "hirist_capabilities_verified": []
+  },
+  "production_db": {
+    "database_opened_for_writing": false,
+    "database_opened_at_all": false,
+    "file_sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "file_sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "unchanged": true
+  },
+  "stopped_after_this_report": true,
+  "hirist_adapter_implementation_or_enablement_begun": false
+}

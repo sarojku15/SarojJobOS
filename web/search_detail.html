@@ -1,0 +1,168 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Job Search OS — Search</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<header>
+  <span class="brand">Job Search OS</span>
+  <a href="/">Home</a>
+  <a href="/profile">Profile</a>
+  <a href="/searches" class="active">Searches</a>
+  <a href="/dashboard">Dashboard</a>
+</header>
+<main>
+  <h1 id="title">Search</h1>
+  <div id="msg"></div>
+
+  <div class="card">
+    <div class="button-row" style="justify-content: space-between; margin-top:0">
+      <h2 style="margin:0">Criteria</h2>
+      <button class="secondary" id="edit-btn" type="button">Edit</button>
+    </div>
+    <div id="criteria"></div>
+  </div>
+
+  <div class="card">
+    <h2>Run</h2>
+    <button id="run-btn">Run now</button>
+    <div id="run-status" class="hint"></div>
+  </div>
+
+  <div class="card">
+    <h2>Results &amp; report</h2>
+    <div class="button-row" style="margin-top:0">
+      <button class="secondary" id="results-btn">View results</button>
+      <button class="secondary" id="report-btn">Download Excel report</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Manage</h2>
+    <button class="danger" id="archive-btn">Archive this search</button>
+  </div>
+</main>
+<script src="/static/app.js"></script>
+<script>
+const searchId = window.location.pathname.split("/")[2];
+let search = null;
+let profileConfirmed = false;
+let candidateId = null;
+
+async function load() {
+  const msg = document.getElementById("msg");
+
+  candidateId = await resolveActiveCandidate();
+  if (!candidateId) {
+    showEmpty(document.getElementById("criteria"), "No candidate selected yet.");
+    return;
+  }
+
+  try {
+    search = await api(`/api/searches/${searchId}?candidate_id=${candidateId}`);
+    document.getElementById("title").textContent = search.name;
+
+    try {
+      const profile = await api(`/api/candidates/${search.candidate_id}/profile`);
+      profileConfirmed = profile.metadata.profile_status === "CONFIRMED";
+      if (!profileConfirmed) {
+        showInfo(msg, "Your profile needs to be confirmed before running a new search. Existing results (if any) are still shown below.");
+      }
+    } catch (e) {
+      // Non-fatal for viewing this page.
+    }
+
+    document.getElementById("criteria").innerHTML = `
+      <table class="results-table">
+        <tr><th>Job titles</th><td>${escapeHtml(search.target_roles.join(", "))}</td></tr>
+        <tr><th>Locations</th><td>${escapeHtml(search.target_locations.join(", "))}</td></tr>
+        <tr><th>Work model</th><td>${escapeHtml((search.work_models || []).join(", ") || "-")}</td></tr>
+        <tr><th>Employment type</th><td>${escapeHtml(search.employment_type || "-")}</td></tr>
+        <tr><th>Experience</th><td>${search.minimum_experience_years ?? "-"} to ${search.maximum_experience_years ?? "-"} years</td></tr>
+        <tr><th>Salary</th><td>${search.salary_expectation_min ?? "-"} to ${search.salary_expectation_max ?? "-"} ${escapeHtml(search.salary_currency || "")}</td></tr>
+        <tr><th>Skills</th><td>${escapeHtml((search.skills || []).join(", ") || "-")}</td></tr>
+        <tr><th>Minimum score</th><td>${search.minimum_match_score ?? 70}</td></tr>
+        <tr><th>Freshness</th><td>${search.max_job_age_days ?? "-"} days</td></tr>
+        <tr><th>Sources</th><td>${escapeHtml((search.sources || []).join(", ") || "(default enabled sources)")}</td></tr>
+        <tr><th>Resume / Profile</th><td id="pin-cell">Loading...</td></tr>
+        <tr><th>Status</th><td>${badgeHtml(search.status)}</td></tr>
+      </table>
+    `;
+
+    renderPinnedProfileCell(search);
+  } catch (err) {
+    showError(msg, err);
+  }
+}
+
+async function renderPinnedProfileCell(search) {
+  const cell = document.getElementById("pin-cell");
+  if (!cell) return;
+  if (search.profile_version == null) {
+    cell.textContent = "Current profile (always up to date)";
+    return;
+  }
+  try {
+    const data = await api(`/api/candidates/${search.candidate_id}/profile-versions`);
+    const pinned = (data.profile_versions || []).find((v) => v.version === search.profile_version);
+    cell.textContent = pinned && pinned.resume_filename
+      ? `Pinned: Resume "${pinned.resume_filename}" (profile v${search.profile_version})`
+      : `Pinned: profile v${search.profile_version}`;
+  } catch (err) {
+    cell.textContent = `Pinned: profile v${search.profile_version}`;
+  }
+}
+
+document.getElementById("edit-btn").addEventListener("click", () => {
+  window.location.href = `/searches/${searchId}/edit`;
+});
+
+document.getElementById("run-btn").addEventListener("click", async () => {
+  const msg = document.getElementById("msg");
+  const statusEl = document.getElementById("run-status");
+  try {
+    const { run_id } = await api(`/api/searches/${searchId}/run?candidate_id=${candidateId}`, { method: "POST" });
+    poll(run_id, statusEl);
+  } catch (err) {
+    showError(msg, err);
+  }
+});
+
+async function poll(runId, statusEl) {
+  try {
+    const run = await api(`/api/runs/${runId}?candidate_id=${candidateId}`);
+    statusEl.innerHTML = `${badgeHtml(run.status)} &mdash; ${run.jobs_ready ?? 0} ready, ${run.jobs_eligible ?? 0} eligible, ${run.jobs_discovered ?? 0} discovered`;
+    if (!["COMPLETED", "PARTIAL", "FAILED", "BLOCKED"].includes(run.status)) {
+      setTimeout(() => poll(runId, statusEl), 3000);
+    }
+  } catch (err) {
+    statusEl.textContent = "Could not fetch run status.";
+  }
+}
+
+document.getElementById("results-btn").addEventListener("click", () => {
+  window.location.href = `/searches/${searchId}/results`;
+});
+
+document.getElementById("report-btn").addEventListener("click", () => {
+  window.location.href = `/api/searches/${searchId}/report?candidate_id=${candidateId}`;
+});
+
+document.getElementById("archive-btn").addEventListener("click", async () => {
+  const msg = document.getElementById("msg");
+  if (!confirm("Archive this search? It will no longer appear in your active list.")) return;
+  try {
+    await api(`/api/searches/${searchId}?candidate_id=${candidateId}`, { method: "DELETE" });
+    showSuccess(msg, "Archived. Redirecting...");
+    setTimeout(() => (window.location.href = "/searches"), 600);
+  } catch (err) {
+    showError(msg, err);
+  }
+});
+
+load();
+</script>
+</body>
+</html>

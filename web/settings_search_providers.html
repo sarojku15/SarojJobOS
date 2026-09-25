@@ -1,0 +1,220 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Job Search OS — Search Providers</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<header>
+  <span class="brand">Job Search OS</span>
+  <a href="/">Home</a>
+  <a href="/profile">Profile</a>
+  <a href="/searches">Searches</a>
+  <a href="/dashboard">Dashboard</a>
+</header>
+<main>
+  <h1>Settings — Search Providers</h1>
+  <p class="lede">
+    LinkedIn, Indeed, Foundit, Instahyre, Cutshort, Wellfound and Shine cannot be searched directly.
+    JobOS instead uses a real search-provider API to discover their public job listings. Configure one
+    or more providers below — JobOS tries them in priority order and automatically fails over if one is
+    unavailable. Keys are stored only in this project's local <code>.env</code> file, never in the
+    database, never shown again in full after saving.
+  </p>
+  <div id="msg"></div>
+  <div id="content"><div class="loading-state">Loading...</div></div>
+</main>
+
+<template id="tpl-provider-row">
+  <div class="card provider-row">
+    <div class="button-row" style="justify-content: space-between; margin-top:0">
+      <h2 style="margin:0"><span class="p-name"></span> <span class="p-priority hint"></span></h2>
+      <span class="p-status"></span>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>API key</label>
+        <div class="p-key-display hint"></div>
+      </div>
+      <div>
+        <label>Enter / replace key</label>
+        <input type="password" class="p-key-input" placeholder="paste API key" />
+      </div>
+    </div>
+
+    <div class="hint p-advisory"></div>
+    <div class="hint p-usage"></div>
+    <div class="hint p-last-error"></div>
+
+    <div class="button-row">
+      <button class="secondary small p-save-key">Save key</button>
+      <button class="secondary small p-remove-key">Remove key</button>
+      <button class="secondary small p-test">Test</button>
+      <button class="secondary small p-toggle-enable"></button>
+      <button class="secondary small p-reset-usage">Reset usage</button>
+      <button class="secondary small p-move-up">Move up</button>
+      <button class="secondary small p-move-down">Move down</button>
+    </div>
+  </div>
+</template>
+
+<script src="/static/app.js"></script>
+<script>
+async function load() {
+  const content = document.getElementById("content");
+  const msg = document.getElementById("msg");
+
+  try {
+    const data = await api("/api/settings/search-providers");
+    render(data.providers);
+  } catch (err) {
+    showError(msg, err);
+  }
+}
+
+function statusBadgeClass(status) {
+  if (status === "AVAILABLE") return "A";
+  if (status === "NOT_CONFIGURED") return "";
+  if (["QUOTA_EXHAUSTED", "AUTH_FAILED", "RATE_LIMITED", "ERROR"].includes(status)) return "REJECT";
+  return "";
+}
+
+function render(providers) {
+  const content = document.getElementById("content");
+  content.innerHTML = "";
+
+  const orderHint = document.createElement("div");
+  orderHint.className = "hint";
+  orderHint.textContent = "Priority order: " + providers.map((p) => p.display_name).join(" → ") + ". Only providers with a configured key AND marked Enabled are actually tried, in this order.";
+  content.appendChild(orderHint);
+
+  providers.forEach((p, idx) => {
+    const row = document.getElementById("tpl-provider-row").content.cloneNode(true);
+    row.querySelector(".p-name").textContent = p.display_name;
+    row.querySelector(".p-priority").textContent = `(priority ${idx + 1})`;
+    row.querySelector(".p-status").innerHTML = badgeHtml(p.configured ? p.status : "NOT_CONFIGURED", statusBadgeClass(p.status));
+
+    row.querySelector(".p-key-display").textContent = p.configured
+      ? `${p.masked_key} — configured via environment variable ${p.env_key}`
+      : `Not configured (set via ${p.env_key})`;
+
+    row.querySelector(".p-advisory").textContent = p.advisory_free_tier ? `ADVISORY: ${p.advisory_free_tier}` : "";
+
+    const u = p.usage;
+    row.querySelector(".p-usage").textContent =
+      `Local usage (advisory only, not the provider's real quota) — today: ${u.request_count_daily} requests ` +
+      `(${u.successful_count_daily} ok, ${u.failure_count_daily} failed, ${u.quota_failures_daily} quota) · ` +
+      `this month: ${u.request_count_monthly} requests`;
+
+    row.querySelector(".p-last-error").textContent = p.last_error ? `Last error (${p.last_error_at || "-"}): ${p.last_error}` : "";
+
+    const toggleBtn = row.querySelector(".p-toggle-enable");
+    toggleBtn.textContent = p.enabled ? "Disable" : "Enable";
+
+    // Captured NOW, while `row` (a DocumentFragment) still has its
+    // children -- `content.appendChild(row)` below moves row's
+    // children into `content` and leaves the fragment itself empty,
+    // so a LAZY `row.querySelector(...)` evaluated later, inside a
+    // click handler, would return null (this was the actual save-key
+    // bug: clicking Save threw "Cannot read properties of null
+    // (reading 'value')" before the API call was ever made, so .env
+    // was never written and the UI silently stayed NOT_CONFIGURED).
+    // The captured element itself stays valid after the move -- only
+    // fresh queries against the now-empty fragment fail.
+    const keyInput = row.querySelector(".p-key-input");
+
+    row.querySelector(".p-save-key").addEventListener("click", async () => {
+      const value = keyInput.value.trim();
+      if (!value) {
+        showError(document.getElementById("msg"), new Error("Enter an API key first."));
+        return;
+      }
+      try {
+        const result = await api(`/api/settings/search-providers/${p.provider}/key`, { method: "POST", body: { api_key: value } });
+        showSuccess(document.getElementById("msg"), `${p.display_name} key saved (${result.masked_key}). Stored in this project's local .env file. Restart the JobOS server for this to take full effect.`);
+        input.value = "";
+        load();
+      } catch (err) {
+        showError(document.getElementById("msg"), err);
+      }
+    });
+
+    row.querySelector(".p-remove-key").addEventListener("click", async () => {
+      if (!confirm(`Remove the saved ${p.display_name} API key?`)) return;
+      try {
+        await api(`/api/settings/search-providers/${p.provider}/key`, { method: "DELETE" });
+        showSuccess(document.getElementById("msg"), `${p.display_name} key removed.`);
+        load();
+      } catch (err) {
+        showError(document.getElementById("msg"), err);
+      }
+    });
+
+    row.querySelector(".p-test").addEventListener("click", async (e) => {
+      const btn = e.target;
+      btn.disabled = true;
+      btn.textContent = "Testing...";
+      try {
+        const result = await api(`/api/settings/search-providers/${p.provider}/test`, { method: "POST" });
+        if (result.status === "AVAILABLE") {
+          showSuccess(document.getElementById("msg"), `${p.display_name}: ${result.detail}`);
+        } else {
+          showError(document.getElementById("msg"), new Error(`${p.display_name}: ${result.status} — ${result.detail}`));
+        }
+      } catch (err) {
+        showError(document.getElementById("msg"), err);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Test";
+        load();
+      }
+    });
+
+    row.querySelector(".p-toggle-enable").addEventListener("click", async () => {
+      try {
+        const action = p.enabled ? "disable" : "enable";
+        await api(`/api/settings/search-providers/${p.provider}/${action}`, { method: "POST" });
+        load();
+      } catch (err) {
+        showError(document.getElementById("msg"), err);
+      }
+    });
+
+    row.querySelector(".p-reset-usage").addEventListener("click", async () => {
+      try {
+        await api(`/api/settings/search-providers/${p.provider}/reset-usage`, { method: "POST", body: {} });
+        showSuccess(document.getElementById("msg"), `${p.display_name} usage counters reset.`);
+        load();
+      } catch (err) {
+        showError(document.getElementById("msg"), err);
+      }
+    });
+
+    row.querySelector(".p-move-up").addEventListener("click", () => reorder(providers, idx, idx - 1));
+    row.querySelector(".p-move-down").addEventListener("click", () => reorder(providers, idx, idx + 1));
+    if (idx === 0) row.querySelector(".p-move-up").disabled = true;
+    if (idx === providers.length - 1) row.querySelector(".p-move-down").disabled = true;
+
+    content.appendChild(row);
+  });
+}
+
+async function reorder(providers, from, to) {
+  if (to < 0 || to >= providers.length) return;
+  const names = providers.map((p) => p.provider);
+  const [moved] = names.splice(from, 1);
+  names.splice(to, 0, moved);
+  try {
+    await api("/api/settings/search-providers/order", { method: "POST", body: { order: names } });
+    load();
+  } catch (err) {
+    showError(document.getElementById("msg"), err);
+  }
+}
+
+load();
+</script>
+</body>
+</html>

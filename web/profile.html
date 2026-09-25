@@ -1,0 +1,266 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Job Search OS — Profile</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<header>
+  <span class="brand">Job Search OS</span>
+  <a href="/">Home</a>
+  <a href="/profile" class="active">Profile</a>
+  <a href="/searches">Searches</a>
+  <a href="/dashboard">Dashboard</a>
+</header>
+<main>
+  <h1>Review your profile</h1>
+  <p class="lede">Edit anything below, then confirm it before creating a search. Any edit un-confirms the profile until you confirm again.</p>
+  <div id="msg"></div>
+  <div id="content"><div class="loading-state">Loading your profile...</div></div>
+</main>
+
+<template id="tpl-profile-form">
+  <div class="card">
+    <div class="button-row" style="justify-content: space-between; margin-top:0">
+      <h2 style="margin:0">Identity</h2>
+      <span id="status-badge"></span>
+    </div>
+    <label>Name</label><input id="p-name" />
+    <label>Email</label><input id="p-email" />
+    <label>Phone</label><input id="p-phone" />
+  </div>
+
+  <div class="card">
+    <h2>Professional summary</h2>
+    <label>Headline</label><input id="p-headline" />
+    <label>Current title</label><input id="p-title" />
+    <div class="row">
+      <div><label>Total experience (years)</label><input id="p-years" type="number" step="0.5" min="0" /></div>
+      <div><label>Industries (comma-separated)</label><input id="p-industries" placeholder="e.g. FinTech, Healthcare, SaaS" /></div>
+    </div>
+    <label>Summary</label><textarea id="p-summary"></textarea>
+  </div>
+
+  <div class="card">
+    <h2>Skills</h2>
+    <label>Skills (comma-separated)</label>
+    <textarea id="p-skills" placeholder="Java, Spring Boot, AWS, Terraform, ..."></textarea>
+  </div>
+
+  <div class="card">
+    <h2>Job preferences</h2>
+    <label>Target / alternate job titles (comma-separated)</label>
+    <input id="p-roles" placeholder="e.g. Senior SRE, Site Reliability Engineer" />
+    <label>Target locations (comma-separated)</label>
+    <input id="p-locations" placeholder="e.g. Bangalore, Remote India" />
+    <label>Work model preferences (comma-separated)</label>
+    <input id="p-workmodel" placeholder="Remote, Hybrid, Onsite" />
+    <div class="row">
+      <div>
+        <label>Employment type</label>
+        <select id="p-emptype">
+          <option value="">(unspecified)</option>
+          <option>FULL_TIME</option>
+          <option>CONTRACT</option>
+          <option>PART_TIME</option>
+          <option>INTERNSHIP</option>
+        </select>
+      </div>
+      <div><label>Min salary</label><input id="p-salmin" type="number" min="0" /></div>
+      <div><label>Max salary</label><input id="p-salmax" type="number" min="0" /></div>
+      <div><label>Currency</label><input id="p-curr" placeholder="INR" /></div>
+    </div>
+  </div>
+
+  <div class="button-row">
+    <button id="save-btn">Save changes</button>
+    <button id="confirm-btn" class="secondary">Confirm profile</button>
+  </div>
+</template>
+
+<template id="tpl-resumes">
+  <div class="card">
+    <h2>Resumes</h2>
+    <div class="hint" style="margin-bottom:8px">Every resume you've uploaded stays on file -- uploading a new one never deletes or overwrites an older one. Each search can be pinned to a specific resume/profile version, so an older search keeps representing the resume it was created with.</div>
+    <div class="results-table-wrap">
+      <table class="results-table">
+        <thead>
+          <tr><th>Filename</th><th>Version label</th><th>Uploaded</th><th>Status</th><th>Resume ID</th></tr>
+        </thead>
+        <tbody id="resumes-body"></tbody>
+      </table>
+    </div>
+    <div class="button-row" style="margin-top:12px">
+      <input type="file" id="resume-file-input" accept="application/pdf" />
+      <button id="upload-resume-btn">Upload New Resume</button>
+    </div>
+    <div id="resume-upload-msg" class="hint"></div>
+  </div>
+</template>
+
+<script src="/static/app.js"></script>
+<script>
+let candidateId = null;
+
+function csv(str) { return str.split(",").map((s) => s.trim()).filter(Boolean); }
+
+async function load() {
+  const content = document.getElementById("content");
+  const msg = document.getElementById("msg");
+
+  candidateId = await resolveActiveCandidate();
+  if (!candidateId) {
+    showEmpty(content, "No candidate selected yet.");
+    showInfo(msg, "Start by uploading a resume or entering your profile manually.");
+    const cta = el(`<div style="text-align:center;margin-top:16px"><button onclick="window.location.href='/'">Go to Home</button></div>`);
+    content.appendChild(cta);
+    return;
+  }
+
+  try {
+    const profile = await api(`/api/candidates/${candidateId}/profile`);
+    content.innerHTML = "";
+    content.appendChild(document.getElementById("tpl-profile-form").content.cloneNode(true));
+    populateForm(profile);
+    wireButtons();
+    content.appendChild(document.getElementById("tpl-resumes").content.cloneNode(true));
+    wireResumeUpload();
+    await loadResumes();
+  } catch (err) {
+    showError(msg, err);
+    showEmpty(content, "We couldn't load a profile for this candidate.");
+  }
+}
+
+async function loadResumes() {
+  const tbody = document.getElementById("resumes-body");
+  if (!tbody) return;
+  try {
+    const data = await api(`/api/candidates/${candidateId}/resumes`);
+    const resumes = (data.resumes || []).slice().sort((a, b) => (b.uploaded_at || "").localeCompare(a.uploaded_at || ""));
+    tbody.innerHTML = resumes.length
+      ? resumes.map((r) => `
+          <tr>
+            <td>${escapeHtml(r.filename || "-")}</td>
+            <td>${escapeHtml(r.resume_version || "-")}</td>
+            <td>${escapeHtml((r.uploaded_at || "").slice(0, 19).replace("T", " "))}</td>
+            <td>${badgeHtml(r.status)}</td>
+            <td class="hint">${escapeHtml(r.resume_id || "")}</td>
+          </tr>
+        `).join("")
+      : `<tr><td colspan="5" class="hint">No resumes uploaded yet.</td></tr>`;
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="5" class="hint">Could not load resumes.</td></tr>`;
+  }
+}
+
+function wireResumeUpload() {
+  const btn = document.getElementById("upload-resume-btn");
+  if (!btn) return;
+  btn.addEventListener("click", async () => {
+    const msg = document.getElementById("resume-upload-msg");
+    const fileInput = document.getElementById("resume-file-input");
+    if (!fileInput.files.length) {
+      showError(msg, new Error("Choose a PDF resume file first."));
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = "Uploading...";
+    try {
+      const form = new FormData();
+      form.append("file", fileInput.files[0]);
+      const result = await api(`/api/candidates/${candidateId}/resume`, { method: "POST", body: form });
+      showSuccess(msg, "Resume uploaded and parsed into a new DRAFT profile version below. Review, then confirm it to make it selectable on a search.");
+      fileInput.value = "";
+      populateForm(result.profile);
+      await loadResumes();
+    } catch (err) {
+      showError(msg, err);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Upload New Resume";
+    }
+  });
+}
+
+function populateForm(profile) {
+  document.getElementById("p-name").value = profile.identity.name || "";
+  document.getElementById("p-email").value = profile.identity.email || "";
+  document.getElementById("p-phone").value = profile.identity.phone || "";
+  document.getElementById("p-headline").value = profile.professional_summary.headline || "";
+  document.getElementById("p-title").value = profile.professional_summary.current_title || "";
+  document.getElementById("p-years").value = profile.professional_summary.total_experience_years ?? "";
+  document.getElementById("p-industries").value = (profile.professional_summary.industries || []).join(", ");
+  document.getElementById("p-summary").value = profile.professional_summary.summary || "";
+
+  const allSkillNames = Object.values(profile.skills).flat().map((s) => s.name);
+  document.getElementById("p-skills").value = allSkillNames.join(", ");
+
+  document.getElementById("p-roles").value = (profile.job_preferences.target_roles || []).join(", ");
+  document.getElementById("p-locations").value = (profile.job_preferences.target_locations || []).join(", ");
+  document.getElementById("p-workmodel").value = (profile.job_preferences.work_model_preferences || []).join(", ");
+  document.getElementById("p-emptype").value = profile.job_preferences.employment_type || "";
+  document.getElementById("p-salmin").value = profile.job_preferences.salary_expectation_min ?? "";
+  document.getElementById("p-salmax").value = profile.job_preferences.salary_expectation_max ?? "";
+  document.getElementById("p-curr").value = profile.job_preferences.salary_currency || "";
+
+  document.getElementById("status-badge").innerHTML = `Status: ${badgeHtml(profile.metadata.profile_status)}`;
+}
+
+function buildUpdatePayload() {
+  const skillNames = csv(document.getElementById("p-skills").value);
+  return {
+    name: document.getElementById("p-name").value.trim() || null,
+    email: document.getElementById("p-email").value.trim() || null,
+    phone: document.getElementById("p-phone").value.trim() || null,
+    headline: document.getElementById("p-headline").value.trim() || null,
+    current_title: document.getElementById("p-title").value.trim() || null,
+    total_experience_years: document.getElementById("p-years").value === "" ? null : Number(document.getElementById("p-years").value),
+    industries: csv(document.getElementById("p-industries").value),
+    summary: document.getElementById("p-summary").value.trim() || null,
+    skills: { other: skillNames.map((name) => ({ name })) },
+    job_preferences: {
+      target_roles: csv(document.getElementById("p-roles").value),
+      target_locations: csv(document.getElementById("p-locations").value),
+      work_model_preferences: csv(document.getElementById("p-workmodel").value),
+      employment_type: document.getElementById("p-emptype").value || null,
+      salary_expectation_min: document.getElementById("p-salmin").value === "" ? null : Number(document.getElementById("p-salmin").value),
+      salary_expectation_max: document.getElementById("p-salmax").value === "" ? null : Number(document.getElementById("p-salmax").value),
+      salary_currency: document.getElementById("p-curr").value.trim() || null,
+      excluded_roles: [],
+      relocation_preference: null,
+      target_seniority: null,
+    },
+  };
+}
+
+function wireButtons() {
+  document.getElementById("save-btn").addEventListener("click", async () => {
+    const msg = document.getElementById("msg");
+    try {
+      const updated = await api(`/api/candidates/${candidateId}/profile`, { method: "PUT", body: buildUpdatePayload() });
+      showSuccess(msg, "Saved as draft.");
+      populateForm(updated);
+    } catch (err) {
+      showError(msg, err);
+    }
+  });
+
+  document.getElementById("confirm-btn").addEventListener("click", async () => {
+    const msg = document.getElementById("msg");
+    try {
+      await api(`/api/candidates/${candidateId}/profile`, { method: "PUT", body: buildUpdatePayload() });
+      const confirmed = await api(`/api/candidates/${candidateId}/profile/confirm`, { method: "POST" });
+      showSuccess(msg, "Profile confirmed. You can now create a search.");
+      populateForm(confirmed);
+    } catch (err) {
+      showError(msg, err);
+    }
+  });
+}
+
+load();
+</script>
+</body>
+</html>

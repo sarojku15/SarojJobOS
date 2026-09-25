@@ -1,0 +1,32 @@
+[
+  {
+    "source": "MANUAL",
+    "job_id": "",
+    "company": "Example Cloud Company",
+    "title": "Senior Site Reliability Engineer",
+    "location": "Bengaluru",
+    "work_model": "Hybrid",
+    "job_url": "https://www.linkedin.com/jobs/view/example-senior-sre",
+    "application_url": "https://www.linkedin.com/jobs/view/example-senior-sre",
+    "posted_date": "2026-09-19",
+    "experience_required": "8-12 years",
+    "mandatory_skills": [
+      "Kubernetes",
+      "Terraform",
+      "AWS",
+      "Prometheus",
+      "Grafana"
+    ],
+    "preferred_skills": [
+      "Azure",
+      "Jenkins",
+      "GitHub Actions",
+      "Python",
+      "SRE",
+      "SLI",
+      "SLO",
+      "incident management"
+    ],
+    "jd_text": "Senior Site Reliability Engineer responsible for production reliability, Kubernetes, Terraform, AWS, Azure, Prometheus, Grafana, CI/CD, incident management, SLI, SLO, observability, automation and RCA."
+  }
+]

@@ -1,0 +1,113 @@
+{
+  "task": "Diagnose why the Naukri health check was blocked under the new default headless browser configuration",
+  "no_network_activity": true,
+  "no_code_changes": true,
+  "architecture": {
+    "health_check_url": "https://www.naukri.com/",
+    "search_url_pattern": "https://www.naukri.com/{role-slug}-jobs-in-{location-slug}[?jobAge=N]",
+    "same_fetch_mechanism": true,
+    "same_browser_session_reuse": false,
+    "session_or_cookie_mechanism_exists": false,
+    "health_check_is_hard_gate": true,
+    "gate_location": "scripts/source_registry.py:141-145 (discover_from_sources)",
+    "blocked_health_check_implies_search_blocked": "unknown - never tested; different URL, never attempted once health check fails"
+  },
+  "browser_launch_comparison": {
+    "headed_config": {
+      "used_by": ["naukri_discovery_probe.js", "naukri_search_probe.js", "naukri_job_structure_probe.js", "naukri_extractor.js", "naukri_fetch_bridge.js (pre-session)"],
+      "headless": false,
+      "binary": "chromium-1243 (full Chromium build)",
+      "viewport": "1440x900",
+      "user_agent": "default (unset)",
+      "locale": "default (unset)",
+      "timezone": "default (unset)",
+      "http_headers": "default (unset)",
+      "storage_state": "none",
+      "cookies": "none",
+      "wait_strategy": "domcontentloaded",
+      "timeout_ms": 60000,
+      "settle_delay_ms": "5000-7000 depending on script"
+    },
+    "headless_config_this_task": {
+      "used_by": "naukri_fetch_bridge.js (current, JOBOS_BROWSER_HEADLESS unset)",
+      "headless": true,
+      "binary_observed": "chromium_headless_shell-1243 (separate dedicated headless-only build, NOT chromium-1243)",
+      "viewport": "1440x900 (unchanged)",
+      "user_agent": "default (unset, unchanged)",
+      "locale": "default (unset, unchanged)",
+      "timezone": "default (unset, unchanged)",
+      "http_headers": "default (unset, unchanged)",
+      "storage_state": "none (unchanged)",
+      "cookies": "none (unchanged)",
+      "wait_strategy": "domcontentloaded (unchanged)",
+      "timeout_ms": 60000,
+      "settle_delay_ms": 6000
+    },
+    "key_difference_identified": "Playwright's chromium.launch({headless:true}) without an explicit channel uses a separate 'headless shell' binary (chromium_headless_shell-1243) rather than the full chromium-1243 binary used by every previously-successful headed run. Confirmed directly from the Playwright browser cache on disk (both binaries present) and from the actual process command line observed during the failed run."
+  },
+  "probe_evidence": {
+    "any_probe_demonstrated_headless_access": false,
+    "any_probe_used_session_or_cookie_reuse": false,
+    "all_successful_access_was_headed": true,
+    "probes_inspected": [
+      "scripts/naukri_discovery_probe.js",
+      "scripts/naukri_search_probe.js",
+      "scripts/naukri_job_structure_probe.js",
+      "scripts/naukri_extractor.js",
+      "scripts/naukri_detail_probe.js",
+      "scripts/naukri_manual_capture.js"
+    ]
+  },
+  "failed_run_evidence": {
+    "queries_attempted": 0,
+    "queries_completed": 0,
+    "blocked_sources": ["NAUKRI"],
+    "fetch_count": 1,
+    "fetch_target": "https://www.naukri.com/ (homepage, health check only)",
+    "fetch_succeeded_without_exception": true,
+    "block_detected_via": "detect_block_reason() returned non-NONE after a successful fetch (inferred from code path; exact phrase not captured -- raw HTML was not saved by this run's instrumentation)",
+    "process_observations_total": 44,
+    "process_observations_headless_shell_binary": 44,
+    "process_observations_full_chromium_binary": 0
+  },
+  "root_cause_diagnosis": {
+    "status": "leading hypothesis, not proven",
+    "hypothesis": "Playwright's default headless launch substitutes a distinct 'headless shell' Chromium binary with a different, more detectable runtime fingerprint than the full Chromium binary used in every previously-successful (headed) access. This, not 'headless' in the abstract, is the most concrete evidenced difference between every success and this failure.",
+    "alternative_untested_explanations": [
+      "Naukri categorically blocks all headless Chromium regardless of binary (Option 1)",
+      "The homepage specifically has stricter protection than the search-results URL (Option 3)",
+      "Cumulative session/IP-level rate-limiting or reputation scoring from this session's repeated live requests"
+    ]
+  },
+  "options_evaluated": {
+    "A_mandatory_gate": {"headless_preserved": true, "visible_browser_required": false, "changes_production_behavior": false, "blocking_risk": "unchanged/unverified", "offline_testable": "n/a", "unblocks_jobAge3_verification": false},
+    "B_health_check_uses_search_url": {"headless_preserved": true, "visible_browser_required": false, "changes_production_behavior": true, "blocking_risk": "unknown", "offline_testable": "partially", "unblocks_jobAge3_verification": true},
+    "C_advisory_health_check": {"headless_preserved": true, "visible_browser_required": false, "changes_production_behavior": true, "blocking_risk": "increased (more live attempts before failure is known)", "offline_testable": true, "unblocks_jobAge3_verification": true},
+    "D_session_cookie_reuse": {"viable": false, "reason": "no such mechanism exists anywhere in this codebase; disallowed by project safety rules (no login/account creation)"},
+    "E_improve_headless_launch_config": {"headless_preserved": true, "visible_browser_required": false, "changes_production_behavior": "minimal (one launch option)", "blocking_risk": "likely reduced", "offline_testable": true, "unblocks_jobAge3_verification": true, "recommended": true, "specific_change": "add channel: 'chromium' to chromium.launch() in naukri_fetch_bridge.js so headless mode uses the full chromium-1243 binary instead of the default chromium_headless_shell-1243"},
+    "F_persistent_context": {"headless_preserved": true, "visible_browser_required": false, "changes_production_behavior": "larger architectural change", "blocking_risk": "does not address the identified fingerprint cause on its own", "offline_testable": "partially", "unblocks_jobAge3_verification": "only combined with another fix"}
+  },
+  "recommended_next_step": "Option E: add channel: 'chromium' to naukri_fetch_bridge.js's chromium.launch() call, keeping headless computed exactly as today (JOBOS_BROWSER_HEADLESS-driven, default true). NOT implemented in this task -- awaiting explicit approval.",
+  "jobAge_3_verification_plan": [
+    "Apply the recommended Option E change (pending approval)",
+    "Re-run the existing 5-query, max_job_age_days=3 live validation script unchanged",
+    "If health check succeeds, inspect the already-built per-query URL capture for '?jobAge=3' and the freshness audit for jobs_returned_older_than_3_days",
+    "If health check still fails under the full-Chromium-binary headless config, treat that as evidence against the fingerprint hypothesis and reconsider Options 1/3"
+  ],
+  "risks_and_unknowns": [
+    "Fingerprint hypothesis is not proven with a live test",
+    "Whether the search URL specifically (not just the homepage) is blocked under headless is untested",
+    "Session/IP-level rate-limiting from this session's cumulative live requests cannot be ruled out",
+    "The exact blocked-page phrase from this run's failure was not captured (only inferred from the code path)"
+  ],
+  "tests_run": {
+    "standalone_suite": "35/35 pass",
+    "py_compile": "clean",
+    "pytest": "not installed in this environment"
+  },
+  "production_db": {
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "unchanged": true
+  }
+}

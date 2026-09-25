@@ -1,0 +1,16 @@
+{
+  "reference_date": "2026-09-20",
+  "candidate_profile": {
+    "candidate": {"name": "Test Candidate", "experience_years": 11},
+    "target_locations": ["Bengaluru", "Hyderabad", "Pune", "Chennai", "Remote"],
+    "cloud": ["AWS", "Azure"],
+    "kubernetes": ["Kubernetes", "EKS", "AKS", "Helm"],
+    "iac_and_automation": ["Terraform", "Ansible"],
+    "cicd_and_devops": ["Jenkins", "GitHub Actions", "ArgoCD"],
+    "observability": ["Prometheus", "Grafana", "Splunk", "Dynatrace", "OpenTelemetry"],
+    "sre": ["SLO", "SLI", "SLA", "Error Budgets", "Incident Management", "RCA"],
+    "programming_and_scripting": ["Python", "Shell", "PowerShell"],
+    "tools": ["Linux"]
+  },
+  "cases": []
+}

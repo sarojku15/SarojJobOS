@@ -1,0 +1,85 @@
+[
+  {
+    "job_id": "DISC-001",
+    "source": "TEST",
+    "company": "Example Technology",
+    "title": "Senior Site Reliability Engineer",
+    "location": "Bengaluru",
+    "work_model": "Hybrid",
+    "job_url": "https://example.com/jobs/disc-001",
+    "application_url": "https://example.com/apply/disc-001",
+    "posted_date": "2026-09-19",
+    "jd_text": "Senior SRE role requiring AWS, Azure, Kubernetes, Terraform, Jenkins, Prometheus and Grafana.",
+    "experience_required": "8+ years",
+    "mandatory_skills": [
+      "AWS",
+      "Azure",
+      "Kubernetes",
+      "Terraform"
+    ],
+    "preferred_skills": [
+      "Prometheus",
+      "Grafana"
+    ]
+  },
+  {
+    "job_id": "DISC-002",
+    "source": "TEST",
+    "company": "Cloud Company",
+    "title": "Senior DevOps Engineer",
+    "location": "Hyderabad",
+    "work_model": "Hybrid",
+    "job_url": "https://example.com/jobs/disc-002",
+    "application_url": "https://example.com/apply/disc-002",
+    "posted_date": "2026-09-19",
+    "jd_text": "Senior DevOps role requiring AWS, Terraform, Jenkins and Docker.",
+    "experience_required": "7+ years",
+    "mandatory_skills": [
+      "AWS",
+      "Terraform",
+      "Jenkins"
+    ],
+    "preferred_skills": [
+      "Docker"
+    ]
+  },
+  {
+    "job_id": "DISC-001",
+    "source": "TEST",
+    "company": "Example Technology",
+    "title": "Senior Site Reliability Engineer",
+    "location": "Bengaluru",
+    "work_model": "Hybrid",
+    "job_url": "https://example.com/jobs/disc-001",
+    "application_url": "https://example.com/apply/disc-001",
+    "posted_date": "2026-09-19",
+    "jd_text": "Duplicate record of the same SRE position.",
+    "experience_required": "8+ years",
+    "mandatory_skills": [
+      "AWS",
+      "Azure",
+      "Kubernetes",
+      "Terraform"
+    ],
+    "preferred_skills": [
+      "Prometheus",
+      "Grafana"
+    ]
+  },
+  {
+    "source": "TEST",
+    "company": "Platform Systems",
+    "title": "Platform Engineer",
+    "location": "Pune",
+    "work_model": "Remote",
+    "job_url": "https://example.com/jobs/disc-003",
+    "application_url": "https://example.com/apply/disc-003",
+    "posted_date": "2026-09-19",
+    "jd_text": "Platform engineering role involving Kubernetes and Terraform.",
+    "experience_required": "6+ years",
+    "mandatory_skills": [
+      "Kubernetes",
+      "Terraform"
+    ]
+  }
+]

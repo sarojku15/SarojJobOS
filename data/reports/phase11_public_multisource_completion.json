@@ -1,0 +1,131 @@
+{
+  "phase": "11 -- Public Multi-Source Discovery Completion",
+  "status": "COMPLETE",
+  "sources": {
+    "enabled": ["NAUKRI", "HIRIST", "IIMJOBS"],
+    "newly_enabled_this_phase": ["HIRIST", "IIMJOBS"],
+    "count_enabled": 3,
+    "table": [
+      {"source": "NAUKRI", "public_discovery": true, "acquisition_method": "adapter", "live_validated": true, "enabled": true, "reason": "Existing, unmodified"},
+      {"source": "HIRIST", "public_discovery": true, "acquisition_method": "adapter", "live_validated": true, "enabled": true, "reason": "Fixed this phase: two-stage listing+detail-page fetch resolves company via schema.org JobPosting.hiringOrganization.name"},
+      {"source": "IIMJOBS", "public_discovery": true, "acquisition_method": "adapter", "live_validated": true, "enabled": true, "reason": "New this phase: shares Hirist's platform, same fix applied"},
+      {"source": "LINKEDIN", "public_discovery": true, "acquisition_method": "web_search_discovery/provider", "live_validated": false, "enabled": false, "reason": "robots.txt: blanket prohibition on automated access without express permission (re-confirmed fresh)"},
+      {"source": "INDEED", "public_discovery": true, "acquisition_method": "web_search_discovery/provider", "live_validated": false, "enabled": false, "reason": "robots.txt explicitly names ClaudeBot/anthropic-ai/Claude-User/Claude-SearchBot, disallows /jobs"},
+      {"source": "FOUNDIT", "public_discovery": "partial", "acquisition_method": "web_search_discovery/provider", "live_validated": false, "enabled": false, "reason": "robots.txt explicitly names ClaudeBot (+ other AI bots), disallows /jobs/ and /search/"},
+      {"source": "WELLFOUND", "public_discovery": true, "acquisition_method": "provider", "live_validated": false, "enabled": false, "reason": "robots.txt disallows /search; active Cloudflare Turnstile + hCaptcha detected on the live page"},
+      {"source": "CUTSHORT", "public_discovery": true, "acquisition_method": "provider", "live_validated": false, "enabled": false, "reason": "robots.txt permits; job data in a React Query dehydratedState blob, not extracted this phase"},
+      {"source": "SHINE", "public_discovery": "partial", "acquisition_method": "provider", "live_validated": false, "enabled": false, "reason": "robots.txt disallows most job-search/detail paths for generic agents"},
+      {"source": "INSTAHYRE", "public_discovery": true, "acquisition_method": "provider", "live_validated": false, "enabled": false, "reason": "robots.txt permissive; no server-rendered job data found (client-rendered SPA)"},
+      {"source": "TIMESJOBS", "public_discovery": true, "acquisition_method": "provider", "live_validated": false, "enabled": false, "reason": "robots.txt permissive; site's own TLS certificate fails standard verification"},
+      {"source": "APNA", "public_discovery": true, "acquisition_method": "provider", "live_validated": false, "enabled": false, "reason": "New source registered per request; robots.txt permissive; client-rendered, no server-side job data found"},
+      {"source": "GREENHOUSE", "public_discovery": "per-company", "acquisition_method": "provider", "live_validated": false, "enabled": false, "reason": "Real implementation exists (Phase 10); zero company boards configured"},
+      {"source": "LEVER", "public_discovery": "per-company", "acquisition_method": "provider", "live_validated": false, "enabled": false, "reason": "Real implementation exists (Phase 10); zero company boards configured"},
+      {"source": "ASHBY", "public_discovery": "per-company", "acquisition_method": "provider", "live_validated": false, "enabled": false, "reason": "Real implementation exists (Phase 10); zero company boards configured"},
+      {"source": "CAREER_PAGE", "public_discovery": false, "acquisition_method": "provider", "live_validated": false, "enabled": false, "reason": "Generic skeleton, unimplemented"},
+      {"source": "WEB_SEARCH", "public_discovery": false, "acquisition_method": "web_search_discovery", "live_validated": false, "enabled": false, "reason": "Backend process cannot invoke a web-search tool at runtime; no credential configured"}
+    ]
+  },
+  "hirist_fix": {
+    "root_cause": "Listing-page cards genuinely do not render a company name for most postings (confirmed via live DOM inspection) -- not a parser bug, a data-absence fact.",
+    "fix": "Two-stage fetch: listing page for title+job_url only, then each job's own detail page for company via schema.org JobPosting.hiringOrganization.name",
+    "files_changed": ["scripts/hirist_parser.py", "scripts/hirist_adapter.py"],
+    "new_capabilities": ["SEARCH", "DETAIL", "PAGINATION"],
+    "validation_steps": [
+      "1 live listing-page fetch (20 real entries observed)",
+      "1 live detail-page fetch (confirmed JobPosting shape)",
+      "10 real detail pages fetched + parsed offline: 10/10 correct company extraction",
+      "Full live end-to-end adapter run: 14 requests, all HTTP 200, zero blocks, 10/10 jobs correct, 182.2s wall-clock"
+    ],
+    "special_cases_validated": [
+      "Genuinely employer-anonymized listing preserved verbatim as 'Verified Company' (Hirist's own honest placeholder)",
+      "A listing title with zero '-' delimiters, impossible to split under the old heuristic, still correctly resolved"
+    ]
+  },
+  "iimjobs_new_adapter": {
+    "files_created": ["scripts/iimjobs_fetch_bridge.js", "scripts/iimjobs_fetcher.py", "scripts/iimjobs_parser.py", "scripts/iimjobs_adapter.py", "scripts/test_iimjobs_adapter.py"],
+    "shares_platform_with": "HIRIST",
+    "validation_steps": [
+      "1 live listing-page fetch (4 real entries observed)",
+      "1 live detail-page fetch (confirmed same JobPosting shape as Hirist)",
+      "Full live end-to-end adapter run: 6 requests, all HTTP 200, zero blocks, 4/4 jobs correct, 68.0s wall-clock"
+    ]
+  },
+  "multi_source_acceptance_test": {
+    "candidate": "real Saroj-profile data seeded into data/applications/jobos_dev.db from config/profile.json, never production",
+    "search": {"role": "Site Reliability Engineer", "location": "India", "freshness_days": 3, "sources": ["NAUKRI", "HIRIST", "IIMJOBS"]},
+    "results": {
+      "queries_run": 3,
+      "jobs_discovered_raw": 34,
+      "jobs_by_source": {"NAUKRI": 20, "HIRIST": 10, "IIMJOBS": 4},
+      "malformed": 0,
+      "unique_after_dedup": 34,
+      "cross_source_duplicate_pairs": 0,
+      "excluded_experience": 14,
+      "excluded_location": 0,
+      "eligible": 20,
+      "scored": 20,
+      "priority_distribution": {"A": 7, "B": 3, "C": 2, "REJECT": 8},
+      "apply_today_count": 4,
+      "candidate_job_matches_created": 20,
+      "errors": 0,
+      "wall_clock_seconds": 462.1
+    },
+    "report_path": "data/reports/phase11_multisource_acceptance_report.xlsx",
+    "report_sheets_confirmed": ["APPLY_TODAY", "ALL_MATCHING_JOBS", "NEW_JOBS", "ALREADY_APPLIED", "REJECTED_EXCLUDED", "DUPLICATES", "APPLICATION_TRACKER", "SOURCE_HEALTH", "RUN_SUMMARY"]
+  },
+  "gui_validation": {
+    "pages_checked_live": ["/", "/profile", "/searches", "/searches/new", "/dashboard"],
+    "all_returned_200": true,
+    "sources_endpoint_correctly_lists": ["NAUKRI", "HIRIST", "IIMJOBS"],
+    "unavailable_sources_shown_with_reasons": true,
+    "no_auto_apply_ui_element_found": true
+  },
+  "web_search_status": "NOT_AVAILABLE_IN_CURRENT_RUNTIME -- unchanged from Phase 10; backend process cannot invoke a web-search tool, no credential configured. Provider interface, query generation, and quality gate are implemented and tested.",
+  "test_results": {
+    "new_test_files": ["test_hirist_phase11_detail_fetch.py", "test_iimjobs_adapter.py", "test_apna_adapter.py"],
+    "updated_test_files": [
+      "test_hirist_adapter.py", "test_search_submission.py", "test_multi_source_adapter_architecture.py",
+      "test_hirist_phase6_offline_design.py", "test_hirist_phase8_offline_gate.py",
+      "test_linkedin_phase5_offline_design.py", "test_phase10_discovery_engine.py"
+    ],
+    "full_suite_files_run": 56,
+    "full_suite_failures": 0,
+    "documented_live_network_tests_skipped": ["test_naukri_adapter.py", "test_live_naukri_score_audit.py"],
+    "py_compile_clean": true,
+    "json_configs_valid": true
+  },
+  "production_db": {
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "identical": true,
+    "size_bytes": 114688,
+    "row_counts_unchanged": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0}
+  },
+  "scheduling_status": "launchd not installed/loaded/started; no production background scheduler created",
+  "no_auto_application": true,
+  "final_product_status": "FUNCTIONALLY COMPLETE per the task's own acceptance test -- user can create a Site Reliability Engineer / India / 11yr / 3-day-freshness search across Naukri+Hirist+iimjobs, run it, see a unified result set (source, title, company, location, URL, posted date, freshness, eligibility, score, priority, match reason), and download the existing 9-sheet Excel report",
+  "files_changed_summary": {
+    "created": [
+      "scripts/iimjobs_fetch_bridge.js", "scripts/iimjobs_fetcher.py", "scripts/iimjobs_parser.py", "scripts/iimjobs_adapter.py",
+      "scripts/apna_adapter.py",
+      "scripts/test_hirist_phase11_detail_fetch.py", "scripts/test_iimjobs_adapter.py", "scripts/test_apna_adapter.py",
+      "data/fixtures/hirist/phase11_listing_page1.html", "data/fixtures/hirist/phase11_listing_page2.html",
+      "data/fixtures/hirist/phase11_duplicate_jobs.html", "data/fixtures/hirist/phase11_pagination_self_loop.html",
+      "data/fixtures/hirist/detail_verint_senior_devops.html", "data/fixtures/hirist/detail_acme_staff_sre.html",
+      "data/fixtures/hirist/detail_lead_platform_engineer.html", "data/fixtures/hirist/detail_loop_co_some_role.html",
+      "data/reports/hirist_phase11_captures/ (11 real captured pages)",
+      "data/reports/iimjobs_phase11_captures/ (2 real captured pages)",
+      "data/reports/phase11_multisource_acceptance_report.xlsx",
+      "data/reports/phase11_public_multisource_completion.md",
+      "data/reports/phase11_public_multisource_completion.json"
+    ],
+    "modified": [
+      "scripts/hirist_parser.py (new parse_job_detail_json_ld(), _parse_job_entry_title_only(), classify_search_page() gained additive entry_parser/allowed_next_host params)",
+      "scripts/hirist_adapter.py (two-stage search(), status/capabilities now ENABLED)",
+      "scripts/source_registry.py (registered IIMJOBS already present, added APNA)",
+      "scripts/source_capabilities.py (HIRIST/IIMJOBS enabled metadata; fresh reasons for INDEED/FOUNDIT/WELLFOUND/CUTSHORT/SHINE/INSTAHYRE/TIMESJOBS/APNA)",
+      "config/site_adapters.json (Hirist/Iimjobs enabled:true, discovery:true; Apna entry added)",
+      "scripts/test_hirist_adapter.py, test_search_submission.py, test_multi_source_adapter_architecture.py, test_hirist_phase6_offline_design.py, test_hirist_phase8_offline_gate.py, test_linkedin_phase5_offline_design.py, test_phase10_discovery_engine.py (updated for the new ENABLED sources)"
+    ]
+  }
+}

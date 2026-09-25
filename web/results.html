@@ -1,0 +1,399 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Job Search OS — Results</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<header>
+  <span class="brand">Job Search OS</span>
+  <a href="/">Home</a>
+  <a href="/profile">Profile</a>
+  <a href="/searches" class="active">Searches</a>
+  <a href="/dashboard">Dashboard</a>
+</header>
+<main class="wide">
+  <div id="msg"></div>
+  <div id="content"><div class="loading-state">Loading results...</div></div>
+</main>
+
+<div class="modal-backdrop" id="modal-backdrop" hidden>
+  <div class="modal-box" id="modal-box"></div>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+const searchId = window.location.pathname.split("/")[2];
+let allResults = [];
+let allSources = [];
+let searchInfo = null;
+
+function fmtNum(n) { return n == null ? "-" : n; }
+
+function renderHeader(search) {
+  const criteria = [
+    search.target_roles.join(", "),
+    search.target_locations.join(", "),
+    search.minimum_experience_years != null || search.maximum_experience_years != null
+      ? `${search.minimum_experience_years ?? "-"}-${search.maximum_experience_years ?? "-"} yrs`
+      : null,
+    search.max_job_age_days ? `within ${search.max_job_age_days}d` : null,
+  ].filter(Boolean).join(" · ");
+
+  return `
+    <div class="card">
+      <div class="results-header">
+        <div>
+          <h1 style="margin-bottom:2px">${escapeHtml(search.name)}</h1>
+          <div class="criteria-line">${escapeHtml(criteria)}</div>
+        </div>
+        <div class="button-row" style="margin-top:0">
+          <button class="secondary small" onclick="window.location.href='/searches/${searchId}'">Search details</button>
+          <button class="small" onclick="window.location.href='/api/searches/${searchId}/report?candidate_id=${search.candidate_id}'">Download Excel</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderSummary(results, search) {
+  const jobsFound = results.length;
+  // "Hard-eligible" = passed the hard eligibility gate (experience/
+  // location/etc, job_eligibility.py) -- NOT the same as scoring high
+  // enough to qualify. "Qualified" = the existing 100-point score
+  // actually cleared the priority threshold (A/B/C, score_job.py) --
+  // never both true just because one is. A job can legitimately be
+  // hard-eligible=YES, score=40, priority=REJECT (qualified=NO) -- see
+  // score_job.py's documented A=90+/B=80-89/C=70-79/REJECT=<70
+  // thresholds, unchanged here.
+  const hardEligible = results.filter((r) => r.eligible).length;
+  const qualified = results.filter((r) => r.priority && r.priority !== "REJECT").length;
+  const applyToday = results.filter((r) => r.report_status === "READY_TO_APPLY").length;
+  const duplicates = results.filter((r) => r.duplicate_suppressed).length;
+  const createdAt = search.created_at ? new Date(search.created_at) : null;
+  const newJobs = createdAt
+    ? results.filter((r) => r.first_discovered && new Date(r.first_discovered) >= createdAt).length
+    : "-";
+
+  return `
+    <div class="card">
+      <div class="summary-grid">
+        <div class="summary-tile"><div class="value">${jobsFound}</div><div class="label">Jobs Found</div></div>
+        <div class="summary-tile"><div class="value">${hardEligible}</div><div class="label">Hard-Eligible</div></div>
+        <div class="summary-tile"><div class="value">${qualified}</div><div class="label">Qualified (A/B/C)</div></div>
+        <div class="summary-tile"><div class="value">${applyToday}</div><div class="label">Apply Today</div></div>
+        <div class="summary-tile"><div class="value">${duplicates}</div><div class="label">Duplicates</div></div>
+        <div class="summary-tile"><div class="value">${newJobs}</div><div class="label">New Jobs</div></div>
+      </div>
+      <div class="hint" style="margin-top:8px">Hard-Eligible = passed the experience/location eligibility gate. Qualified = the 100-point score cleared the A/B/C priority threshold (90+/80-89/70-79). A job can be Hard-Eligible without being Qualified.</div>
+    </div>
+  `;
+}
+
+function populateFilterOptions(results, sources) {
+  // The source filter is built from the COMPLETE configured source
+  // universe (allSources, from the API's "sources" execution summary),
+  // never only from sources that happened to return jobs in this
+  // result set -- a source with zero results still gets an option
+  // here, distinguishable from one that was never attempted.
+  const sourceNames = [...new Set(sources.map((s) => s.board || s.source).filter(Boolean))].sort();
+  const appStatuses = [...new Set(results.map((r) => r.status).filter(Boolean))].sort();
+  const sourceSel = document.getElementById("f-source");
+  const appSel = document.getElementById("f-app-status");
+  sourceNames.forEach((s) => sourceSel.appendChild(el(`<option value="${s}">${s}</option>`)));
+  appStatuses.forEach((s) => appSel.appendChild(el(`<option value="${s}">${s}</option>`)));
+}
+
+function renderSourceAudit(sources, runId) {
+  if (!sources || !sources.length) return "";
+  const rows = sources
+    .slice()
+    .sort((a, b) => (a.board || a.source).localeCompare(b.board || b.source))
+    .map((s) => {
+      const duration = s.duration_ms != null ? `${(s.duration_ms / 1000).toFixed(1)}s` : "-";
+      const errorNote = s.error_message ? ` title="${escapeHtml(s.error_message)}"` : "";
+      return `
+        <tr${errorNote}>
+          <td>${escapeHtml(s.board || s.source)}</td>
+          <td>${badgeHtml(s.status, "", SOURCE_STATUS_LABELS[s.status])}</td>
+          <td>${fmtNum(s.raw_count)}</td>
+          <td>${fmtNum(s.eligible_count)}</td>
+          <td>${fmtNum(s.displayed_count)}</td>
+          <td>${duration}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  return `
+    <div class="card">
+      <h2>Source Execution Audit</h2>
+      <div class="hint" style="margin-bottom:8px">Which sources were actually searched in the most recent run${runId ? ` (run ${escapeHtml(runId)})` : ""}, and what each one returned. "Jobs Found" above may include jobs from earlier runs of this same saved search too -- this audit always reflects only the run named here.</div>
+      <div class="results-table-wrap">
+        <table class="results-table">
+          <thead>
+            <tr><th>Source</th><th>Status</th><th>Raw</th><th>Eligible</th><th>Displayed</th><th>Duration</th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function applyFilters() {
+  const status = document.getElementById("f-status").value;
+  const priority = document.getElementById("f-priority").value;
+  const minScore = document.getElementById("f-min-score").value;
+  const appStatus = document.getElementById("f-app-status").value;
+  const source = document.getElementById("f-source").value;
+  const location = document.getElementById("f-location").value.trim().toLowerCase();
+
+  return allResults.filter((r) => {
+    if (status && r.report_status !== status) return false;
+    if (priority && r.priority !== priority) return false;
+    if (minScore && (r.score ?? -1) < Number(minScore)) return false;
+    if (appStatus && r.status !== appStatus) return false;
+    if (source && r.source !== source) return false;
+    if (location && !(r.location || "").toLowerCase().includes(location)) return false;
+    return true;
+  });
+}
+
+function renderTableRow(r, idx) {
+  const url = r.job_url || r.application_url;
+  return `
+    <tr data-idx="${idx}">
+      <td>${r.priority ? badgeHtml(r.priority) : ""}</td>
+      <td class="job-cell">
+        <div class="job-title">${escapeHtml(r.title || "")}</div>
+        ${r.match_reason ? `<div class="match-reason">${escapeHtml(r.match_reason)}</div>` : ""}
+      </td>
+      <td>${escapeHtml(r.company || "")}</td>
+      <td>${escapeHtml(r.location || "")}</td>
+      <td>${escapeHtml(r.source || "")}</td>
+      <td>${escapeHtml(r.experience_required || "-")}</td>
+      <td>${escapeHtml(r.freshness || "")}</td>
+      <td class="score-cell">${fmtNum(r.score)}</td>
+      <td>${badgeHtml(r.report_status)}</td>
+      <td onclick="event.stopPropagation()">
+        ${url ? `<a class="job-link" target="_blank" rel="noopener" href="${url}">View Job</a>` : ""}
+        ${r.application_url && r.application_url !== url ? `<a class="job-link" target="_blank" rel="noopener" href="${r.application_url}">Application</a>` : ""}
+      </td>
+    </tr>
+  `;
+}
+
+function renderCard(r, idx) {
+  const url = r.job_url || r.application_url;
+  return `
+    <div class="result-card" data-idx="${idx}">
+      <div class="card-top">
+        <div>
+          <div class="job-title">${escapeHtml(r.title || "")}</div>
+          <div class="company-line">${escapeHtml(r.company || "")} &middot; ${escapeHtml(r.location || "")}</div>
+        </div>
+        ${r.priority ? badgeHtml(r.priority) : ""}
+      </div>
+      ${r.match_reason ? `<div class="match-reason">${escapeHtml(r.match_reason)}</div>` : ""}
+      <div class="card-meta">
+        <span>${escapeHtml(r.source || "")}</span>
+        <span>Score: ${fmtNum(r.score)}</span>
+        <span>${escapeHtml(r.freshness || "")}</span>
+        ${badgeHtml(r.report_status)}
+      </div>
+      <div class="button-row" style="margin-top:8px" onclick="event.stopPropagation()">
+        ${url ? `<a class="job-link" target="_blank" rel="noopener" href="${url}">View Job</a>` : ""}
+        ${r.application_url && r.application_url !== url ? `<a class="job-link" target="_blank" rel="noopener" href="${r.application_url}">Application</a>` : ""}
+      </div>
+    </div>
+  `;
+}
+
+function renderResults() {
+  const filtered = applyFilters().sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+
+  const tbody = document.getElementById("results-body");
+  const cardsWrap = document.getElementById("result-cards");
+  const emptyHint = document.getElementById("empty-hint");
+
+  emptyHint.style.display = filtered.length ? "none" : "block";
+  if (!filtered.length) {
+    const selectedSource = document.getElementById("f-source").value;
+    emptyHint.textContent = selectedSource
+      ? `No matching jobs from ${selectedSource} in this search.`
+      : "No matching jobs yet. Run the search from the search detail page.";
+  }
+  tbody.innerHTML = filtered.map((r, i) => renderTableRow(r, allResults.indexOf(r))).join("");
+  cardsWrap.innerHTML = filtered.map((r, i) => renderCard(r, allResults.indexOf(r))).join("");
+
+  tbody.querySelectorAll("tr").forEach((tr) => tr.addEventListener("click", () => openDetail(Number(tr.dataset.idx))));
+  cardsWrap.querySelectorAll(".result-card").forEach((c) => c.addEventListener("click", () => openDetail(Number(c.dataset.idx))));
+}
+
+function openDetail(idx) {
+  const r = allResults[idx];
+  if (!r) return;
+  const backdrop = document.getElementById("modal-backdrop");
+  const box = document.getElementById("modal-box");
+
+  const skillTags = (list, cls) =>
+    (list && list.length ? list : []).map((s) => `<span class="skill-tag ${cls || ""}">${escapeHtml(s)}</span>`).join("") ||
+    `<span class="hint">None recorded</span>`;
+
+  box.innerHTML = `
+    <button class="modal-close" id="modal-close">&times;</button>
+    <h2 style="margin-bottom:2px">${escapeHtml(r.title || "")}</h2>
+    <div class="hint">${escapeHtml(r.company || "")} &middot; ${escapeHtml(r.location || "")}</div>
+    <dl>
+      <dt>Source</dt><dd>${escapeHtml(r.source || "")}</dd>
+      <dt>Score</dt><dd>${fmtNum(r.score)}</dd>
+      <dt>Priority</dt><dd>${r.priority ? badgeHtml(r.priority) : "-"}</dd>
+      <dt>Freshness</dt><dd>${escapeHtml(r.freshness || "-")}${r.freshness_age_days != null ? ` (${r.freshness_age_days}d)` : ""}</dd>
+      <dt>Experience required</dt><dd>${escapeHtml(r.experience_required || "-")}${r.requirement_type && r.requirement_type !== "UNKNOWN" ? ` <span class="hint">(${escapeHtml(r.requirement_type)})</span>` : ""}</dd>
+      <dt>Eligibility</dt><dd>${r.eligible ? "Eligible" : "Not eligible"} (${escapeHtml(r.eligibility || "-")})</dd>
+      <dt>Match reason</dt><dd>${escapeHtml(r.match_reason || "-")}</dd>
+      <dt>Matched skills</dt><dd class="skill-tag-list">${skillTags(r.matched_skills)}</dd>
+      <dt>Missing skills</dt><dd class="skill-tag-list">${skillTags(r.missing_skills, "missing")}</dd>
+      <dt>Application status</dt><dd>
+        ${badgeHtml(r.status)}
+        <select id="status-select" style="margin-left:8px">
+          ${JOB_STATUS_OPTIONS.map((s) => `<option value="${s}" ${s === r.status ? "selected" : ""}>${s}</option>`).join("")}
+        </select>
+        <button class="small secondary" id="status-update-btn" type="button">Update</button>
+        <div id="status-msg" class="hint"></div>
+      </dd>
+      ${r.duplicate_candidates && r.duplicate_candidates.length ? `
+      <dt>Also seen via</dt><dd>${r.duplicate_candidates.map((d) =>
+        `<a href="${d.other_job_url}" target="_blank" rel="noopener">${escapeHtml(d.other_source)}</a>`
+      ).join(", ")}</dd>` : ""}
+    </dl>
+    <div class="button-row">
+      ${r.job_url ? `<a class="job-link" target="_blank" rel="noopener" href="${r.job_url}">View Job</a>` : ""}
+      ${r.application_url && r.application_url !== r.job_url ? `<a class="job-link" target="_blank" rel="noopener" href="${r.application_url}">Application</a>` : ""}
+    </div>
+  `;
+
+  backdrop.hidden = false;
+  document.getElementById("modal-close").addEventListener("click", closeDetail);
+  backdrop.addEventListener("click", (e) => { if (e.target === backdrop) closeDetail(); }, { once: true });
+  document.getElementById("status-update-btn").addEventListener("click", () => updateJobStatus(r, idx));
+}
+
+// A practical subset of config/application_schema.json's full
+// lifecycle -- the backend (application_lifecycle.py) is the sole
+// authority on what's actually valid (including the APPROVED-before-
+// APPLIED gate); this is just what's useful to pick from a job card.
+const JOB_STATUS_OPTIONS = [
+  "FOUND", "SHORTLISTED", "READY_FOR_APPROVAL", "APPROVED",
+  "APPLICATION_STARTED", "APPLIED", "RECRUITER_CONTACTED", "SCREENING_CALL",
+  "INTERVIEW_1", "INTERVIEW_2", "FINAL_ROUND", "OFFER",
+  "REJECTED", "WITHDRAWN",
+];
+
+async function updateJobStatus(r, idx) {
+  const candidateId = await resolveActiveCandidate();
+  const msg = document.getElementById("status-msg");
+  const newStatus = document.getElementById("status-select").value;
+  try {
+    const updated = await api(`/api/candidates/${candidateId}/jobs/${r.job_id}/status`, {
+      method: "PATCH",
+      body: { status: newStatus },
+    });
+    r.status = updated.candidate_status;
+    showSuccess(msg, `Status updated to ${updated.candidate_status}.`);
+    renderResults();
+  } catch (err) {
+    showError(msg, err);
+  }
+}
+
+function closeDetail() {
+  document.getElementById("modal-backdrop").hidden = true;
+}
+
+async function load() {
+  const content = document.getElementById("content");
+  const msg = document.getElementById("msg");
+
+  const candidateId = await resolveActiveCandidate();
+  if (!candidateId) {
+    showEmpty(content, "No candidate selected yet.");
+    return;
+  }
+
+  try {
+    searchInfo = await api(`/api/searches/${searchId}?candidate_id=${candidateId}`);
+  } catch (err) {
+    showError(msg, err);
+    showEmpty(content, "This search could not be found.");
+    return;
+  }
+
+  content.innerHTML = renderHeader(searchInfo);
+
+  try {
+    const data = await api(`/api/searches/${searchId}/results?candidate_id=${candidateId}`);
+    allResults = data.results;
+    allSources = data.sources || [];
+
+    content.innerHTML += renderSummary(allResults, searchInfo);
+    content.innerHTML += renderSourceAudit(allSources, data.run_id);
+    content.innerHTML += `
+      <div class="card">
+        <h2>Filters</h2>
+        <div class="filters">
+          <select id="f-status">
+            <option value="">All statuses</option>
+            <option value="READY_TO_APPLY">Ready to apply</option>
+            <option value="ELIGIBLE_NOT_APPLIED">Eligible, not applied</option>
+            <option value="SCORE_REJECTED_NOT_QUALIFIED">Not qualified</option>
+            <option value="DUPLICATE">Duplicate</option>
+            <option value="INELIGIBLE">Ineligible</option>
+          </select>
+          <select id="f-priority">
+            <option value="">All priorities</option>
+            <option value="A">A</option><option value="B">B</option><option value="C">C</option>
+          </select>
+          <select id="f-app-status"><option value="">All application statuses</option></select>
+          <select id="f-source"><option value="">All sources</option></select>
+          <input id="f-min-score" type="number" min="0" max="100" placeholder="Min score" />
+          <input id="f-location" type="text" placeholder="Location contains..." />
+        </div>
+      </div>
+      <div class="card">
+        <div class="results-table-wrap">
+          <table class="results-table">
+            <thead>
+              <tr>
+                <th>Priority</th><th>Job</th><th>Company</th><th>Location</th><th>Source</th>
+                <th>Experience</th><th>Freshness</th><th>Score</th><th>Status</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="results-body"></tbody>
+          </table>
+        </div>
+        <div class="result-cards" id="result-cards"></div>
+        <div id="empty-hint" class="empty-state" style="display:none">No matching jobs yet. Run the search from the search detail page.</div>
+      </div>
+    `;
+
+    populateFilterOptions(allResults, allSources);
+    ["f-status", "f-priority", "f-min-score", "f-app-status", "f-source", "f-location"].forEach((id) =>
+      document.getElementById(id).addEventListener("input", renderResults)
+    );
+    renderResults();
+  } catch (err) {
+    if (err.status === 409) {
+      showInfo(msg, friendlyErrorMessage(err));
+    } else {
+      showError(msg, err);
+    }
+  }
+}
+
+load();
+</script>
+</body>
+</html>

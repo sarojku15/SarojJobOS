@@ -1,0 +1,31 @@
+<!--
+SYNTHETIC fixture, NOT a real captured Hirist page. Constructed for
+Phase 8's Hirist offline gate (data/reports/phase8_multisource_validation.md)
+to cover the "duplicate URL" case explicitly requested there: two
+ListItem entries (different positions, different `name` text) that
+both carry the IDENTICAL top-level `url`. This tests whether the
+parser itself de-duplicates by URL (it does not -- deduplication is
+explicitly discover_local.deduplicate()'s job, by (source, job_id),
+downstream of this module) versus whether it silently corrupts/merges
+the two entries (it must not -- both must parse independently, exactly
+as given, with their own company/title).
+-->
+<!DOCTYPE html><html lang="en"><head>
+<title>Search for - Senior Devops Engineer Jobs | hirist.tech</title>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "ItemList",
+  "name": "Search for - Senior Devops Engineer Jobs",
+  "numberOfItems": 2,
+  "itemListElement": [
+    {"@type": "ListItem", "position": 1, "name": "Dup Corp - Staff SRE",
+     "url": "https://www.hirist.tech/j/dup-corp-staff-sre-9999999"},
+    {"@type": "ListItem", "position": 2, "name": "Dup Corp - Staff SRE (Reposted)",
+     "url": "https://www.hirist.tech/j/dup-corp-staff-sre-9999999"}
+  ]
+}
+</script>
+</head><body>
+<h1>Senior Devops Engineer Jobs</h1>
+</body></html>

@@ -1,0 +1,250 @@
+{
+  "task": "Phase 6 Step 9 -- Hirist raw JSON-LD payload capture, exactly one live search-page request",
+  "hirist_parser_py_modified": false,
+  "production_behavior_modified": false,
+  "hirist_enabled": false,
+  "source_registry_modified": false,
+  "naukri_files_modified": false,
+  "single_request_enforcement": {
+    "method": "HiristAdapter.search() was never invoked (its own pagination loop is structurally capable of multiple requests). The exact search URL was instead built OFFLINE with zero network access by calling the existing, unmodified hirist_adapter._build_search_url() directly. A new diagnostic-only Node/Playwright script (session scratchpad only, not in scripts/) containing exactly one page.goto() call and no loop/pagination logic of any kind performed the actual fetch. scripts/hirist_fetch_bridge.js was not modified, invoked, or read from in the live step.",
+    "url_built_offline_matches_step7_page1_url": true,
+    "diagnostic_script_location": "session scratchpad directory (not a project file, not scripts/)",
+    "diagnostic_script_mirrors_production_config": ["channel: chromium", "headless via JOBOS_BROWSER_HEADLESS", "viewport 1440x900", "waitUntil: domcontentloaded", "60s timeout", "3s settle wait", "page.content() for HTML"],
+    "diagnostic_script_additions_beyond_production_bridge": ["captures navigator.userAgent via page.evaluate()", "writes HTML directly to a file instead of stdout"],
+    "no_stealth_or_fingerprint_modification": true
+  },
+  "A_request_evidence": {
+    "total_requests": 1,
+    "requested_url": "https://www.hirist.tech/search/senior-devops-engineer-jobs?locations=Bengaluru",
+    "final_url": "https://www.hirist.tech/search/senior-devops-engineer-jobs?locations=Bengaluru",
+    "redirected": false,
+    "http_status": 200,
+    "content_type_header": "text/html; charset=utf-8",
+    "effective_user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+    "headless_mode": true,
+    "channel": "chromium",
+    "response_length_chars": 312187,
+    "response_length_bytes_on_disk": 312191,
+    "started_at": "2026-09-20T15:21:09.710Z",
+    "ended_at": "2026-09-20T15:21:13.744Z",
+    "elapsed_seconds_approx": 4.0,
+    "retries": 0,
+    "detail_page_requests": 0,
+    "second_queries": 0,
+    "authentication_or_captcha_interaction": 0,
+    "persisted_artifact": "data/reports/hirist_step9_raw_capture.html",
+    "note_on_ua": "effective UA contains 'HeadlessChrome' -- the exact signal that caused a 403 for Naukri in this project's earlier forensics; Hirist returned 200 with this UA present, consistent with all prior evidence that Hirist does not block on this signal"
+  },
+  "classifier_result": {
+    "state": "VALID_RESULTS",
+    "matched_block_phrase": null,
+    "current_parser_jobs_extracted": 10,
+    "current_parser_entries_skipped": 10,
+    "total_entries_on_page": 20,
+    "next_url_detected_not_followed": "https://www.hirist.tech/search/senior-devops-engineer-jobs?page=2"
+  },
+  "B_json_ld_evidence": {
+    "total_ld_json_blocks": 2,
+    "blocks": [
+      {
+        "index": 0,
+        "at_context": "https://schema.org",
+        "at_type": "BreadcrumbList",
+        "top_level_keys": ["@context", "@type", "itemListElement"],
+        "analyzed": false,
+        "reason_not_analyzed": "not job data -- navigational breadcrumb markup, out of scope"
+      },
+      {
+        "index": 1,
+        "at_context": "https://schema.org",
+        "at_type": "ItemList",
+        "top_level_keys": ["@context", "@type", "name", "numberOfItems", "itemListElement"],
+        "numberOfItems": 20,
+        "itemListElement_length": 20,
+        "matches_numberOfItems": true
+      }
+    ],
+    "malformed_blocks": 0,
+    "union_of_keys_across_all_20_listitem_entries": ["@type", "name", "position", "url"],
+    "keys_confirmed_absent_from_every_entry": [
+      "item (nested object)", "@id", "sameAs", "jobLocation",
+      "experienceRequirements", "baseSalary", "description",
+      "any application/contact field"
+    ],
+    "entries_with_nested_item_object": 0,
+    "confidence": "FACT -- directly observed on this real captured page, not inferred from truncated data"
+  },
+  "C_company_title_evidence": {
+    "raw_name_values": [
+      "Verint - Senior DevOps Engineer",
+      "Senior DevOps Engineer - AWS & Kubernetes",
+      "Vedantu Innovations - Senior DevOps & SecOps Engineer",
+      "NTT DATA - Senior DevOps Engineer",
+      "SatSure - Senior Cloud/DevOps Engineer",
+      "Verint - Senior Software Engineer - DevOps",
+      "Lucideus - Senior DevOps Engineer",
+      "EXL - Senior DevOps Engineer - Cloud Architecture & Infrastructure",
+      "Appzlogic Mobility - Senior DevOps Engineer - GCP/GKE",
+      "MoveInSync - Senior DevOps Engineer - AWS Infrastructure",
+      "Optum - Senior DevOps Engineer - AWS/Azure/Google Cloud Platform",
+      "Senior DevOps Engineer - Cloud Infrastructure",
+      "Opstree Solutions - Senior DevOps/SRE Engineer - Cloud Infrastructure",
+      "Moody's - Senior Software Engineer - DevOps & Cloud Engineering",
+      "Atyeti - Senior DevOps Engineer",
+      "CG-VAK - Senior DevOps Engineer",
+      "ZeMoSo Technologies - Senior DevOps Engineer - AWS",
+      "RHIA - Senior DevOps Engineer - Cloud Infrastructure",
+      "Normec Verifavia - Senior DevOps Engineer - Cloud Infrastructure",
+      "Senior DevOps Engineer - AWS & Kubernetes"
+    ],
+    "delimiter_occurrence_counts": {
+      "zero_occurrences": 0,
+      "exactly_one_occurrence": 10,
+      "more_than_one_occurrence": 10
+    },
+    "name_consistently_follows_company_dash_title": false,
+    "confirmed_not_inferred": true,
+    "conventions_observed": [
+      {
+        "convention": "Company - Title",
+        "example": "Verint - Senior DevOps Engineer",
+        "count_note": "the majority of single-delimiter entries"
+      },
+      {
+        "convention": "Title only, no company segment",
+        "examples": ["Senior DevOps Engineer - AWS & Kubernetes", "Senior DevOps Engineer - Cloud Infrastructure"],
+        "note": "entire string is the title; current parser cannot distinguish this from Company - Title and produces a wrong split, reproducing Step 7's exact finding"
+      },
+      {
+        "convention": "Company - Title - Tags/Skills (3+ segments)",
+        "examples": ["EXL - Senior DevOps Engineer - Cloud Architecture & Infrastructure", "MoveInSync - Senior DevOps Engineer - AWS Infrastructure", "Optum - Senior DevOps Engineer - AWS/Azure/Google Cloud Platform"],
+        "note": "current parser's fail-closed 'exactly one occurrence' rule skips all of these -- 10/20 entries on this page"
+      }
+    ],
+    "delimiter_appears_in_company_names": false,
+    "delimiter_appears_in_job_titles": true,
+    "delimiter_in_titles_examples": ["Senior Software Engineer - DevOps (entry 6's title portion)", "Senior DevOps/SRE Engineer - Cloud Infrastructure (entry 13's possible title portion)"],
+    "another_field_provides_company_title_separately": false,
+    "stable_deterministic_parsing_rule_exists": false,
+    "conclusion": "confirmed negative -- with hyphen used both as field separator and within titles, and with a bare-title convention indistinguishable from Company - Title by delimiter count alone, no positional rule recovers company/title correctly for all observed conventions from name alone",
+    "heuristic_parser_implemented": false
+  },
+  "D_url_evidence": {
+    "url_present_in_captured_json_ld": true,
+    "conclusive": true,
+    "field_path": "itemListElement[i].url (top-level on ListItem, sibling to name and position)",
+    "entries_with_top_level_url": 20,
+    "entries_with_top_level_id": 0,
+    "entries_with_top_level_sameas": 0,
+    "entries_with_nested_item_url": "N/A -- 0/20 entries have any nested item object",
+    "example_url": "https://www.hirist.tech/j/verint-senior-dev-ops-engineer-1672606",
+    "step8_hypothesis_resolution": {
+      "hypothesis_i_data_genuinely_has_no_url": "REFUTED",
+      "hypothesis_ii_url_present_but_unchecked_key": "CONFIRMED"
+    },
+    "why_step7_showed_null_job_url_for_all_24": "hirist_parser._parse_job_entry()'s flat-name branch (the only branch real data ever exercises) never reads list_item.get('url') -- it only checks for a url nested inside an 'item' object, a shape this real page never uses",
+    "secondary_finding_stable_id_candidate": {
+      "description": "the trailing numeric segment of each job's URL (e.g. 1672606, 1672338, 1672535) is a distinct integer per job, very likely Hirist's internal job ID",
+      "exploited_in_this_task": false,
+      "note": "evidence only, not implemented or relied upon"
+    },
+    "fix_recommendation": {
+      "description": "read list_item.get('url') in the flat-name branch of _parse_job_entry(), falling back to empty only if absent",
+      "implemented_in_this_task": false,
+      "reason_not_implemented": "explicit instruction: do not modify hirist_parser.py or production behavior in this task",
+      "status": "recommended, evidence-backed next step for a future, separately-authorized task"
+    }
+  },
+  "E_other_fields": {
+    "location": {"present_in_json_ld": false, "basis": "not a key on any of the 20 ListItem entries"},
+    "experience": {"present_in_json_ld": false, "basis": "same"},
+    "salary": {"present_in_json_ld": false, "basis": "same"},
+    "description": {
+      "present_in_json_ld": false,
+      "note": "the literal string 'description' appears 2 times elsewhere in the raw HTML, unrelated to the ItemList/ListItem JSON-LD -- not investigated further, out of this task's JSON-LD scope"
+    },
+    "stable_id": {
+      "present_as_explicit_id_field": false,
+      "candidate_exists": true,
+      "candidate_description": "URL trailing numeric segment -- see D_url_evidence.secondary_finding_stable_id_candidate"
+    },
+    "application_url": {
+      "present_in_json_ld": false,
+      "basis": "no field distinct from the one url found; no applicationContact/applyUrl/similar key in either JSON-LD block"
+    },
+    "additional_out_of_scope_observation": {
+      "description": "page also embeds a Next.js __NEXT_DATA__ script tag (props.pageProps.initialState, keys: ads, auth, app, job, user, jobDetail, competition, botDetection)",
+      "is_json_ld": false,
+      "checked_non_invasively_offline_only": true,
+      "finding": "initialState.job.jobfeed is an empty list (len 0), totalJobs: 0, isLoading: true; initialState.jobDetail has only an empty jobDetailInsights key -- this data is NOT populated in this capture",
+      "conclusion": "rules out __NEXT_DATA__ as an easy alternative richer data source from this same page; the visible job list is rendered from server-side JSON-LD independently of this client-side state, which appears to populate only after further client-side interaction not triggered by this single page load",
+      "pursued_further": false
+    }
+  },
+  "safety_verification": {
+    "exactly_one_http_request": true,
+    "zero_pagination_requests": true,
+    "zero_detail_page_requests": true,
+    "zero_retries": true,
+    "zero_second_queries": true,
+    "no_authentication_or_captcha_interaction": true,
+    "headless_chromium_only_no_stealth": true,
+    "production_db_unchanged": true,
+    "hirist_status_not_enabled": true,
+    "hirist_capabilities_empty": true,
+    "default_sources": ["NAUKRI"],
+    "hirist_parser_py_modified": false,
+    "hirist_adapter_py_modified": false,
+    "hirist_fetcher_py_modified": false,
+    "hirist_fetch_bridge_js_modified": false,
+    "source_registry_modified": false,
+    "naukri_files_modified": []
+  },
+  "production_db": {
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "unchanged": true,
+    "opened_at_all": false
+  },
+  "verification_results": {
+    "full_standalone_suite": "PASS=44 FAIL=0",
+    "py_compile": "PY_COMPILE_ALL_OK",
+    "json_report_valid": true,
+    "hirist_status": "AdapterStatus.NOT_ENABLED",
+    "hirist_capabilities": [],
+    "default_sources": ["NAUKRI"]
+  },
+  "files_changed": {
+    "new": [
+      "data/reports/hirist_step9_raw_capture.html",
+      "data/reports/hirist_raw_payload_capture.md",
+      "data/reports/hirist_raw_payload_capture.json"
+    ],
+    "modified": [],
+    "not_modified": [
+      "scripts/hirist_parser.py", "scripts/hirist_adapter.py",
+      "scripts/hirist_fetcher.py", "scripts/hirist_fetch_bridge.js",
+      "scripts/naukri_parser.py", "scripts/naukri_adapter.py",
+      "scripts/naukri_fetcher.py", "scripts/naukri_fetch_bridge.js",
+      "scripts/source_registry.py", "scripts/search_profile.py",
+      "scripts/search_worker.py", "scripts/score_job.py",
+      "scripts/job_eligibility.py", "data/applications/jobos.db",
+      "any existing Hirist fixture", "any LinkedIn file"
+    ],
+    "diagnostic_script_used": {
+      "location": "session scratchpad directory only",
+      "added_to_project": false
+    }
+  },
+  "summary": [
+    "the job_url evidence gap from Step 8 is now conclusively resolved: every real ListItem entry has a top-level url field; the data was never missing, the parser simply never reads it on the only-exercised flat-name path -- a confirmed, evidence-backed one-line fix candidate, not implemented in this task",
+    "the delimiter issue is confirmed to be a genuine structural ambiguity in the source data (at least 3 coexisting conventions, hyphen used both as separator and within titles) -- no deterministic rule recovers company/title correctly for all conventions from name alone; not fixed",
+    "location, experience, salary, description, and a dedicated application URL are confirmed absent from this page's JSON-LD, not merely unobserved",
+    "a strong, unexploited stable-ID candidate exists: the numeric suffix of each job's URL"
+  ],
+  "stopped_after_this_task": true,
+  "live_hirist_query_performed": true,
+  "live_hirist_query_count": 1,
+  "hirist_enabled": false,
+  "awaiting_review_before_next_step": true
+}

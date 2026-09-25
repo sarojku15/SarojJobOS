@@ -1,0 +1,41 @@
+{
+  "_comment": "Phase 14.6 -- advisory daily search-planner budgets/intervals. All values here are defaults only; every key has an environment-variable override of the same name (upper-cased) checked first by daily_search_planner.load_planner_config(). Never hard-codes a pass/fail assumption about any provider's real pricing or free-tier size -- these are purely local, user-configurable ceilings.",
+
+  "max_search_provider_queries_per_run": 12,
+  "max_search_provider_queries_per_day": 30,
+  "max_search_provider_queries_per_provider_per_day": 12,
+
+  "search_query_cooldown_hours": 24,
+
+  "source_refresh_interval_hours": {
+    "NAUKRI": 12,
+    "HIRIST": 24,
+    "IIMJOBS": 24,
+    "APNA": 12,
+    "LINKEDIN": 24,
+    "INDEED": 24,
+    "FOUNDIT": 24,
+    "INSTAHYRE": 24,
+    "CUTSHORT": 24,
+    "WELLFOUND": 24,
+    "SHINE": 24
+  },
+
+  "min_new_jobs_per_source": 3,
+  "target_new_jobs_per_run": 25,
+
+  "direct_sources": ["NAUKRI", "HIRIST", "IIMJOBS", "APNA"],
+  "search_provider_sources": ["LINKEDIN", "INDEED", "FOUNDIT", "INSTAHYRE", "CUTSHORT", "WELLFOUND", "SHINE"],
+
+  "_comment_14_7": "Phase 14.7 -- adaptive per-source query expansion. A source's consolidated (round-1) query is followed by ONE MORE targeted query (combining every still-uncovered/under-covered configured location into one OR'd query) only when coverage is insufficient, up to max_provider_queries_per_source_per_run total queries for that source this run, and never exceeding the Section 6 global budgets above.",
+
+  "max_provider_queries_per_source_per_run": 2,
+  "coverage_min_unique_jobs": 5,
+  "coverage_min_locations_covered": 3,
+  "coverage_min_new_jobs": 3,
+  "coverage_min_completeness": 0.4,
+
+  "_comment_14_8": "Phase 14.8 -- actual_job_location is only ever KNOWN when location_taxonomy.py can genuinely parse a city from the search result itself; it is never inferred from the query's own target location. A source whose unique/new/completeness are already sufficient is NOT expanded again merely because some of its jobs have UNKNOWN location -- at most this many additional queries may be triggered by a location gap alone (still bounded by max_provider_queries_per_source_per_run and the global run/day budgets above).",
+
+  "max_additional_query_for_unknown_location": 1
+}

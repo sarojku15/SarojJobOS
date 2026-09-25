@@ -1,0 +1,93 @@
+{
+  "task": "Job Discovery Engine -- generic multi-source discovery architecture + working GUI/API completion",
+  "status": "COMPLETE",
+  "blocked_subitem": {
+    "item": "WEB_SEARCH source live execution",
+    "reason": "NO_WEB_SEARCH_BACKEND_CONFIGURED -- this backend process (FastAPI/uvicorn) cannot invoke Claude Code's own WebSearch tool directly, and no search-API credential is configured in this environment",
+    "everything_else_implemented": true,
+    "activation_requires": "supplying a web-search API credential, or calling web_search_discovery_adapter.set_web_search_backend() from a runtime that has one -- configuration, not a redesign"
+  },
+  "gui_startup_command": ".venv/bin/uvicorn api.main:app --reload --port 8420",
+  "gui_url": "http://127.0.0.1:8420/",
+  "api_startup_command": ".venv/bin/uvicorn api.main:app --reload --port 8420",
+  "discovery_skill_location": ".claude/skills/job-discovery-engine/",
+  "sources": {
+    "working": ["NAUKRI", "MOCK"],
+    "not_working": {
+      "LINKEDIN": "NO_AUTHORIZED_DIRECT_JOB_DISCOVERY -- robots.txt disallows unrecognized agents; no authorized API/provider configured",
+      "HIRIST": "SOURCE_NOT_READY -- structurally unreliable title/company extraction across 3 conventions, no deterministic disambiguation",
+      "INDEED": "SOURCE_NOT_READY -- registered skeleton, not implemented/validated",
+      "FOUNDIT": "SOURCE_NOT_READY -- registered skeleton, not implemented/validated",
+      "INSTAHYRE": "SOURCE_NOT_READY -- registered skeleton, not implemented/validated",
+      "CUTSHORT": "SOURCE_NOT_READY -- registered skeleton, not implemented/validated",
+      "WELLFOUND": "SOURCE_NOT_READY -- registered skeleton, not implemented/validated",
+      "SHINE": "SOURCE_NOT_READY -- registered skeleton, not implemented/validated",
+      "TIMESJOBS": "SOURCE_NOT_READY -- registered skeleton, not implemented/validated",
+      "IIMJOBS": "SOURCE_NOT_READY -- registered skeleton, not implemented/validated",
+      "CAREER_PAGE": "SOURCE_NOT_READY -- generic provider not implemented/validated",
+      "GREENHOUSE": "SOURCE_NOT_READY -- real implementation exists, zero boards configured, not phased-live-validated",
+      "LEVER": "SOURCE_NOT_READY -- real implementation exists, zero boards configured, not phased-live-validated",
+      "ASHBY": "SOURCE_NOT_READY -- real implementation exists, zero boards configured, not phased-live-validated",
+      "WEB_SEARCH": "NO_WEB_SEARCH_BACKEND_CONFIGURED -- see blocked_subitem"
+    }
+  },
+  "test_results": {
+    "test_phase10_discovery_engine.py": {"passed": 53, "failed": 0},
+    "test_phase9_api.py": {"passed": 58, "failed": 0, "regression": false},
+    "full_existing_suite_files_run": 53,
+    "full_existing_suite_files_passed": 53,
+    "documented_live_network_tests_skipped": ["test_naukri_adapter.py", "test_live_naukri_score_audit.py"],
+    "regressions": 0
+  },
+  "naukri_live_regression_performed": false,
+  "naukri_live_regression_reason": "Zero changes made to naukri_adapter.py/naukri_fetcher.py/naukri_parser.py or the Naukri request path this phase; a live call against unchanged, already-validated code would produce no new evidence and would violate the project's own minimize-live-calls discipline.",
+  "production_db": {
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "identical": true,
+    "size_bytes_before": 114688,
+    "size_bytes_after": 114688,
+    "row_counts_before": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+    "row_counts_after": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0}
+  },
+  "files_created": [
+    "scripts/ats_common.py", "scripts/greenhouse_adapter.py", "scripts/lever_adapter.py", "scripts/ashby_adapter.py",
+    "scripts/web_search_discovery_adapter.py", "scripts/source_capabilities.py", "scripts/migrate_v4_search_extensions.py",
+    "scripts/test_phase10_discovery_engine.py",
+    "scripts/fixtures/greenhouse_sample.json", "scripts/fixtures/lever_sample.json", "scripts/fixtures/ashby_sample.json",
+    "config/career_pages.json",
+    ".claude/skills/job-discovery-engine/SKILL.md",
+    ".claude/skills/job-discovery-engine/references/discovery-policy.md",
+    ".claude/skills/job-discovery-engine/references/source-strategy.md",
+    ".claude/skills/job-discovery-engine/references/job-schema.md",
+    ".claude/skills/job-discovery-engine/references/quality-rules.md",
+    ".claude/skills/job-discovery-engine/references/search-query-strategy.md",
+    ".claude/skills/job-discovery-engine/scripts/discover_jobs.py",
+    ".claude/skills/job-discovery-engine/scripts/validate_discovered_job.py",
+    ".claude/skills/job-discovery-engine/scripts/normalize_discovered_jobs.py",
+    "web/searches.html", "web/search_detail.html",
+    "data/reports/phase9_job_discovery_engine.md", "data/reports/phase9_job_discovery_engine.json"
+  ],
+  "files_modified": [
+    "scripts/source_registry.py", "scripts/candidate_profile.py", "scripts/init_dev_db.py",
+    "api/schemas.py", "api/search_store.py", "api/main.py", "api/profile_store.py", "api/results_store.py",
+    "web/profile.html", "web/search_new.html", "web/dashboard.html", "web/results.html", "README.md"
+  ],
+  "protected_file_change": {
+    "file": "scripts/candidate_profile.py",
+    "change": "added ProfessionalSummary.industries: list, optional, informational only, no scoring/eligibility function reads it",
+    "regression_proof": "all 16 pre-existing test_candidate_profile.py tests pass unmodified"
+  },
+  "remaining_limitations": [
+    "WEB_SEARCH cannot execute live in this backend-process runtime (architecturally ready, not activatable here)",
+    "GREENHOUSE/LEVER/ASHBY real but unvalidated by design (no board configured, no phased live-validation run)",
+    "Per-search Excel report is an alias onto the existing candidate-scoped report, not a second implementation",
+    "No real authentication -- single-user local tool, documented",
+    "DOCX resume support not added (would require a new dependency)"
+  ],
+  "launchd_activated": false,
+  "applications_submitted": 0,
+  "hirist_enabled": false,
+  "linkedin_enabled": false,
+  "next_action_required": "None to consider this phase complete. Supplying a web-search credential (or a backend calling set_web_search_backend()) would be the only action needed to activate WEB_SEARCH discovery -- configuration, not code."
+}

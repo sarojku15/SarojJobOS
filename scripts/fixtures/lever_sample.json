@@ -1,0 +1,18 @@
+[
+  {
+    "text": "Data Scientist",
+    "hostedUrl": "https://jobs.lever.co/examplecompany/data-scientist-1",
+    "applyUrl": "https://jobs.lever.co/examplecompany/data-scientist-1/apply",
+    "categories": {"location": "Remote", "commitment": "Full-time"},
+    "createdAt": 1757930400000,
+    "descriptionPlain": "We need a Data Scientist skilled in Python, SQL and Machine Learning."
+  },
+  {
+    "text": "Accountant",
+    "hostedUrl": "https://jobs.lever.co/examplecompany/accountant-1",
+    "applyUrl": "https://jobs.lever.co/examplecompany/accountant-1/apply",
+    "categories": {"location": "Hyderabad, India", "commitment": "Full-time"},
+    "createdAt": 1757844000000,
+    "descriptionPlain": "Manage our books."
+  }
+]

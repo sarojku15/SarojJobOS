@@ -1,0 +1,28 @@
+<!--
+SYNTHETIC fixture, NOT a real captured Hirist page. Constructed for
+Phase 8's Hirist offline gate (data/reports/phase8_multisource_validation.md)
+to cover the "missing URL" case explicitly requested there. Phase 6
+Step 9's real, untruncated live capture confirmed every one of 20 real
+ListItem entries DID carry a top-level "url" field (see
+data/reports/hirist_raw_payload_capture.md) -- so a real Hirist entry
+with no url field has never actually been observed. This fixture
+exists purely to prove the PARSER's own defensive behavior when that
+field is absent (never guesses/constructs one), not to claim this
+shape has been seen on the real site.
+-->
+<!DOCTYPE html><html lang="en"><head>
+<title>Search for - Senior Devops Engineer Jobs | hirist.tech</title>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "ItemList",
+  "name": "Search for - Senior Devops Engineer Jobs",
+  "numberOfItems": 1,
+  "itemListElement": [
+    {"@type": "ListItem", "position": 1, "name": "NoUrl Corp - Staff SRE"}
+  ]
+}
+</script>
+</head><body>
+<h1>Senior Devops Engineer Jobs</h1>
+</body></html>

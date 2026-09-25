@@ -1,0 +1,143 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Job Search OS — Import a job</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<header>
+  <span class="brand">Job Search OS</span>
+  <a href="/">Home</a>
+  <a href="/profile">Profile</a>
+  <a href="/searches">Searches</a>
+  <a href="/dashboard">Dashboard</a>
+</header>
+<main>
+  <h1>Import a job manually</h1>
+  <div id="msg"></div>
+
+  <div class="card">
+    <p class="hint">
+      Some job boards (LinkedIn, Indeed, Foundit, Instahyre, Cutshort, Wellfound, Shine) do not
+      currently allow JobOS to search or fetch pages automatically. If you're already looking at a
+      real, publicly-visible job posting in your own browser, copy its details in here — JobOS will
+      normalize, de-duplicate, and score it exactly like a job found by an automated search.
+      Nothing is fetched from the job board by JobOS itself; only what you type/paste below is used.
+    </p>
+  </div>
+
+  <div class="card">
+    <label>Job board</label>
+    <select id="i-source">
+      <option value="LINKEDIN">LinkedIn</option>
+      <option value="INDEED">Indeed</option>
+      <option value="FOUNDIT">Foundit</option>
+      <option value="INSTAHYRE">Instahyre</option>
+      <option value="CUTSHORT">Cutshort</option>
+      <option value="WELLFOUND">Wellfound</option>
+      <option value="SHINE">Shine</option>
+      <option value="NAUKRI">Naukri</option>
+      <option value="HIRIST">Hirist</option>
+      <option value="IIMJOBS">iimjobs</option>
+      <option value="APNA">Apna</option>
+      <option value="OTHER">Other / company career page</option>
+    </select>
+
+    <label>Job URL (the page you're viewing)</label>
+    <input id="i-url" placeholder="https://..." />
+
+    <label>Job title</label>
+    <input id="i-title" placeholder="e.g. Senior Site Reliability Engineer" />
+
+    <label>Company</label>
+    <input id="i-company" placeholder="e.g. Example Technologies" />
+
+    <div class="row">
+      <div><label>Location</label><input id="i-location" placeholder="e.g. Bengaluru" /></div>
+      <div><label>Work model</label><input id="i-workmodel" placeholder="Remote / Hybrid / Onsite" /></div>
+    </div>
+
+    <div class="row">
+      <div><label>Experience required</label><input id="i-experience" placeholder="e.g. 8-12 years" /></div>
+      <div><label>Posted date</label><input id="i-posted" placeholder="e.g. 2026-09-18" /></div>
+    </div>
+
+    <label>Application URL (if different from the job URL)</label>
+    <input id="i-apply-url" placeholder="https://..." />
+
+    <label>Job description (paste as much as you can)</label>
+    <textarea id="i-jd" rows="8"></textarea>
+
+    <div class="button-row">
+      <button id="import-btn">Import this job</button>
+      <button class="secondary" onclick="window.location.href='/dashboard'">Cancel</button>
+    </div>
+  </div>
+
+  <div id="result-card" class="card" hidden>
+    <h2>Import result</h2>
+    <div id="result-body"></div>
+  </div>
+</main>
+<script src="/static/app.js"></script>
+<script>
+let candidateId = null;
+
+async function init() {
+  candidateId = await requireActiveCandidateOrRedirect();
+}
+
+document.getElementById("import-btn").addEventListener("click", async () => {
+  const msg = document.getElementById("msg");
+  if (!candidateId) return;
+
+  const payload = {
+    job_source: document.getElementById("i-source").value,
+    job_url: document.getElementById("i-url").value.trim(),
+    title: document.getElementById("i-title").value.trim(),
+    company: document.getElementById("i-company").value.trim(),
+    location: document.getElementById("i-location").value.trim(),
+    work_model: document.getElementById("i-workmodel").value.trim(),
+    experience_required: document.getElementById("i-experience").value.trim(),
+    posted_date: document.getElementById("i-posted").value.trim(),
+    application_url: document.getElementById("i-apply-url").value.trim(),
+    jd_text: document.getElementById("i-jd").value.trim(),
+  };
+
+  try {
+    const result = await api(`/api/candidates/${candidateId}/jobs/import`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    showSuccess(msg, "Job imported.");
+
+    const resultCard = document.getElementById("result-card");
+    resultCard.hidden = false;
+    if (result.eligible) {
+      document.getElementById("result-body").innerHTML = `
+        <table class="results-table">
+          <tr><th>Company</th><td>${escapeHtml(result.company)}</td></tr>
+          <tr><th>Title</th><td>${escapeHtml(result.title)}</td></tr>
+          <tr><th>Score</th><td>${result.score}</td></tr>
+          <tr><th>Priority</th><td>${badgeHtml(result.priority)}</td></tr>
+          <tr><th>Matched skills</th><td>${escapeHtml((result.matched_skills || []).join(", ") || "-")}</td></tr>
+          <tr><th>Missing skills</th><td>${escapeHtml((result.missing_skills || []).join(", ") || "-")}</td></tr>
+        </table>
+        <p class="hint">This job is now in your tracker. View it from your Dashboard's Excel report, or a saved search covering the same role/location.</p>
+      `;
+    } else {
+      document.getElementById("result-body").innerHTML = `
+        <p>This job was recorded, but is not eligible under your confirmed profile.</p>
+        <p class="hint">${escapeHtml(result.eligibility_reason || "")}</p>
+      `;
+    }
+  } catch (err) {
+    showError(msg, err);
+  }
+});
+
+init();
+</script>
+</body>
+</html>

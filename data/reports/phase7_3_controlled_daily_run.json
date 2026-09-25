@@ -1,0 +1,227 @@
+{
+  "task": "Phase 7.3 -- Controlled Real Daily-Run Gate",
+  "main_objective_proven": {
+    "statement": "Real daily Naukri search -> actionable Excel report",
+    "proven": true,
+    "scheduler_live_or_active": false,
+    "note": "the scheduler itself (launchd) was NOT installed, loaded, or started -- only the underlying wrapper/worker/report chain was exercised once, manually, against a temp DB"
+  },
+  "important_finding_disclosed": {
+    "description": "this validation made 22 total HTTP requests, not 1",
+    "breakdown": {
+      "health_check_homepage": 1,
+      "search_results_page": 1,
+      "detail_page_fetches": 20,
+      "total": 22
+    },
+    "reason": "NaukriAdapter.search() (confirmed by reading scripts/naukri_adapter.py, unmodified) fetches a detail page for every raw job found on the search-results page, via parse_detail_page(), to get full JD text for scoring; health_check_is_advisory=True also triggers one homepage fetch. This is pre-existing, unmodified adapter behavior, not new in this task.",
+    "all_http_status_200": true,
+    "retries": 0,
+    "blocks": 0,
+    "captcha_interactions": 0,
+    "second_logical_queries": 0,
+    "still_one_logical_query": true,
+    "retroactive_note": "earlier Naukri validations in this project (including Phase 7's SIXTH step) likely made this same ~20-detail-page pattern too, but were characterized as '1 live request' in terms of logical queries rather than precise HTTP count, since this level of request logging did not exist yet -- flagged for record accuracy, does not change any prior safety conclusion (no block/CAPTCHA/retry occurred in any of them either)"
+  },
+  "step1_precheck": {
+    "production_db_sha256": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "production_db_size_bytes": 114688,
+    "row_counts": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+    "naukri_status": "AdapterStatus.ENABLED",
+    "hirist_status": "AdapterStatus.NOT_ENABLED",
+    "linkedin_status": "AdapterStatus.NOT_ENABLED",
+    "default_sources": ["NAUKRI"],
+    "headless_default_confirmed": "naukri_fetch_bridge.js: headless = process.env.JOBOS_BROWSER_HEADLESS !== '0'",
+    "chrome_ua_override_intact": true,
+    "max_job_age_days_3_available": true,
+    "anything_changed_at_this_step": false
+  },
+  "step2_tempdb_redirect_mechanism": {
+    "wrapper_had_no_db_override_before": true,
+    "change": "PRODUCTION_DB=\"${JOBOS_DAILY_DB_OVERRIDE:-$PROJECT_ROOT/data/applications/jobos.db}\"",
+    "default_behavior_unchanged": true,
+    "override_visibly_logged_when_active": true,
+    "bug_found_and_fixed": {
+      "description": "override banner initially wrote to logs/daily_search_scheduler.log even during --dry-run, breaking that mode's zero-filesystem-changes guarantee",
+      "fix": "moved the log call after the dry-run early-exit",
+      "reverified_offline": true
+    },
+    "production_configuration_weakened": false,
+    "output_directory_redirected": false,
+    "reason_output_not_redirected": "task's Step 4 expects artifacts at the real data/daily/YYYY-MM-DD/ path; only the database (disposable) was diverted, not the report destination (git-ignored, generated-only)"
+  },
+  "step3_live_validation": {
+    "command": "JOBOS_DAILY_DB_OVERRIDE=<temp_db_path> scripts/run_daily_search.sh",
+    "role": "Infrastructure Engineer",
+    "location": "Bangalore",
+    "freshness_max_job_age_days": 3,
+    "candidate": "saroj",
+    "source": "NAUKRI",
+    "search_url": "https://www.naukri.com/infrastructure-engineer-jobs-in-bangalore?jobAge=3",
+    "total_http_requests": 22,
+    "http_status_all": 200,
+    "classifier_result": "VALID_RESULTS",
+    "retries": 0,
+    "second_logical_queries": 0,
+    "captcha_interaction": 0,
+    "anti_bot_bypass": 0,
+    "synthetic_job_list_substituted": false,
+    "real_unmodified_adapter_used": true,
+    "real_unmodified_pipeline_used": true,
+    "query_plan_confirmed_offline_before_live_call": "dry_run=True showed exactly 1 query"
+  },
+  "step4_artifacts": {
+    "directory": "data/daily/2026-09-20/",
+    "files": {
+      "job_search_report.xlsx": {"size_bytes": 26298, "exists": true},
+      "run_summary.json": {"size_bytes": 1214, "exists": true},
+      "worker.log": {"size_bytes": 8226, "exists": true}
+    },
+    "workbook_opens_successfully": true,
+    "sheets_present": ["APPLY_TODAY", "ALL_MATCHING_JOBS", "NEW_JOBS", "ALREADY_APPLIED", "REJECTED_EXCLUDED", "DUPLICATES", "APPLICATION_TRACKER", "SOURCE_HEALTH", "RUN_SUMMARY"],
+    "sheets_exact_match": true,
+    "urls_clickable_hyperlinked": true,
+    "score_present": true,
+    "priority_present": true,
+    "freshness_present": true,
+    "source_present": true,
+    "location_present": true,
+    "application_job_url_present": true,
+    "new_seen_classification_present": true,
+    "application_status_present": true,
+    "exclusion_reasons_present": true,
+    "duplicate_information_present": true,
+    "source_health_present": true,
+    "run_totals_reconcile": true,
+    "reconciliation": {
+      "raw": {"worker_log": 20, "run_summary": 20, "application_tracker_rows": 20},
+      "normalized": 20,
+      "duplicates_removed_intra_source": 0,
+      "excluded_experience": 16,
+      "excluded_location": 0,
+      "eligible": 4,
+      "scored": 4,
+      "ready_for_approval": 1,
+      "matches_created": 4,
+      "apply_today_rows": 1,
+      "new_jobs_rows": 1,
+      "already_applied_rows": 0,
+      "duplicates_rows": 0,
+      "source_health_rows": 1,
+      "discrepancy_found": false
+    },
+    "the_one_apply_today_job": {
+      "title": "Hiring For AWS Cloud Infra and DevOps Engineer with Tenarai",
+      "company": "TENARAI TECHNOLOGIES PRIVATE LIMITED",
+      "location": "Bengaluru",
+      "score": 90,
+      "priority": "A",
+      "freshness": "FRESH",
+      "freshness_age_days": 3,
+      "report_status": "READY_TO_APPLY",
+      "previously_seen": false
+    }
+  },
+  "step5_main_objective_questions": {
+    "1_jobs_found_today": "APPLICATION_TRACKER (20 rows)",
+    "2_which_actionable": "APPLY_TODAY (1 row)",
+    "3_why_actionable": "Matched Skills / Strong Points column",
+    "4_score": "Score column (90)",
+    "5_priority": "Priority column (A)",
+    "6_freshness": "Freshness + Freshness (days) columns (FRESH, 3)",
+    "7_location": "Location column (Bengaluru)",
+    "8_source": "Source column (NAUKRI)",
+    "9_new_for_candidate": "Previously Seen=No, in NEW_JOBS",
+    "10_already_applied": "Application Status column + ALREADY_APPLIED sheet (empty)",
+    "11_exclusion_reason": "REJECTED_EXCLUDED's Exclusion/Gap Reason column, all 19 populated",
+    "12_source_search_failed": "SOURCE_HEALTH: errors_count=0, blocked_queries=0, status=COMPLETED -- no failure",
+    "apply_today_rule_verification": {
+      "qualifying_priority": true,
+      "freshness_le_3_days": true,
+      "usable_url": true,
+      "not_duplicate_suppressed": true,
+      "not_already_applied": true,
+      "not_score_rejected": true,
+      "not_ineligible": true,
+      "all_7_gates_independently_confirmed": true,
+      "exactly_one_row_satisfies_all_gates": true
+    }
+  },
+  "step6_status_semantics_live_verification": {
+    "not_qualified_live_confirmed": {
+      "count": 3,
+      "report_status": "SCORE_REJECTED_NOT_QUALIFIED",
+      "significance": "first live confirmation that score_job.py's Phase 7.2 NOT_QUALIFIED fix actually fires on real data"
+    },
+    "legacy_rejected_produced_this_run": false,
+    "reason": "this temp DB has no legacy rows; covered separately by Phase 7.2's offline backward-compat tests",
+    "employer_rejected_produced_this_run": false,
+    "reason_employer_rejected_absent": "no application workflow exists to write it -- expected absence",
+    "application_lifecycle_statuses_observed": ["FOUND", "NOT_QUALIFIED", "READY_FOR_APPROVAL"],
+    "applied_or_employer_rejected_status_observed": false,
+    "employer_rejection_invented_or_implied": false
+  },
+  "step7_failure_safety_reconfirmed": {
+    "network_used": false,
+    "test_file": "scripts/test_daily_scheduler_offline.py",
+    "all_15_checks_pass": true,
+    "atomic_write_test_included": true,
+    "real_daily_workbook_touched_by_this_reconfirmation": false
+  },
+  "step8_production_db_integrity": {
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "size_before": 114688,
+    "size_after": 114688,
+    "row_counts_before": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+    "row_counts_after": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+    "byte_identical": true,
+    "opened_for_write_by_live_validation": false
+  },
+  "step9_final_tests": {
+    "full_standalone_suite": "PASS=48 FAIL=0 (.venv)",
+    "py_compile": "PY_COMPILE_ALL_OK",
+    "json_validation_run_summary": "valid",
+    "json_validation_this_report": "valid",
+    "xlsx_structural_validation": "all 9 required sheets present, exact match",
+    "source_status_validation": {"naukri": "ENABLED", "hirist": "NOT_ENABLED", "linkedin": "NOT_ENABLED", "default_sources": ["NAUKRI"]},
+    "launchd_installed": false,
+    "launchd_loaded": false,
+    "launchd_started": false,
+    "launchd_plist_in_launchagents": false
+  },
+  "files_changed": {
+    "modified": ["scripts/run_daily_search.sh"],
+    "new_generated_gitignored": [
+      "data/daily/2026-09-20/job_search_report.xlsx",
+      "data/daily/2026-09-20/run_summary.json",
+      "data/daily/2026-09-20/worker.log",
+      "logs/daily_search_scheduler.log"
+    ],
+    "new_reports": [
+      "data/reports/phase7_3_controlled_daily_run.md",
+      "data/reports/phase7_3_controlled_daily_run.json"
+    ],
+    "not_modified": [
+      "scripts/run_search_worker.py", "scripts/search_worker.py",
+      "scripts/naukri_adapter.py", "scripts/naukri_fetcher.py",
+      "scripts/naukri_fetch_bridge.js", "scripts/naukri_parser.py",
+      "scripts/generate_run_report.py", "scripts/score_job.py",
+      "scripts/candidate_profile.py", "scripts/search_submission.py",
+      "launchd/com.sarojjobos.dailysearch.plist", "config/profile.json",
+      "data/applications/jobos.db"
+    ]
+  },
+  "summary": [
+    "Real daily Naukri search -> actionable Excel report is proven end-to-end using the exact Phase 7.2 chain, real NaukriAdapter, real search_worker/generate_run_report pipeline, against a disposable temp DB via a one-line default-safe diagnostic override",
+    "every artifact opened correctly, every required sheet present, every number reconciled exactly, all 7 APPLY_TODAY gates independently confirmed on the one real qualifying job",
+    "the Phase 7.2 NOT_QUALIFIED status fix was confirmed working live on real freshly-scored data for the first time",
+    "one honest process disclosure: this validation made 22 total HTTP requests (not 1) -- pre-existing, unmodified NaukriAdapter behavior (1 health check + 1 search page + 20 detail-page fetches), all HTTP 200, zero blocks/retries/CAPTCHA",
+    "production DB remained byte-identical throughout",
+    "launchd was not installed, loaded, or started -- the scheduler itself is not live"
+  ],
+  "stopped_after_this_task": true,
+  "proceeded_to_linkedin_or_hirist": false,
+  "hirist_enabled": false,
+  "linkedin_enabled": false
+}

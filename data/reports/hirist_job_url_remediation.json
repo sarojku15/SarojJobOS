@@ -1,0 +1,176 @@
+{
+  "task": "Phase 6 Step 10 -- Hirist deterministic job_url remediation, offline only, zero network requests",
+  "live_network_requests_made": 0,
+  "tools_confirmed_not_invoked": ["Playwright", "hirist_fetcher.py", "hirist_fetch_bridge.js", "curl", "wget", "browser", "any HTTP client"],
+  "hirist_enabled": false,
+  "source_registry_modified": false,
+  "naukri_files_modified": false,
+  "production_db_modified": false,
+  "company_title_parsing_modified": false,
+  "original_gap": {
+    "location": "scripts/hirist_parser.py, _parse_job_entry(), flat 'name' branch",
+    "description": "only the nested-item branch read a url field (nested_item.get('url')); the flat-name branch (the ONLY branch real Hirist data ever exercises, per Step 7: 0/24 real jobs used the nested path) never checked for any URL field at all",
+    "consequence": "job_url came back empty for 100% of real jobs, not because the data lacked a URL, but because the code never looked for one on the path real data actually uses"
+  },
+  "step9_evidence": {
+    "source_report": "data/reports/hirist_raw_payload_capture.md / .json, Section D",
+    "source_artifact": "data/reports/hirist_step9_raw_capture.html",
+    "live_requests_in_step9": 1,
+    "findings": {
+      "entries_with_top_level_url": "20/20",
+      "entries_with_nested_item_object": "0/20",
+      "entries_with_at_id": "0/20",
+      "entries_with_sameas": "0/20",
+      "entries_with_jobLocation_experienceRequirements_baseSalary_description_or_application_field": "0/20"
+    },
+    "example_entry": {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Verint - Senior DevOps Engineer",
+      "url": "https://www.hirist.tech/j/verint-senior-dev-ops-engineer-1672606"
+    }
+  },
+  "exact_code_change": {
+    "file": "scripts/hirist_parser.py",
+    "function": "_parse_job_entry()",
+    "branch": "flat 'name' path only",
+    "before": "return _empty_raw_job(company_part, title_part)",
+    "after": "job = _empty_raw_job(company_part, title_part); url = _sane_url_or_none(list_item.get('url')); if url: job['job_url'] = url; return job",
+    "company_title_split_logic_changed": false,
+    "nested_item_path_changed": false,
+    "validator_used": "_sane_url_or_none() -- existing, unmodified, reused exactly as the nested path already uses it",
+    "new_domain_restriction_added": false,
+    "domain_allowlist_note": "the project's only existing domain allowlist (_ALLOWED_NEXT_URL_HOST = 'www.hirist.tech') has only ever applied to pagination rel=next link-following, never to job_url, on either path, before or after this change",
+    "url_ever_constructed_or_guessed": false
+  },
+  "stable_id_decision": {
+    "instruction": "Before implementing an ID extraction, inspect the existing schema/model and determine whether a stable job ID field already exists and whether the captured URL evidence is sufficient to populate it safely.",
+    "finding": "a stable ID field (job_id) already exists in the pipeline schema (scripts/discover_local.py normalize_job() -> scripts/job_id.py generate_job_id()), and is already correctly populated as an automatic consequence of the job_url fix -- no new code needed",
+    "existing_priority_order": [
+      "1. source-provided job_id (none provided by any adapter today)",
+      "2. deterministic hash of source + normalized job_url (job_id_from_url())",
+      "3. fallback hash of source + company + title + location (job_id_from_fields()), used only when no usable job_url exists"
+    ],
+    "verified_directly": {
+      "with_url_job_id": "HIRIST-5649154751c6aff0",
+      "deterministic_confirmed": true,
+      "without_url_job_id_fallback": "HIRIST-d19708782931609b"
+    },
+    "separate_raw_numeric_id_extraction_implemented": false,
+    "reasons_not_implemented": [
+      "the raw-job-dict schema (_empty_raw_job()) has no field for a source-native numeric ID today; adding one would be a schema change beyond this task's minimal scope",
+      "it would be purely redundant with the URL-based job_id mechanism that already exists and now already works correctly",
+      "Step 9's own report explicitly framed the URL's numeric suffix as an unconfirmed inference (likely Hirist's internal job ID), not a confirmed fact -- no second live capture has verified the digits are stable/unique across re-crawls rather than a listing-position artifact"
+    ],
+    "conclusion": "existing schema already supports a stable ID; captured URL evidence is sufficient to populate it safely and already does so automatically via the existing job_id_from_url() pipeline; no new stable-ID extraction code was added to hirist_parser.py",
+    "ambiguity_present": true,
+    "left_unchanged_per_instruction": true
+  },
+  "tests": {
+    "new_file": "scripts/test_hirist_job_url_remediation.py",
+    "check_count": 6,
+    "checks": [
+      {"id": "A", "proves": "verbatim real Step 9 entry (Verint - Senior DevOps Engineer, real captured URL) produces job_url equal to the exact real URL"},
+      {"id": "B", "proves": "ListItem with no url field leaves job_url empty -- never guessed or constructed"},
+      {"id": "C", "proves": "nested item.url extraction unaffected; adversarial case with BOTH a nested item and a top-level url (two different URLs) -- nested path still wins entirely, paths remain independent"},
+      {"id": "D", "proves": "malformed URL rejected on flat path (same as nested path always was); well-formed off-domain URL accepted identically on both paths -- no new domain restriction or leniency introduced"},
+      {"id": "E", "proves": "existing unmodified valid_results_page1/2.html fixtures still classify VALID_RESULTS with same job counts; fixture's flat entry (no url field) still yields job_url == ''"},
+      {"id": "F", "proves": "company/title split output byte-identical to pre-remediation behavior, including the fails-closed multi-delimiter skip; re-uses the Step 9 wrong-split example to prove name-parsing was not touched"}
+    ],
+    "case_G_naukri_regression": {
+      "duplicated_in_new_file": false,
+      "verified_by": "full standalone suite run (45 files, PASS=45 FAIL=0)",
+      "reason": "naukri_parser.py was never modified"
+    },
+    "existing_step8_test_file_updated": {
+      "file": "scripts/test_hirist_normalization_url_forensics.py",
+      "test_updated": "test_A (renamed to test_A_flat_entry_reads_top_level_url_not_id_or_sameas)",
+      "reason": "previously asserted the OLD gap (job_url stays empty for a top-level url field); that gap is now fixed by this task, so the assertion was updated to reflect the new, correct behavior",
+      "tests_unchanged": ["B (application_url gap)", "C (baseSalary/experienceRequirements gap)", "D (delimiter ambiguity)"],
+      "reason_unchanged": "none of B, C, D were touched by this remediation -- still genuinely unfixed limitations"
+    },
+    "heuristic_company_title_fix_added": false
+  },
+  "unresolved_company_title_limitation": {
+    "addressed_in_this_task": false,
+    "status": "unchanged from data/reports/hirist_normalization_url_forensics.md and hirist_raw_payload_capture.md -- name mixes at least 3 conventions (bare title; Company - Title; Company - Title - Tags) with no deterministic disambiguation rule",
+    "reconfirmed_by_test_F": true
+  },
+  "confirmations": {
+    "zero_live_requests": true,
+    "hirist_status_not_enabled": true,
+    "hirist_capabilities_empty": true,
+    "production_db_untouched": true,
+    "default_sources_unchanged": ["NAUKRI"],
+    "hirist_adapter_py_modified": false,
+    "hirist_fetcher_py_modified": false,
+    "hirist_fetch_bridge_js_modified": false,
+    "naukri_files_modified": [],
+    "source_registry_modified": false,
+    "search_profile_modified": false,
+    "search_worker_modified": false,
+    "scoring_modified": false,
+    "discover_local_py_modified": false,
+    "job_id_py_modified": false,
+    "existing_hirist_fixtures_modified": false,
+    "company_title_split_logic_modified": false,
+    "nested_item_path_modified": false
+  },
+  "verification_results": {
+    "new_test_file": "test_hirist_job_url_remediation.py: 6/6 PASS",
+    "updated_test_file": "test_hirist_normalization_url_forensics.py: 4/4 PASS",
+    "full_standalone_suite": "PASS=45 FAIL=0",
+    "py_compile": "PY_COMPILE_ALL_OK",
+    "json_report_valid": true,
+    "hirist_status": "AdapterStatus.NOT_ENABLED",
+    "hirist_capabilities": [],
+    "default_sources": ["NAUKRI"]
+  },
+  "production_db": {
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "unchanged": true,
+    "row_counts_unchanged": true,
+    "row_counts": {
+      "candidates": 1,
+      "candidate_search_profile": 1,
+      "jobs": 9,
+      "candidate_job_matches": 0,
+      "search_runs": 0,
+      "search_queue": 0
+    },
+    "opened_at_all": false
+  },
+  "files_changed": {
+    "modified": [
+      "scripts/hirist_parser.py",
+      "scripts/test_hirist_normalization_url_forensics.py"
+    ],
+    "new": [
+      "scripts/test_hirist_job_url_remediation.py",
+      "data/reports/hirist_job_url_remediation.md",
+      "data/reports/hirist_job_url_remediation.json"
+    ],
+    "not_modified": [
+      "scripts/hirist_adapter.py", "scripts/hirist_fetcher.py",
+      "scripts/hirist_fetch_bridge.js", "scripts/naukri_parser.py",
+      "scripts/naukri_adapter.py", "scripts/naukri_fetcher.py",
+      "scripts/naukri_fetch_bridge.js", "scripts/source_registry.py",
+      "scripts/search_profile.py", "scripts/search_worker.py",
+      "scripts/score_job.py", "scripts/discover_local.py",
+      "scripts/job_id.py", "scripts/job_eligibility.py",
+      "data/applications/jobos.db", "any existing Hirist fixture",
+      "any LinkedIn file"
+    ]
+  },
+  "summary": [
+    "job_url is now correctly extracted for real Hirist data, using the exact top-level url field Step 9 confirmed every real entry has",
+    "this automatically fixes job_id too, at zero additional code cost, via the existing, unmodified discover_local.generate_job_id() URL-based hashing",
+    "no separate raw numeric stable-ID field was added -- existing schema has none, URL-based mechanism already supersedes the need, and the numeric-suffix-as-ID inference is not yet confirmed strongly enough",
+    "company/title parsing is completely unchanged, confirmed by a dedicated regression test, per explicit instruction"
+  ],
+  "stopped_after_this_task": true,
+  "live_hirist_query_performed": false,
+  "hirist_enabled": false,
+  "awaiting_review_before_next_step": true
+}

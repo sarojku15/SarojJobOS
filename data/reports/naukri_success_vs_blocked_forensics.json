@@ -1,0 +1,104 @@
+{
+  "task": "Offline differential forensic comparison between the most recent successful Naukri run and the two most recent blocked runs",
+  "no_new_live_requests": true,
+  "no_browser_launches": true,
+  "code_changes_made": false,
+  "runs_compared": {
+    "A_successful": {"report": "data/reports/naukri_5_query_validation.md", "date_context": "before headless/jobAge features existed", "outcome": "VALID_RESULTS, 20 job links for query 1 (Infrastructure Engineer/Bangalore)"},
+    "B_blocked_no_jobage": {"report": "data/reports/naukri_single_query_no_jobage_live_validation.md", "outcome": "BLOCKED, HTTP 403, 0 jobs"},
+    "C_blocked_with_jobage": {"report": "data/reports/naukri_advisory_health_check_live_validation.md", "outcome": "BLOCKED, 0 jobs (HTTP status not captured then)"}
+  },
+  "headline_finding": {
+    "statement": "Run A's first query used the exact same base URL as Run B (https://www.naukri.com/infrastructure-engineer-jobs-in-bangalore) and returned VALID_RESULTS with 20 real listings; the identical URL later returned BLOCKED/403/0 listings in Run B.",
+    "label": "FACT for the outcome comparison; the exact URL string for Run A is an INFERENCE reconstructed from unchanged, deterministic _build_search_url() slug logic, since Run A's own instrumentation never logged the literal URL"
+  },
+  "browser_comparison": {
+    "playwright_version": {"run_a": "1.63.0", "runs_bc": "1.63.0", "label": "FACT - unchanged, no reinstall performed"},
+    "chromium_revision": {"run_a": "1243 (inferred, not directly captured)", "runs_bc": "1243 (confirmed via process evidence)", "label": "INFERENCE for run A"},
+    "channel": {"run_a": "none specified (chromium.launch({headless:false}))", "runs_bc": "channel:'chromium' explicitly", "label": "FACT reconstructed from session edit history; no git history exists to verify independently (git log confirms zero commits)"},
+    "headless_or_headed": {"run_a": "headed", "runs_bc": "headless", "label": "FACT"},
+    "executable_observed": {"run_a": "not captured (no instrumentation existed)", "runs_bc": "chromium-1243/Google Chrome for Testing.app, 0 headless_shell observations", "label": "FACT for runs B/C"},
+    "context_options": {"both": "{viewport: {width:1440, height:900}}, unchanged", "label": "FACT"},
+    "user_agent_locale_timezone": {"both": "never explicitly set, never captured", "label": "FACT (no override exists); NOT_DETERMINABLE (actual values)"},
+    "cookies_storage_state": {"both": "none - every fetch is an isolated launch/close cycle", "label": "FACT"},
+    "automation_settings": {"both": "no stealth/evasion, no navigator.webdriver patching, ever", "label": "FACT"}
+  },
+  "http_request_comparison": {
+    "exact_url_query1": {"run_a": "https://www.naukri.com/infrastructure-engineer-jobs-in-bangalore (reconstructed)", "run_b": "https://www.naukri.com/infrastructure-engineer-jobs-in-bangalore (captured)", "run_c": "same + ?jobAge=3 (captured)"},
+    "headers": {"all_runs": "never captured", "label": "NOT_DETERMINABLE"},
+    "cookies": {"all_runs": "none sent", "label": "FACT"},
+    "redirects": {"run_a": "not captured", "runs_bc": "none observed, final URL == requested URL", "label": "NOT_DETERMINABLE (A); FACT (B/C)"},
+    "http_status": {"run_a": "not captured (diagnostic added after run A)", "run_b": 403, "run_c": "not captured (diagnostic added between C and B)", "label": "cannot be compared to run A; B and C both effectively blocked regardless"},
+    "timing": {"all_runs": "not precisely measured anywhere in this project", "label": "NOT_DETERMINABLE"}
+  },
+  "request_sequence_comparison": {
+    "run_a": {"health_check": "succeeded", "search_requests": 5, "detail_requests": 100, "total_requests": 106, "shared_session": false},
+    "runs_bc": {"health_check": "failed (UNKNOWN_BLOCK)", "search_requests": 1, "detail_requests": 0, "total_requests": 2, "shared_session": false},
+    "cumulative_session_context": "FACT: Run A occurred earliest in this session's cumulative Naukri-request timeline; Runs B/C occurred after substantially more cumulative requests had already been made across multiple prior tasks this session"
+  },
+  "code_version_state": {
+    "git_history_exists": false,
+    "git_log_result": "fatal: your current branch 'main' does not have any commits yet",
+    "evidence_source": "this session's own first-hand sequential edit record, not an independently-verifiable git diff",
+    "changes_between_run_a_and_runs_bc": [
+      "naukri_fetch_bridge.js: headless:false hardcoded -> channel:'chromium' + JOBOS_BROWSER_HEADLESS-driven headless (default true), plus stderr DIAGNOSTIC line added later still",
+      "naukri_fetcher.py: stderr forwarded only on failure -> also forwarded on success (added between run C and run B)",
+      "naukri_parser.py: BLOCKED detail generic -> includes matched phrase (added between run C and run B)",
+      "source_registry.py/source_adapter.py: health_check hard gate -> advisory opt-in (added before run C)",
+      "naukri_adapter.py _build_search_url: no jobAge support -> jobAge=N support; role/location slug logic unchanged throughout"
+    ],
+    "classifier_phrase_list_changed": false
+  },
+  "naukri_response_comparison": {
+    "run_a_query1": {"classifier_state": "VALID_RESULTS", "job_links": 20, "http_status": "not captured"},
+    "run_b": {"classifier_state": "BLOCKED", "job_links": 0, "http_status": 403, "matched_phrase": "access denied"},
+    "run_c": {"classifier_state": "BLOCKED", "job_links": 0, "http_status": "not captured", "matched_phrase": "not captured (generic detail only)"}
+  },
+  "reproducibility_of_run_a": {
+    "launch_config_reproducible_offline": true,
+    "headers_ua_timing_reproducible": false,
+    "reason": "never captured by Run A's own instrumentation, and no code anywhere ever explicitly set them in either era"
+  },
+  "hypotheses": {
+    "A_headless_causes_403": {"verdict": "SUPPORTED", "note": "confounded with E, cannot be isolated", "evidence": "identical URL succeeded headed (Run A), failed headless with full binary confirmed (Runs B/C)"},
+    "B_headless_shell_binary_mismatch": {"verdict": "CONTRADICTED", "evidence": "channel='chromium' (full binary, 0 headless_shell observations) confirmed in use, still blocked"},
+    "C_headers_context_differ": {"verdict": "NOT_DETERMINABLE", "evidence": "no header/context data ever captured for any run"},
+    "D_session_cookie_state_differs": {"verdict": "CONTRADICTED", "evidence": "no cookie/session mechanism exists anywhere, in either era; nothing to differ"},
+    "E_request_sequence_volume_differs": {"verdict": "SUPPORTED", "note": "confounded with A, cannot be isolated", "evidence": "Run A occurred earliest in cumulative session request timeline; Runs B/C occurred after substantially more cumulative requests"},
+    "F_url_construction_causes_403": {"verdict": "CONTRADICTED", "evidence": "byte-identical URL succeeded in Run A and was blocked in Run B"},
+    "G_naukri_blocks_independent_of_jobAge": {"verdict": "SUPPORTED", "evidence": "identical outcome (403, BLOCKED, 0 jobs) with and without jobAge=3, directly demonstrated in the prior controlled A/B test"},
+    "H_evidence_insufficient": {"verdict": "NOT_DETERMINABLE", "note": "narrowed uncertainty: B, D, F ruled out and G established, but A vs E remains genuinely confounded"}
+  },
+  "recommended_next_single_experiment": {
+    "option_1_headed_exception": {
+      "query": {"role": "Infrastructure Engineer", "location": "Bangalore", "max_job_age_days": null},
+      "browser_mode": "headed, via JOBOS_BROWSER_HEADLESS=0 (deliberate one-time diagnostic exception, not a change to the automated default)",
+      "configuration": "everything else identical: channel='chromium' (moot in headed mode), advisory health check unchanged, no code changes",
+      "request_url": "https://www.naukri.com/infrastructure-engineer-jobs-in-bangalore",
+      "variable_changed": "headless -> headed",
+      "must_remain_identical": ["query", "URL", "advisory architecture", "channel setting", "exactly one request, no retries"],
+      "expected_outcomes": {
+        "VALID_RESULTS": "strong evidence against E as dominant cause, for A (headless-mode association)",
+        "BLOCKED_again": "strong evidence against A as sole cause, pointing toward E or another factor"
+      },
+      "caveat": "requires a visible browser window to appear once, as a deliberate human-approved exception -- not executed by this report"
+    },
+    "option_2_headless_cooldown": {
+      "description": "same query, headless, after a substantially longer cooldown period",
+      "informativeness": "weaker - does not cleanly separate A from E",
+      "advantage": "stays fully headless, no visible window"
+    },
+    "executed": false
+  },
+  "ready_for_multi_query_validation": {
+    "ready": false,
+    "reason": "The open A-vs-E confound is best resolved by one more carefully isolated single query, not by additional volume against a source already confirmed blocking on its most recent attempts. Multi-query would add exactly the kind of cumulative volume Hypothesis E already implicates, without additional discriminating power."
+  },
+  "production_db": {
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "row_counts_before": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+    "row_counts_after": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+    "unchanged": true
+  }
+}

@@ -1,0 +1,110 @@
+{
+  "test_objective": "Determine whether the Naukri search page remains blocked with jobAge=3 completely removed, while preserving the advisory health-check architecture and collecting new diagnostic evidence",
+  "query": {"source": "NAUKRI", "role": "Infrastructure Engineer", "location": "Bangalore", "max_job_age_days": null},
+  "pre_flight_confirmations": {
+    "query_has_no_max_job_age_days": true,
+    "advisory_health_check_enabled": true,
+    "headless_default_enabled": true,
+    "channel_chromium": true,
+    "production_sha_before_matches_expected": true,
+    "production_row_counts_before_match_expected": true
+  },
+  "temp_db_path": "/var/folders/5x/hc_gpp312k1fm2bsxw0d2t2r0000gn/T/jobos_live_1query_nojobage_xo_1hx15/jobos_test.db",
+  "search_run_id": "23e25ae7-b194-42d3-b0f3-71c92a72ef3b",
+  "A_homepage_health_check": {
+    "reachable": false,
+    "block_reason": "UNKNOWN_BLOCK",
+    "adapter_health_detail": "",
+    "http_status": 403,
+    "final_url": "https://www.naukri.com/",
+    "requested_url": "https://www.naukri.com/",
+    "label": "FACT (all fields observed directly)"
+  },
+  "B_search_execution": {
+    "search_attempted": true,
+    "search_attempt_count": 1,
+    "requested_url": "https://www.naukri.com/infrastructure-engineer-jobs-in-bangalore",
+    "final_url": "https://www.naukri.com/infrastructure-engineer-jobs-in-bangalore",
+    "redirect_occurred": false,
+    "http_status": 403,
+    "matched_block_phrase": "access denied",
+    "classifier_state": "BLOCKED",
+    "classifier_block_reason": "UNKNOWN_BLOCK",
+    "classifier_detail": "block phrase matched (UNKNOWN_BLOCK): 'access denied'",
+    "exception_raised": "AdapterBlockedError",
+    "jobAge_present_in_url": false,
+    "label": "FACT (all fields observed directly via instrumentation)"
+  },
+  "C_browser_evidence": {
+    "headless": true,
+    "channel": "chromium",
+    "executable_observed": "chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app",
+    "headless_shell_observations": 0,
+    "total_process_observations": 328,
+    "observations_with_headless_flag": 74,
+    "visible_ui": false,
+    "label": "FACT"
+  },
+  "D_results": {
+    "raw_jobs": 0,
+    "normalized_jobs": 0,
+    "unique_jobs": 0,
+    "freshness_classifications": "none (0 jobs)",
+    "label": "FACT"
+  },
+  "E_comparison_with_previous_test": {
+    "previous": {
+      "url": "https://www.naukri.com/infrastructure-engineer-jobs-in-bangalore?jobAge=3",
+      "homepage_health_check": "failed, UNKNOWN_BLOCK",
+      "homepage_http_status": "not captured (diagnostic did not exist yet)",
+      "search_attempted": true,
+      "search_http_status": "not captured (diagnostic did not exist yet)",
+      "matched_block_phrase": "not captured (generic detail only, diagnostic did not exist yet)",
+      "search_classifier_state": "BLOCKED",
+      "jobs_returned": 0,
+      "worker_status": "BLOCKED"
+    },
+    "current": {
+      "url": "https://www.naukri.com/infrastructure-engineer-jobs-in-bangalore",
+      "homepage_health_check": "failed, UNKNOWN_BLOCK",
+      "homepage_http_status": 403,
+      "search_attempted": true,
+      "search_http_status": 403,
+      "matched_block_phrase": "access denied",
+      "search_classifier_state": "BLOCKED",
+      "jobs_returned": 0,
+      "worker_status": "BLOCKED"
+    },
+    "answers": {
+      "1_outcome_changed_by_removing_jobAge": {"answer": false, "label": "FACT/OBSERVED"},
+      "2_homepage_health_check_result_changed": {"answer": false, "label": "FACT/OBSERVED"},
+      "3_search_http_status_changed": {"answer": "NOT_DETERMINABLE", "reason": "previous run never captured any HTTP status code"},
+      "4_final_url_changed": {"answer": "requested URL differs by design; no redirect this run; previous run's redirect status NOT_DETERMINABLE (not captured)"},
+      "5_matched_block_phrase_changed": {"answer": "NOT_DETERMINABLE", "reason": "previous run never captured the exact matched phrase"},
+      "6_search_classifier_changed": {"answer": false, "label": "FACT/OBSERVED"},
+      "7_listings_returned": {"answer": false, "label": "FACT/OBSERVED (both runs)"},
+      "8_freshness_data": {"answer": "none available in either run"}
+    }
+  },
+  "interpretation": {
+    "jobAge_supported_as_cause": "NOT_SUPPORTED - both homepage and search remain blocked identically with jobAge completely removed, directly reinforcing the prior forensic report's Hypothesis F verdict (CONTRADICTED) via a genuine controlled A/B removal",
+    "new_independent_evidence": "HTTP 403 status captured for the first time ever on both the homepage and search requests -- an HTTP-layer signal independent of the page-text phrase classifier, strengthening confidence that the BLOCKED classification is a genuine access-denied response, not a text-classifier false positive (Hypothesis E)",
+    "root_cause": "NOT_DETERMINABLE - removing jobAge did not change whether the block occurred, providing no new signal to distinguish categorical-headless-block vs. cumulative-rate-limiting vs. another cause. Per instruction, causality is NOT attributed to headless mode, rate limiting, WAF policy, or fingerprint without direct evidence, and none of this run's evidence provides that direct attribution.",
+    "advisory_architecture": "Confirmed working correctly for the second consecutive live run -- search() was genuinely attempted despite a failed homepage health check, and its own outcome correctly drove the worker's BLOCKED aggregate status."
+  },
+  "single_live_attempt_confirmed": true,
+  "retry_occurred": false,
+  "code_changed_this_task": false,
+  "classifier_weakened_or_bypassed": false,
+  "advisory_architecture_disabled": false,
+  "browser_fingerprint_changed": false,
+  "production_db": {
+    "sha256_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "sha256_after": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+    "size_before": 114688,
+    "size_after": 114688,
+    "row_counts_before": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+    "row_counts_after": {"candidates": 1, "candidate_search_profile": 1, "jobs": 9, "candidate_job_matches": 0, "search_runs": 0, "search_queue": 0},
+    "unchanged": true
+  }
+}

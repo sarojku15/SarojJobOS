@@ -1,0 +1,92 @@
+{
+  "policy": {
+    "respect_site_terms": true,
+    "respect_rate_limits": true,
+    "never_bypass_captcha": true,
+    "never_bypass_mfa": true,
+    "never_bypass_anti_bot_controls": true,
+    "human_handoff_on_block": true,
+    "human_approval_before_submission": true
+  },
+
+  "sources": {
+    "Naukri": {
+      "enabled": true,
+      "mode": "browser",
+      "discovery": true,
+      "application": true
+    },
+    "LinkedIn": {
+      "enabled": false,
+      "mode": "browser",
+      "discovery": false,
+      "application": false
+    },
+    "Hirist": {
+      "enabled": true,
+      "mode": "browser",
+      "discovery": true,
+      "application": false,
+      "note": "Phase 11: discovery-only, live-validated (two-stage listing+detail-page fetch). Application submission is never implemented for any source in this project."
+    },
+    "Indeed": {
+      "enabled": false,
+      "mode": "browser",
+      "discovery": false,
+      "application": false
+    },
+    "Foundit": {
+      "enabled": false,
+      "mode": "browser",
+      "discovery": false,
+      "application": false,
+      "note": "Phase 12: NOT_AUTHORIZED. robots.txt explicitly names ClaudeBot among disallowed agents on /jobs//search/; the user's own provided search URL also returned HTTP 403 on a live check."
+    },
+    "Instahyre": {
+      "enabled": false,
+      "mode": "browser",
+      "discovery": false,
+      "application": false,
+      "note": "Phase 12: NOT_AUTHORIZED. A live fetch of the user's own real job detail URL returned HTTP 403 with an active Cloudflare challenge-platform response."
+    },
+    "Cutshort": {
+      "enabled": false,
+      "mode": "browser",
+      "discovery": false,
+      "application": false,
+      "note": "Phase 12: NOT_AUTHORIZED. __NEXT_DATA__ dehydratedState is null (client-side-only job data); a live network capture found active Cloudflare challenge-platform requests during a normal page load."
+    },
+    "Wellfound": {
+      "enabled": false,
+      "mode": "browser",
+      "discovery": false,
+      "application": false
+    },
+    "Shine": {
+      "enabled": false,
+      "mode": "browser",
+      "discovery": false,
+      "application": false
+    },
+    "TimesJobs": {
+      "enabled": false,
+      "mode": "browser",
+      "discovery": false,
+      "application": false
+    },
+    "Iimjobs": {
+      "enabled": true,
+      "mode": "browser",
+      "discovery": true,
+      "application": false,
+      "note": "Phase 11: discovery-only, live-validated. Shares Hirist's underlying platform/parsing approach."
+    },
+    "Apna": {
+      "enabled": true,
+      "mode": "http",
+      "discovery": true,
+      "application": false,
+      "note": "Phase 12: discovery-only, live-validated. Job data is genuinely server-rendered (a React Server Components streaming payload) and reachable via plain HTTP GET -- no browser automation needed."
+    }
+  }
+}

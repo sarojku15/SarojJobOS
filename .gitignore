@@ -1,0 +1,61 @@
+# Secrets
+.env
+.env.*
+credentials.json
+token.json
+client_secret*.json
+
+# Google / OAuth
+*.pem
+*.key
+
+# Browser sessions and authentication
+browser/sessions/
+browser/.auth/
+playwright/.auth/
+
+# Job application personal data
+data/applications/
+data/private/
+data/*.csv
+data/*.xlsx
+
+# Phase 7.2: daily automated search/report artifacts (job_search_report.xlsx,
+# run_summary.json, worker.log per data/daily/YYYY-MM-DD/) -- generated
+# output, never committed
+data/daily/
+
+# Logs
+logs/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+
+# n8n runtime data — contains database and encrypted credentials
+n8n/*
+
+# Personal resume and application data
+resumes/
+data/applications/
+data/private/
+
+# Local test job data
+data/test_job*.json

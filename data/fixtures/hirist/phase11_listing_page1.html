@@ -1,0 +1,42 @@
+<!--
+SYNTHETIC fixture (Phase 11), NOT a real captured Hirist page. A
+variant of valid_results_page1.html with "url" fields added to every
+entry, matching the shape a real controlled live validation actually
+observed this phase (data/reports/phase11_public_multisource_completion.md):
+every real ListItem carries a top-level "url" sibling to "name",
+whether or not a nested "item" object is also present. Kept as a
+SEPARATE fixture from valid_results_page1.html so that file's own
+historical "no url field" regression proof
+(test_hirist_job_url_remediation.py test E) is never disturbed.
+-->
+<!DOCTYPE html><html lang="en"><head>
+<title>Search for - Senior Devops Engineer Jobs, 3441 Job Vacancies | hirist.tech</title>
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://www.hirist.tech/search/senior-devops-engineer-jobs">
+<link rel="next" href="https://www.hirist.tech/search/senior-devops-engineer-jobs?page=2">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"item":{"@id":"https://www.hirist.tech/","name":"Home"}}]}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "ItemList",
+  "name": "Search for - Senior Devops Engineer Jobs",
+  "numberOfItems": 2,
+  "itemListElement": [
+    {"@type": "ListItem", "position": 1, "name": "Verint - Senior DevOps Engineer", "url": "https://www.hirist.tech/j/verint-senior-devops-engineer-1001"},
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "item": {
+        "@type": "JobPosting",
+        "title": "Lead Platform Engineer",
+        "url": "https://www.hirist.tech/job-detail/lead-platform-engineer-12345"
+      }
+    }
+  ]
+}
+</script>
+</head><body>
+<h1>Senior Devops Engineer Jobs</h1>
+</body></html>

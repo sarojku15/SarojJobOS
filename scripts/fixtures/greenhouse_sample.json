@@ -1,0 +1,20 @@
+{
+  "jobs": [
+    {
+      "id": 1001,
+      "title": "Senior Cloud Engineer",
+      "absolute_url": "https://boards.greenhouse.io/examplecompany/jobs/1001",
+      "location": {"name": "Bangalore, India"},
+      "updated_at": "2026-09-15T10:00:00-05:00",
+      "content": "<p>We are looking for a Senior Cloud Engineer with AWS and Terraform experience.</p>"
+    },
+    {
+      "id": 1002,
+      "title": "Marketing Manager",
+      "absolute_url": "https://boards.greenhouse.io/examplecompany/jobs/1002",
+      "location": {"name": "Remote"},
+      "updated_at": "2026-09-10T10:00:00-05:00",
+      "content": "<p>Lead our marketing team.</p>"
+    }
+  ]
+}

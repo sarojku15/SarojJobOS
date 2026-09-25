@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Phase 7.2 (data/reports/phase7_2_automation_status_audit.md, PART B).
+
+  PROJECT-OWNED TEMPLATE. NOT installed. NOT loaded. NOT activated by
+  anything in this repository. See launchd/README.md for the manual,
+  human-approved installation step - copying this file into
+  ~/Library/LaunchAgents/ and running `launchctl load` is a deliberate,
+  separate action this task does not take.
+
+  What this does, once installed: once per day, launchd starts
+  scripts/run_daily_search.sh (the ONLY thing this job ever invokes -
+  see that script's own header for what it does and why a wrapper is
+  needed at all). RunAtLoad and KeepAlive are both explicitly false:
+  this is a bounded, once-a-day trigger, never a daemon/loop, and
+  launchd will never auto-relaunch the job just because a prior run
+  exited non-zero - a failed run stays failed until the next
+  scheduled trigger (or a human re-runs it manually), matching
+  search_worker.py's own "no daemon loop, no automatic retry" design.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.sarojjobos.dailysearch</string>
+
+    <!-- Absolute path to the wrapper script (PART B requirement #3).
+         The wrapper itself resolves every further path (Python,
+         production DB, output directory) from its own hardcoded
+         PROJECT_ROOT - launchd provides no working-directory or PATH
+         guarantee, so nothing here relies on either. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/sarojnayak/SarojJobOS/scripts/run_daily_search.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/sarojnayak/SarojJobOS</string>
+
+    <!-- Once per day at 08:00 local time. Adjust to taste before
+         installing - nothing about this template requires this exact
+         time. -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>8</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <!-- Scheduler-level stdout/stderr (PART B requirement #7: "keep
+         all logs under ~/SarojJobOS/logs/"). Separate from the
+         per-day, per-run scripts/run_daily_search.sh -> worker.log
+         (PART C's data/daily/YYYY-MM-DD/worker.log) - this captures
+         anything launchd itself observes (e.g. the wrapper script
+         failing to even start), independent of whether the wrapper
+         got far enough to write its own log. -->
+    <key>StandardOutPath</key>
+    <string>/Users/sarojnayak/SarojJobOS/logs/launchd_dailysearch.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/sarojnayak/SarojJobOS/logs/launchd_dailysearch.err.log</string>
+
+    <!-- Belt-and-suspenders: the wrapper script already exports this
+         itself before invoking Python, but setting it here too means
+         the guarantee holds even if this plist's ProgramArguments were
+         ever pointed at something else directly (PART B requirement
+         #9: never open a visible browser window). -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>JOBOS_BROWSER_HEADLESS</key>
+        <string>1</string>
+    </dict>
+
+    <!-- Do NOT start immediately when the job is loaded - only at the
+         next scheduled StartCalendarInterval trigger. -->
+    <key>RunAtLoad</key>
+    <false/>
+
+    <!-- Do NOT relaunch automatically on exit (success OR failure) -
+         a single bounded run per scheduled trigger, matching
+         run_search_worker.py's own "no daemon/loop mode" contract.
+         This, together with the wrapper script's own mkdir-based lock,
+         is the overlap-protection story: KeepAlive=false means
+         launchd itself never causes an overlap, and the lock protects
+         against a manually-triggered run colliding with a scheduled
+         one. -->
+    <key>KeepAlive</key>
+    <false/>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <!-- A generous but bounded ceiling - Naukri live validation runs
+         in this project have taken well under a minute per query; this
+         is a safety bound against a genuinely hung browser process,
+         not a tuned expectation. launchd sends SIGKILL if exceeded. -->
+    <key>ExitTimeOut</key>
+    <integer>600</integer>
+</dict>
+</plist>

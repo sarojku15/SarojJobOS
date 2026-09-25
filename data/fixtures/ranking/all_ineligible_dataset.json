@@ -1,0 +1,71 @@
+{
+  "reference_date": "2026-09-20",
+  "candidate_profile": {
+    "candidate": {"name": "Test Candidate", "experience_years": 11},
+    "target_locations": ["Bengaluru", "Hyderabad", "Pune", "Chennai", "Remote"],
+    "cloud": ["AWS", "Azure"],
+    "kubernetes": ["Kubernetes", "EKS", "AKS", "Helm"],
+    "iac_and_automation": ["Terraform", "Ansible"],
+    "cicd_and_devops": ["Jenkins", "GitHub Actions", "ArgoCD"],
+    "observability": ["Prometheus", "Grafana", "Splunk", "Dynatrace", "OpenTelemetry"],
+    "sre": ["SLO", "SLI", "SLA", "Error Budgets", "Incident Management", "RCA"],
+    "programming_and_scripting": ["Python", "Shell", "PowerShell"],
+    "tools": ["Linux"]
+  },
+  "cases": [
+    {
+      "case_id": 1,
+      "description": "Wrong city -- ineligible",
+      "job": {
+        "source": "SOURCE_A",
+        "job_id": "ALLINEL-JOB-001",
+        "company": "Coastal Systems",
+        "title": "Senior Site Reliability Engineer",
+        "location": "Mumbai",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/3001",
+        "posted_date": "2026-09-19",
+        "jd_text": "Senior SRE role based in Mumbai.",
+        "experience_required": "8-12 years",
+        "mandatory_skills": [],
+        "preferred_skills": []
+      }
+    },
+    {
+      "case_id": 2,
+      "description": "Below-profile experience -- ineligible",
+      "job": {
+        "source": "SOURCE_A",
+        "job_id": "ALLINEL-JOB-002",
+        "company": "Fresh Grad Startups",
+        "title": "Site Reliability Engineer",
+        "location": "Bengaluru",
+        "work_model": "",
+        "job_url": "https://source-a.example.com/jobs/3002",
+        "posted_date": "2026-09-18",
+        "jd_text": "Entry-level SRE role.",
+        "experience_required": "1-3 years",
+        "mandatory_skills": [],
+        "preferred_skills": []
+      }
+    },
+    {
+      "case_id": 3,
+      "description": "Both wrong city and below-profile experience -- ineligible on both grounds",
+      "job": {
+        "source": "SOURCE_B",
+        "job_id": "ALLINEL-JOB-003",
+        "company": "Coastal Systems",
+        "title": "Site Reliability Engineer",
+        "location": "Mumbai",
+        "work_model": "",
+        "job_url": "https://source-b.example.com/careers/3003",
+        "posted_date": "2026-09-17",
+        "jd_text": "Entry-level SRE role based in Mumbai.",
+        "experience_required": "1-3 years",
+        "mandatory_skills": [],
+        "preferred_skills": []
+      }
+    }
+  ]
+}
