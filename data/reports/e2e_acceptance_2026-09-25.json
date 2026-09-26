@@ -1,0 +1,305 @@
+{
+  "generated_at": "2026-09-25T19:56:11.698915+00:00",
+  "commit": "665c83d92e7144f595c88c0ebd2bb487a3100202",
+  "candidate_id": "cand_2b31bdbe4850",
+  "resume_id_a": "resume_36ac84015e7c",
+  "resume_id_b": "resume_85a83ad1c9c2",
+  "profile_version_a": 3,
+  "profile_version_b": 5,
+  "search_a_id": "search_9a7ddbded9a3",
+  "search_b_id": "search_1d3feca332ad",
+  "run_a_id": "86808bd4-6608-49e1-8ca1-872629cb8bfc",
+  "run_b_id": "d8e53a83-9a69-4acc-879c-ddc581758e3e",
+  "run_a2_id": "22303a6f-82d6-4eb8-8200-38766c98d5df",
+  "apna_details": {
+    "detail_fetch_attempted": 20,
+    "detail_fetch_succeeded": 19,
+    "detail_fetch_failed": 1
+  },
+  "candidate_job_matches_count": 75,
+  "candidate_job_search_matches_count": 213,
+  "production_before": "174fc2e752dbd168ef3d99c42efed2c0df64a9b825b2b1a54c02c25cbcd87dc8",
+  "production_before_size": 114688,
+  "steps": [
+    {
+      "step": 1,
+      "description": "Start the real application",
+      "expected": "app responds",
+      "actual": "GET /api/health -> 200 {'status': 'OK', 'db': 'jobos_dev.db'}",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 2,
+      "description": "Create fresh test candidate",
+      "expected": "201/200 with candidate_id",
+      "actual": "200, candidate_id=cand_2b31bdbe4850",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 3,
+      "description": "Upload Resume A (real PDF, real extraction)",
+      "expected": "200 SUCCESS with resume_id + profile draft",
+      "actual": "200, status=SUCCESS, resume_id=resume_36ac84015e7c, profile_version=2",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 4,
+      "description": "Confirm Resume A / profile version",
+      "expected": "profile_status=CONFIRMED",
+      "actual": "200, status=CONFIRMED, version_a=3",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 5,
+      "description": "Upload Resume B (no 2nd real PDF fixture exists; constructed via resume_store.py directly, same pattern as this project's own committed tests)",
+      "expected": "resume_id created, distinct from Resume A",
+      "actual": "resume_id_b=resume_85a83ad1c9c2, distinct=True",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 6,
+      "description": "Confirm Resume B / profile version",
+      "expected": "profile_status=CONFIRMED, new version > version_a",
+      "actual": "200, status=CONFIRMED, version_b=5",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 7,
+      "description": "Create Search A pinned to Resume A",
+      "expected": "profile_version=3",
+      "actual": "200, search_a_id=search_9a7ddbded9a3, profile_version=3",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 8,
+      "description": "Create Search B pinned to Resume B",
+      "expected": "profile_version=5",
+      "actual": "200, search_b_id=search_1d3feca332ad, profile_version=5",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 9,
+      "description": "Run Search A through the real source/provider pipeline (live APNA)",
+      "expected": "COMPLETED (or PARTIAL)",
+      "actual": "run_a_id=86808bd4-6608-49e1-8ca1-872629cb8bfc, status=COMPLETED",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 10,
+      "description": "Results/summary/source-audit use the same run_id",
+      "expected": "all three identical",
+      "actual": "run_a_id=86808bd4-6608-49e1-8ca1-872629cb8bfc, results.run_id=86808bd4-6608-49e1-8ca1-872629cb8bfc, canonical=86808bd4-6608-49e1-8ca1-872629cb8bfc, match=True",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 11,
+      "description": "Source counts are truthful",
+      "expected": "APNA attempted=True, real status, eligible_count matches actual API results",
+      "actual": "apna_entry={'id': 1, 'search_run_id': '86808bd4-6608-49e1-8ca1-872629cb8bfc', 'source': 'APNA', 'attempted': True, 'started_at': '2026-09-25T19:52:34+00:00', 'completed_at': '2026-09-25T19:53:43+00:00', 'duration_ms': 69000, 'reachable': True, 'succeeded': True, 'raw_count': 75, 'eligible_count': 75, 'displayed_count': 75, 'status': 'SUCCESS', 'error_type': None, 'error_message': None, 'details_json': '{\"detail_fetch_attempted\": 20, \"detail_fetch_succeeded\": 19, \"detail_fetch_failed\": 1}', 'created_at': '2026-09-25T19:53:43.316887+00:00', 'board': 'APNA', 'details': {'detail_fetch_attempted': 20, 'detail_fetch_succeeded': 19, 'detail_fetch_failed': 1}}, api_results_count=75, eligible_matches_api=True",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 12,
+      "description": "Verify APNA detail fetching",
+      "expected": "detail_fetch_attempted > 0",
+      "actual": "details={'detail_fetch_attempted': 20, 'detail_fetch_succeeded': 19, 'detail_fetch_failed': 1}",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 13,
+      "description": "APNA jobs contain real JD text when detail fetch succeeded",
+      "expected": "count matches detail_fetch_succeeded",
+      "actual": "jobs_with_nonempty_jd=19, detail_fetch_succeeded=19, sample=Site Engineer job opportunity.",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 14,
+      "description": "Score explanations match actual JD evidence (recomputed score_job() == displayed score)",
+      "expected": "recomputed score == displayed score for all sampled jobs",
+      "actual": "[{\"job_id\": \"APNA-04df26d0fbeaf9e9\", \"persisted_score\": 25, \"recomputed_score\": 25, \"matches\": true, \"matched_skills\": [\"SRE/DevOps responsibilities\", \"Experience\", \"Overall/domain fit\"]}, {\"job_id\": \"APNA-25d12f4709b2add0\", \"persisted_score\": 20, \"recomputed_score\": 20, \"matches\": true, \"matched_skills\": [\"Partial cloud alignment\", \"Partial Kubernetes\", \"Experience\"]}, {\"job_id\": \"APNA-1360ee3113777de1\", \"persisted_score\": 18, \"recomputed_score\": 18, \"matches\": true, \"matched_skills\": [\"Partial cloud alignment\", \"Experience requirement not specified\", \"Partial domain fit\"]}]",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 15,
+      "description": "Hard-eligible vs qualified distinction",
+      "expected": "hard_eligible_count >= qualified_count, both independently meaningful",
+      "actual": "hard_eligible=75, qualified=0, total_results=75",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 16,
+      "description": "Search A results remain tied to Resume A",
+      "expected": "resume_variant reflects Resume A's filename",
+      "actual": "resume_variants_seen={'SarojKumarNayak_SRE_DevOps_11Yrs'}",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 17,
+      "description": "Run Search B",
+      "expected": "COMPLETED (or PARTIAL)",
+      "actual": "run_b_id=d8e53a83-9a69-4acc-879c-ddc581758e3e, status=COMPLETED",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 18,
+      "description": "Search B results remain tied to Resume B",
+      "expected": "resume_variant reflects Resume B's filename",
+      "actual": "resume_variants_seen={'E2E_ResumeB_Azure_Focused'}, run_id=d8e53a83-9a69-4acc-879c-ddc581758e3e",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 19,
+      "description": "Same-job multi-search independence (natural overlap found)",
+      "expected": "job stays visible in BOTH searches independently",
+      "actual": "overlap_count=69, sample_job=APNA-b4bf88c7fb078ac5, still_in_A=True, still_in_B=True",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 20,
+      "description": "Edit Search A and change its pinned profile",
+      "expected": "profile_version=5",
+      "actual": "200, profile_version=5",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 21,
+      "description": "Historical Search A run unchanged after edit",
+      "expected": "run_id still == 86808bd4-6608-49e1-8ca1-872629cb8bfc (no auto-rescore against the new pin until a NEW run)",
+      "actual": "run_id=86808bd4-6608-49e1-8ca1-872629cb8bfc",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 22,
+      "description": "Re-run Search A uses the new pinned profile",
+      "expected": "new run_id, resume_variant reflects Resume B (the new pin)",
+      "actual": "run_a2_id=22303a6f-82d6-4eb8-8200-38766c98d5df, status=COMPLETED, run_id_in_view=22303a6f-82d6-4eb8-8200-38766c98d5df, variants={'SarojKumarNayak_SRE_DevOps_11Yrs', 'E2E_ResumeB_Azure_Focused'}",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 23,
+      "description": "Shortlist transition",
+      "expected": "200, candidate_status=SHORTLISTED",
+      "actual": "200, {'candidate_id': 'cand_2b31bdbe4850', 'job_id': 'APNA-04df26d0fbeaf9e9', 'candidate_status': 'SHORTLISTED', 'updated_at': '2026-09-25T19:56:11.603376+00:00'}",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 24,
+      "description": "Approval gate (SHORTLISTED -> APPROVED)",
+      "expected": "200, candidate_status=APPROVED",
+      "actual": "200, {'candidate_id': 'cand_2b31bdbe4850', 'job_id': 'APNA-04df26d0fbeaf9e9', 'candidate_status': 'APPROVED', 'updated_at': '2026-09-25T19:56:11.606097+00:00'}",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 25,
+      "description": "APPLIED cannot occur without APPROVED",
+      "expected": "400 rejected",
+      "actual": "400, {'detail': \"Cannot move to 'APPLIED' from 'SHORTLISTED' -- a job must be APPROVED by the candidate before APPLICATION_STARTED/APPLIED. This system never submits an application automatically; the candidate must explicitly approve it first (see config/application_schema.json).\"}",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 26,
+      "description": "No automatic external application submission",
+      "expected": "no auto-apply/auto-submit code path found in api/ or web/",
+      "actual": "grep matches: (none)",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 27,
+      "description": "API/UI consistency",
+      "expected": "results API is the single source both the results page and dashboard read from (no second scoring path)",
+      "actual": "results_api total=75 run_id=86808bd4-6608-49e1-8ca1-872629cb8bfc",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    },
+    {
+      "step": 28,
+      "description": "Excel/export consistency",
+      "expected": "200, real xlsx content-type",
+      "actual": "200, content-type=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, content-length=44576",
+      "status": "PASS",
+      "root_cause": "",
+      "severity": "",
+      "code_changed": "No"
+    }
+  ]
+}

@@ -47,6 +47,7 @@ function renderHeader(search) {
         <div>
           <h1 style="margin-bottom:2px">${escapeHtml(search.name)}</h1>
           <div class="criteria-line">${escapeHtml(criteria)}</div>
+          <div class="hint" id="header-provenance-line">Resume/Profile: loading...</div>
         </div>
         <div class="button-row" style="margin-top:0">
           <button class="secondary small" onclick="window.location.href='/searches/${searchId}'">Search details</button>
@@ -55,6 +56,26 @@ function renderHeader(search) {
       </div>
     </div>
   `;
+}
+
+async function renderHeaderProvenance(search, runId) {
+  const el = document.getElementById("header-provenance-line");
+  if (!el) return;
+  let profileText;
+  if (search.profile_version == null) {
+    profileText = "Current profile (always up to date)";
+  } else {
+    try {
+      const data = await api(`/api/candidates/${search.candidate_id}/profile-versions`);
+      const pinned = (data.profile_versions || []).find((v) => v.version === search.profile_version);
+      profileText = pinned && pinned.resume_filename
+        ? `Resume "${pinned.resume_filename}" (profile v${search.profile_version}, pinned)`
+        : `Profile v${search.profile_version} (pinned)`;
+    } catch (err) {
+      profileText = `Profile v${search.profile_version} (pinned)`;
+    }
+  }
+  el.textContent = `Resume/Profile: ${profileText}${runId ? ` · Run: ${runId}` : ""}`;
 }
 
 function renderSummary(results, search) {
@@ -256,6 +277,7 @@ function openDetail(idx) {
       <dt>Match reason</dt><dd>${escapeHtml(r.match_reason || "-")}</dd>
       <dt>Matched skills</dt><dd class="skill-tag-list">${skillTags(r.matched_skills)}</dd>
       <dt>Missing skills</dt><dd class="skill-tag-list">${skillTags(r.missing_skills, "missing")}</dd>
+      <dt>Resume/Profile used</dt><dd>${escapeHtml(r.resume_variant || "Not available")}</dd>
       <dt>Application status</dt><dd>
         ${badgeHtml(r.status)}
         <select id="status-select" style="margin-left:8px">
@@ -340,6 +362,7 @@ async function load() {
 
     content.innerHTML += renderSummary(allResults, searchInfo);
     content.innerHTML += renderSourceAudit(allSources, data.run_id);
+    renderHeaderProvenance(searchInfo, data.run_id);
     content.innerHTML += `
       <div class="card">
         <h2>Filters</h2>

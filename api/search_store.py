@@ -68,8 +68,32 @@ def validate_sources(sources):
     return list(sources)
 
 
+_VALID_SEARCH_TYPES = frozenset({"USER", "TEST", "SYSTEM"})
+
+
+def validate_search_type(search_type):
+    """None (the overwhelming majority of real calls -- a real user
+    never sets this) lets the DB column's own DEFAULT 'USER' apply,
+    never guessed/inferred here. An explicit value must be one of the
+    three known types -- see migrate_v10_search_type.py."""
+    if search_type is None:
+        return None
+    if search_type not in _VALID_SEARCH_TYPES:
+        raise SearchStoreError(f"Invalid search_type: {search_type!r}. Must be one of {sorted(_VALID_SEARCH_TYPES)}")
+    return search_type
+
+
 def create_saved_search(conn, candidate_id, payload):
     sources = validate_sources(payload.sources)
+    # Defaulted to "USER" in Python (rather than relying on the DB
+    # column's own DEFAULT) because this INSERT always passes an
+    # explicit value for every column -- an explicit bound NULL would
+    # NOT fall back to the column DEFAULT (SQLite only applies DEFAULT
+    # when a column is OMITTED from the INSERT entirely). A real user
+    # creating a search through the normal UI never sets this
+    # themselves; it resolves to "USER" here exactly as if the column
+    # DEFAULT had applied.
+    search_type = validate_search_type(getattr(payload, "search_type", None)) or "USER"
     saved_search_id = "search_" + uuid.uuid4().hex[:12]
     now = _now()
 
@@ -81,9 +105,9 @@ def create_saved_search(conn, candidate_id, payload):
             employment_type, minimum_experience_years, maximum_experience_years,
             salary_expectation_min, salary_expectation_max, salary_currency,
             minimum_match_score, max_job_age_days, sources_json,
-            skills_json, schedule_json, profile_version,
+            skills_json, schedule_json, profile_version, search_type,
             status, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?)
         """,
         (
             saved_search_id,
@@ -104,6 +128,7 @@ def create_saved_search(conn, candidate_id, payload):
             json.dumps(payload.skills or []),
             json.dumps(payload.schedule.model_dump()) if payload.schedule else json.dumps({"enabled": False, "frequency": None}),
             payload.profile_version,
+            search_type,
             now,
             now,
         ),
@@ -152,12 +177,26 @@ def get_saved_search_for_candidate(conn, saved_search_id, candidate_id):
     return saved_search
 
 
-def list_saved_searches(conn, candidate_id, include_archived=False):
+def list_saved_searches(conn, candidate_id, include_archived=False, search_types=("USER",)):
+    """
+    search_types (item 3 fix -- test-data isolation): restricts the
+    listing to these saved_searches.search_type values. Defaults to
+    ("USER",) -- the normal user-facing /searches page and its API
+    show ONLY real user searches, never a TEST/SYSTEM one, by
+    explicit semantic field, not brittle name matching (see
+    migrate_v10_search_type.py). Pass search_types=None for every
+    type (used by this project's own diagnostics, never the normal
+    user-facing endpoint).
+    """
     query = "SELECT * FROM saved_searches WHERE candidate_id = ?"
+    params = [candidate_id]
     if not include_archived:
         query += " AND status = 'ACTIVE'"
+    if search_types is not None:
+        query += f" AND search_type IN ({','.join('?' for _ in search_types)})"
+        params.extend(search_types)
     query += " ORDER BY created_at DESC"
-    rows = conn.execute(query, (candidate_id,)).fetchall()
+    rows = conn.execute(query, params).fetchall()
     return [_row_to_dict(r) for r in rows]
 
 

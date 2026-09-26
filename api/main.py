@@ -687,19 +687,24 @@ def get_job_status_history(candidate_id: str, job_id: str):
         conn.close()
 
 
-def _generate_and_serve_report(candidate_id):
+def _generate_and_serve_report(candidate_id, job_id_filter=None, run_ids_filter=None, resume_overrides_by_job=None, filename_suffix="", search_id=None, search_run_id=None):
     import generate_run_report
 
     out_dir = ROOT / "data" / "applications" / "reports_dev"
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"{candidate_id}_report.xlsx"
+    out_path = out_dir / f"{candidate_id}{filename_suffix}_report.xlsx"
 
-    result = generate_run_report.generate(str(db_mod.DEV_DB), candidate_id, str(out_path))
+    result = generate_run_report.generate(
+        str(db_mod.DEV_DB), candidate_id, str(out_path),
+        job_id_filter=job_id_filter, run_ids_filter=run_ids_filter,
+        resume_overrides_by_job=resume_overrides_by_job,
+        search_id=search_id, search_run_id=search_run_id,
+    )
 
     return FileResponse(
         result["workbook_path"],
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename=f"jobos_report_{candidate_id}.xlsx",
+        filename=f"jobos_report_{candidate_id}{filename_suffix}.xlsx",
     )
 
 
@@ -720,12 +725,18 @@ def download_report(candidate_id: str):
 @app.get("/api/searches/{search_id}/report")
 def download_search_report(search_id: str, candidate_id: str):
     """
-    The existing 9-sheet workbook is candidate-scoped (see
-    generate_run_report.py) -- this endpoint is a convenience alias at
-    the search-scoped URL the GUI's search-detail page links from, not
-    a second, per-search report implementation. It generates and
-    returns the SAME candidate-level report the download_report()
-    endpoint above does, for the candidate that owns this search.
+    Root-cause fix for a real bug (item 10/11): this used to return the
+    SAME candidate-WIDE report download_report() below does -- every
+    job ever discovered across ALL of this candidate's searches/runs --
+    even though the GUI's results page for THIS search shows only its
+    own scoped result count. Clicking "Download Excel" from a search
+    showing e.g. 75 results could produce a workbook with 1500+ rows.
+
+    Now scoped via the SAME canonical function results_store.
+    _job_ids_for_search() / list_run_ids_for_search() already use for
+    the JSON results API -- one canonical run-scoped query, reused
+    here, never a second/drifting implementation -- so the export can
+    never show a different job count than the UI for the same search.
     """
     conn = db_mod.get_conn()
     try:
@@ -733,10 +744,18 @@ def download_search_report(search_id: str, candidate_id: str):
             search_store.get_saved_search_for_candidate(conn, search_id, candidate_id)
         except search_store.SearchStoreError as error:
             raise HTTPException(404, str(error))
+        scoped_job_ids = results_store._job_ids_for_search(conn, candidate_id, search_id)
+        scoped_run_ids = search_store.list_run_ids_for_search(conn, search_id)
+        scoped_latest_run_id = search_store.get_latest_run_id_for_search(conn, search_id)
+        resume_overrides = results_store.get_scoped_resume_overrides(conn, candidate_id, search_id)
     finally:
         conn.close()
 
-    return _generate_and_serve_report(candidate_id)
+    return _generate_and_serve_report(
+        candidate_id, job_id_filter=scoped_job_ids, run_ids_filter=scoped_run_ids,
+        resume_overrides_by_job=resume_overrides, filename_suffix=f"_{search_id}",
+        search_id=search_id, search_run_id=scoped_latest_run_id,
+    )
 
 
 @app.get("/api/candidates/{candidate_id}/dashboard")

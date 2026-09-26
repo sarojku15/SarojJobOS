@@ -100,6 +100,12 @@ class SavedSearchCreate(BaseModel):
     # preserves today's existing "always current" behavior exactly.
     # See migrate_v8_resume_profile_traceability.py.
     profile_version: Optional[int] = None
+    # USER (default, via the DB column's own DEFAULT when omitted) /
+    # TEST / SYSTEM -- see migrate_v10_search_type.py. A real user
+    # creating a search through the normal UI never sets this; only
+    # this project's own test suite/live-verification scripts pass
+    # "TEST" explicitly.
+    search_type: Optional[str] = None
 
 
 class SavedSearchUpdate(BaseModel):

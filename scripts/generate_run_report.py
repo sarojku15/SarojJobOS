@@ -227,6 +227,17 @@ class ReportRow:
     last_seen: str
     location_raw: str
     experience_required: str
+    # Item 10 fix (export completeness): read directly from the raw job
+    # dict, same pattern as location_raw/experience_required above --
+    # never invented when the source adapter never populated them.
+    work_model: str = ""
+    jd_text: str = ""
+    # Stamped by generate() AFTER build_report_rows() returns, only for
+    # a search-scoped export (job_id_filter/run_ids_filter given) --
+    # empty ("") for the candidate-wide report, which has no single
+    # search/run to attribute every row to. Never invented.
+    search_id: str = ""
+    search_run_id: str = ""
     eligible: bool = False
     report_status: str = ""
     previously_seen: object = None  # True/False/None (None = not applicable -- no candidate_job_matches row exists, e.g. non-qualifying jobs)
@@ -534,6 +545,8 @@ def build_report_rows(jobs, candidate_profile, since=None, candidate_job_matches
             last_seen=last_seen,
             location_raw=str(job.get("location") or ""),
             experience_required=str(job.get("experience_required") or ""),
+            work_model=str(job.get("work_model") or ""),
+            jd_text=str(job.get("jd_text") or ""),
             eligible=ranking.eligible,
             report_status=report_status,
             previously_seen=previously_seen,
@@ -565,11 +578,18 @@ def build_report_rows(jobs, candidate_profile, since=None, candidate_job_matches
     return report_rows, duplicate_candidates
 
 
-def build_source_health(conn, candidate_id=None):
+def build_source_health(conn, candidate_id=None, run_ids_filter=None):
     """
     SOURCE_HEALTH sheet source: the persisted search_runs table -- the
     only place per-run source/query/error/block counts survive after a
     process exits (WorkItemResult itself is in-memory only).
+
+    run_ids_filter (item 10/11 fix -- run-scoped export): an optional
+    set/container of search_run_ids. When given, restricts this to
+    exactly those runs -- e.g. a per-search report must not let
+    build_run_summary()'s "most recent run" picture come from a
+    DIFFERENT search's more-recent run for the same candidate. None
+    (the default) preserves the original candidate-wide behavior.
     """
     conn.row_factory = sqlite3.Row
     query = """
@@ -580,10 +600,19 @@ def build_source_health(conn, candidate_id=None):
                blocked_queries, error_message, created_at
         FROM search_runs
     """
-    params = ()
+    clauses = []
+    params = []
     if candidate_id is not None:
-        query += " WHERE candidate_id = ?"
-        params = (candidate_id,)
+        clauses.append("candidate_id = ?")
+        params.append(candidate_id)
+    if run_ids_filter is not None:
+        run_ids_list = list(run_ids_filter)
+        if not run_ids_list:
+            return []
+        clauses.append(f"search_run_id IN ({','.join('?' for _ in run_ids_list)})")
+        params.extend(run_ids_list)
+    if clauses:
+        query += " WHERE " + " AND ".join(clauses)
     query += " ORDER BY created_at DESC"
 
     return [dict(row) for row in conn.execute(query, params).fetchall()]
@@ -685,6 +714,20 @@ _JOB_SHEET_COLUMNS = [
     # at the end, same convention as the Phase 14 columns, so no
     # existing column letter shifts.
     ("Requirement Type", lambda r: r.ranking.requirement_type),
+    # Item 10 fix (export completeness): a stable, unique job
+    # identifier was previously absent from every export entirely --
+    # appended at the end, same convention as every other addition
+    # above, so no existing column letter shifts for anyone with an
+    # existing formula/reference into this workbook.
+    ("Job ID", lambda r: r.ranking.job_id),
+    ("Work Model", lambda r: r.work_model),
+    ("JD Text", lambda r: r.jd_text),
+    # Export completeness fix: blank for the candidate-wide report
+    # (no single search/run to attribute every row to); populated only
+    # for a search-scoped export, via generate()'s search_id/
+    # search_run_id params -- same appended-at-the-end convention.
+    ("Search ID", lambda r: r.search_id),
+    ("Search Run ID", lambda r: r.search_run_id),
 ]
 
 _URL_COLUMNS = {"Job URL", "Application URL"}
@@ -847,7 +890,7 @@ def generate_workbook(report_rows, duplicate_candidates, source_health, summary,
 # Top-level orchestration
 # ---------------------------------------------------------------------
 
-def generate(db_path, candidate_id, out_path, since=None, exclude_test_mock=True, planner_metrics=None):
+def generate(db_path, candidate_id, out_path, since=None, exclude_test_mock=True, planner_metrics=None, job_id_filter=None, run_ids_filter=None, resume_overrides_by_job=None, search_id=None, search_run_id=None):
     """
     db_path: path to a SQLite DB with the v2 schema (candidates,
     candidate_search_profile, jobs, search_runs, ...).
@@ -855,6 +898,21 @@ def generate(db_path, candidate_id, out_path, since=None, exclude_test_mock=True
     out_path: where to write the .xlsx workbook.
     since: ISO datetime string cutoff for NEW_JOBS, or None (see
     build_report_rows()'s docstring).
+
+    job_id_filter (item 10/11 fix -- run-scoped export): an optional
+    set/container of job_ids. When given, the workbook is restricted to
+    exactly those jobs -- e.g. api/main.py's per-search report endpoint
+    passes api/results_store.py's OWN _job_ids_for_search() output, the
+    SAME canonical scoping function the results JSON API uses, so the
+    export can never show a different job count than the UI for the
+    same search/run. None (the default) preserves the original
+    behavior exactly: every job in scope for this candidate, matching
+    the existing candidate-wide report endpoint. Cross-source
+    deduplication (build_report_rows()) always runs across the FULL,
+    unfiltered job set first -- filtering to job_id_filter happens
+    only after, exactly mirroring get_results_for_saved_search()'s own
+    order of operations -- so a duplicate's cluster-mate outside this
+    filter is still correctly accounted for, never mis-flagged.
     planner_metrics (Phase 14.6, optional): a flat/nested dict of
     daily-search-planner metrics (planned/skipped/executed queries,
     provider requests saved, cooldown/budget skips, new vs. known jobs,
@@ -865,6 +923,25 @@ def generate(db_path, candidate_id, out_path, since=None, exclude_test_mock=True
     no new worksheet, no change to any of the other 8 sheets or to any
     existing summary key. None (the default) leaves the summary exactly
     as every prior phase produced it.
+
+    resume_overrides_by_job (item 5/10 fix, same class of bug already
+    fixed for the JSON results API in api/results_store.py's
+    _apply_scoped_resume_overrides()): an optional {job_id: {"resume_id":
+    ..., "resume_variant": ...}} dict. When given, overrides the
+    candidate-wide "latest snapshot" resume_variant/resume_id for the
+    matching job_ids -- otherwise a per-search export could show a
+    DIFFERENT search's more recently-run resume, exactly the bug this
+    project's own audit already found and fixed for the JSON API. None
+    (the default) preserves the original candidate-wide behavior.
+
+    search_id / search_run_id (export completeness fix): the saved
+    search / search_run this export is scoped to (via job_id_filter/
+    run_ids_filter above). Constant across every row in a search-scoped
+    export, so stamped onto each ReportRow after build_report_rows()
+    returns rather than looked up per-row. None (the default) leaves
+    both columns blank -- the candidate-wide report has no single
+    search/run to attribute every row to, and this must never be
+    guessed.
 
     Returns a dict summary (also embedded as the RUN_SUMMARY sheet).
     """
@@ -879,10 +956,21 @@ def generate(db_path, candidate_id, out_path, since=None, exclude_test_mock=True
 
         jobs = load_jobs(conn, exclude_test_mock=exclude_test_mock)
         matches = load_candidate_job_matches(conn, candidate_id)
+        if resume_overrides_by_job:
+            for job_id, override in resume_overrides_by_job.items():
+                matches.setdefault(job_id, {})
+                matches[job_id]["resume_id"] = override.get("resume_id")
+                matches[job_id]["resume_variant"] = override.get("resume_variant")
         report_rows, duplicate_candidates = build_report_rows(
             jobs, legacy_profile, since=since, candidate_job_matches=matches
         )
-        source_health = build_source_health(conn, candidate_id=candidate_id)
+        if job_id_filter is not None:
+            report_rows = [row for row in report_rows if row.ranking.job_id in job_id_filter]
+        if search_id is not None or search_run_id is not None:
+            for row in report_rows:
+                row.search_id = str(search_id) if search_id is not None else ""
+                row.search_run_id = str(search_run_id) if search_run_id is not None else ""
+        source_health = build_source_health(conn, candidate_id=candidate_id, run_ids_filter=run_ids_filter)
         summary = build_run_summary(report_rows, source_health)
         if planner_metrics is not None:
             summary["planner"] = planner_metrics

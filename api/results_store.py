@@ -332,41 +332,120 @@ def _load_persisted_results(conn, candidate_id, job_ids, saved_search_id=None):
     return results
 
 
+def _test_only_job_ids(conn, candidate_id):
+    """
+    Item 4/9 fix (real bug found live: the dashboard's "Jobs Found"/
+    "Matching" aggregates previously read the ENTIRE global `jobs`
+    table -- shared across every candidate/search/live-verification
+    run ever -- not this candidate's own activity; on this project's
+    own dev DB that showed 1555 "Jobs Found" for a candidate who had
+    never run more than a handful of their own real searches).
+
+    Returns the set of job_ids that are tracked ONLY through this
+    candidate's TEST/SYSTEM-type searches, never a USER search -- these
+    are excluded from dashboard aggregates. A job with NO
+    candidate_job_search_matches row at all (a manual import, or a
+    match that predates migrate_v9's tracking) is NEVER included here
+    -- benefit of the doubt, not test, since manual import has no
+    "test" concept and older data should not silently vanish from the
+    dashboard just because it predates this fix.
+    """
+    try:
+        all_tracked = {
+            r[0] for r in conn.execute(
+                "SELECT DISTINCT job_id FROM candidate_job_search_matches WHERE candidate_id = ?",
+                (candidate_id,),
+            ).fetchall()
+        }
+        user_search_tracked = {
+            r[0] for r in conn.execute(
+                """
+                SELECT DISTINCT cjsm.job_id
+                FROM candidate_job_search_matches cjsm
+                JOIN saved_search_runs ssr ON ssr.search_run_id = cjsm.search_run_id
+                JOIN saved_searches ss ON ss.saved_search_id = ssr.saved_search_id
+                WHERE cjsm.candidate_id = ? AND ss.search_type = 'USER'
+                """,
+                (candidate_id,),
+            ).fetchall()
+        }
+    except Exception as error:
+        if "no such table" in str(error) or "no such column" in str(error):
+            # A DB predating migrate_v9/migrate_v10 -- nothing to
+            # exclude, same posture as every other defensive fallback
+            # in this project for a pre-migration DB.
+            return set()
+        raise
+    return all_tracked - user_search_tracked
+
+
 def get_dashboard_summary(conn, candidate_id):
     """Aggregate counts for the dashboard -- reuses
     generate_run_report.py's existing build_report_rows()/
     build_source_health()/build_run_summary() exactly as the Excel
     report does; no second computation of jobs-found/matching/
-    APPLY_TODAY/duplicate counts."""
+    APPLY_TODAY/duplicate counts.
+
+    Scoped to THIS candidate's own matched jobs (candidate_job_matches
+    is already candidate-scoped), minus any job tracked only through a
+    TEST/SYSTEM search of theirs (see _test_only_job_ids()) -- never
+    the entire global `jobs` table, and never another candidate's or
+    another search's activity.
+    """
     profile = load_active_profile(conn, candidate_id)
     if profile.metadata.profile_status.value != "CONFIRMED":
         return None
 
     legacy_profile = to_legacy_matching_profile(profile)
-    jobs = report_mod.load_jobs(conn, exclude_test_mock=True)
     matches = report_mod.load_candidate_job_matches(conn, candidate_id)
+    test_only_job_ids = _test_only_job_ids(conn, candidate_id)
+    scoped_job_ids = set(matches.keys()) - test_only_job_ids
+
+    jobs = report_mod.load_jobs(conn, exclude_test_mock=True)
+    jobs = [j for j in jobs if j.get("job_id") in scoped_job_ids]
+
     report_rows, _dupes = report_mod.build_report_rows(jobs, legacy_profile, candidate_job_matches=matches)
-    source_health = report_mod.build_source_health(conn, candidate_id=candidate_id)
+
+    # Same test-isolation fix applied to the source-health aggregate:
+    # only runs belonging to this candidate's OWN USER-type searches
+    # (never a TEST search's run, e.g. this project's own live-
+    # verification searches) feed the dashboard's per-source picture.
+    try:
+        user_run_ids = {
+            r[0] for r in conn.execute(
+                """
+                SELECT DISTINCT ssr.search_run_id
+                FROM saved_search_runs ssr
+                JOIN saved_searches ss ON ss.saved_search_id = ssr.saved_search_id
+                WHERE ss.candidate_id = ? AND ss.search_type = 'USER'
+                """,
+                (candidate_id,),
+            ).fetchall()
+        }
+        source_health = report_mod.build_source_health(conn, candidate_id=candidate_id, run_ids_filter=user_run_ids)
+    except Exception as error:
+        if "no such column" in str(error) or "no such table" in str(error):
+            source_health = report_mod.build_source_health(conn, candidate_id=candidate_id)
+        else:
+            raise
     return report_mod.build_run_summary(report_rows, source_health)
 
 
-def _apply_scoped_resume_overrides(conn, candidate_id, saved_search_id, matches):
+def get_scoped_resume_overrides(conn, candidate_id, saved_search_id):
     """
-    Item 5 fix, continued: `matches` (from generate_run_report.
-    load_candidate_job_matches()) is the candidate-WIDE "latest
-    snapshot" -- correct for candidate_status (global, unchanged here)
-    but NOT for resume_variant/resume_id, which must reflect THIS
-    search's own scoring run, not whichever DIFFERENT search most
-    recently re-matched the same job. Overrides resume_variant/
-    resume_id IN PLACE on `matches`, for job_ids that have a row in
-    candidate_job_search_matches for one of THIS search's own runs --
-    candidate_status is never touched (that column doesn't exist on
-    the scoped table at all, so there is nothing to accidentally
-    override).
+    Item 5/10 fix: {job_id: {"resume_id", "resume_variant"}} sourced
+    from candidate_job_search_matches, scoped to ONE saved search's own
+    run_ids -- correct for resume_variant/resume_id, which must reflect
+    THIS search's own scoring run, never whichever DIFFERENT search
+    most recently re-matched the same job. Used by both the JSON
+    results API (_apply_scoped_resume_overrides() below) and the
+    per-search Excel export (api/main.py's download_search_report(),
+    via generate_run_report.generate()'s resume_overrides_by_job
+    param) -- one canonical scoped-override query, never two.
     """
     run_ids = list_run_ids_for_search(conn, saved_search_id)
     if not run_ids:
-        return
+        return {}
     placeholders = ",".join("?" for _ in run_ids)
     try:
         rows = conn.execute(
@@ -378,12 +457,27 @@ def _apply_scoped_resume_overrides(conn, candidate_id, saved_search_id, matches)
         ).fetchall()
     except Exception as error:
         if "no such table" in str(error):
-            return
+            return {}
         raise
-    for job_id, resume_id, resume_variant in rows:
+    return {job_id: {"resume_id": resume_id, "resume_variant": resume_variant} for job_id, resume_id, resume_variant in rows}
+
+
+def _apply_scoped_resume_overrides(conn, candidate_id, saved_search_id, matches):
+    """
+    `matches` (from generate_run_report.load_candidate_job_matches())
+    is the candidate-WIDE "latest snapshot" -- correct for
+    candidate_status (global, unchanged here) but NOT for
+    resume_variant/resume_id (see get_scoped_resume_overrides() above).
+    Overrides resume_variant/resume_id IN PLACE on `matches` --
+    candidate_status is never touched (that column doesn't exist on
+    the scoped table at all, so there is nothing to accidentally
+    override).
+    """
+    overrides = get_scoped_resume_overrides(conn, candidate_id, saved_search_id)
+    for job_id, override in overrides.items():
         matches.setdefault(job_id, {})
-        matches[job_id]["resume_id"] = resume_id
-        matches[job_id]["resume_variant"] = resume_variant
+        matches[job_id]["resume_id"] = override["resume_id"]
+        matches[job_id]["resume_variant"] = override["resume_variant"]
 
 
 def get_results_for_saved_search(conn, candidate_id, saved_search_id, pinned_profile_version=None):

@@ -3,9 +3,13 @@
 Automated job discovery, matching, application preparation,
 browser-assisted application, tracking and follow-up system.
 
-## Candidate
-
-Saroj Kumar Nayak
+This is Saroj's own personal project, but the application itself is
+**fully generic and multi-user**: anyone who runs it locally gets
+their own completely independent candidate profile, resumes, saved
+searches, and results. A fresh install starts genuinely empty -- no
+Saroj-specific data is baked in or required. If Saroj has shared this
+repository with you, you can install and use it entirely for your own
+job search without seeing (or affecting) anyone else's data.
 
 ## Architecture
 
@@ -16,66 +20,123 @@ Saroj Kumar Nayak
 - Python — utilities and scoring
 - macOS launchd — scheduling
 
-## Local Web App (Phase 9 / Phase 10)
+## Quick Start (fresh clone)
 
-A generic job-search web app -- any profession, not just SRE/DevOps --
-runs locally on top of the existing pipeline: create candidate → upload
-resume (or skip) → review/edit profile → confirm → create one or more
-saved searches → run → see results → download the existing 9-sheet
-Excel report. It talks ONLY to `data/applications/jobos_dev.db`
-(created automatically on first run) -- never the production
-`data/applications/jobos.db`.
+**Requirements**: Python 3.11+ (developed/tested on 3.13), Node.js 18+
+(only needed for Playwright, used by the Naukri adapter), macOS/Linux.
+No system packages beyond Python/Node are required.
 
-**1. Start the backend** (one-time setup already done in this
-checkout; for a fresh clone run `python3 -m venv .venv && .venv/bin/pip
-install -r requirements.txt` first):
+```bash
+git clone <this-repo-url>
+cd SarojJobOS
 
-```
+# Python dependencies
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+
+# Node dependency (Playwright) + its browser binary
+npm install
+npx playwright install chromium
+
+# Optional: search-provider API keys (see "Configuration" below) --
+# the app runs fully without this step, using the 4 direct sources only.
+cp config/jobos.env.example .env   # then edit .env if you want the 7
+                                    # provider-backed boards too
+
+# Start the app -- the local dev database is created automatically on
+# first request; nothing to run by hand.
 .venv/bin/uvicorn api.main:app --reload --port 8420
 ```
 
-**2. Frontend**: served by the same process (no separate build/start
-step) -- there is no frontend framework in this repo, by design (plain
-HTML/CSS/JS, see `web/`).
+Open **http://127.0.0.1:8420/** in a browser. That's it -- no build
+step, no separate frontend server (plain HTML/CSS/JS, see `web/`), no
+manual database initialization.
 
-**3. Open the GUI**: http://127.0.0.1:8420/
+**1. Create your candidate**: on the home page, enter a name (+
+optional email/phone) and click "Create candidate" -- or upload a
+resume directly, which creates the candidate for you automatically.
 
-**4. Create a candidate**: on the home page, enter a name (+ optional
-email/phone) and click "Create candidate."
+**2. Upload your resume**: choose a `.pdf` file and click "Upload &
+extract profile" -- or click "Continue without a resume" to skip
+straight to manual entry. You can upload additional resume versions
+later from the Profile page; every version is kept, never overwritten
+(see "Multiple resumes" below).
 
-**5. Upload a resume**: on the same page, choose a `.pdf` file and
-click "Upload & extract profile" -- or click "Continue without a
-resume" to skip straight to manual entry.
+**3. Review and confirm your profile**: `/profile` shows everything
+extracted from your resume (identity, skills, experience, job
+preferences) -- edit anything, then click "Confirm profile." A search
+cannot run until your profile is confirmed.
 
-**6. Create a search**: go to `/searches/new`, fill in job titles,
+**4. Create a search**: go to `/searches/new`, fill in job titles,
 locations, experience/salary range, skills, work model, employment
 type, minimum score, freshness, and pick from the sources currently
-shown as available (only real, ENABLED sources are ever listed).
+shown as available (only real, ENABLED sources are ever listed). You
+can also pin the search to a specific resume/profile version instead
+of always using whichever is currently active (see "Multiple resumes"
+below).
 
-**7. Run a search**: from `/dashboard` or a search's own `/searches/{id}`
-page, click "Run now." The call returns immediately
-(`{run_id, status:"QUEUED"}`); the page polls `/api/runs/{run_id}`
-until it reaches a terminal status.
+**5. Run the search**: from `/dashboard`, the search's own
+`/searches/{id}` page, or the results page itself, click "Run now."
+The call returns immediately (`{run_id, status:"QUEUED"}`); the page
+polls `/api/runs/{run_id}` until it reaches a terminal status.
 
-**8. View results**: `/searches/{id}/results` -- filterable table with
-an `[Open Job]` link to the job's own external URL. No apply button
-exists anywhere.
+**6. View results**: `/searches/{id}/results` -- a summary (jobs
+found, hard-eligible, qualified, apply-today, duplicates, new),
+a per-source "Source Execution Audit" table (which sources were
+attempted, their real status, raw/eligible/displayed counts), and a
+filterable results table. Click any row for the full detail: score,
+matched/missing skills, freshness, eligibility, which resume/profile
+scored it, and a status dropdown (Shortlist → Approve → Applied, with
+the approval gate enforced server-side). No auto-apply button exists
+anywhere.
 
-**9. Download Excel**: "Download Excel report" on the dashboard or a
-search's detail page -- the existing 9-sheet workbook
-(`scripts/generate_run_report.py`), unchanged.
+**7. Edit an existing search**: from its detail page, click "Edit" --
+change any criteria or the pinned resume/profile. Editing never
+rewrites a past run's own results; only a future run uses the new
+setting.
 
-**10. Sources currently ENABLED**: 4 direct, live-validated sources --
-`NAUKRI`, `HIRIST`, `IIMJOBS`, `APNA` (plus `MOCK`, a dev/test
-fixture) -- always on. 7 more (`LINKEDIN`, `INDEED`, `FOUNDIT`,
-`INSTAHYRE`, `CUTSHORT`, `WELLFOUND`, `SHINE`) turn on automatically
-the moment at least one search-provider API key
+**8. Download Excel**: "Download Excel report" on the results or
+search-detail page -- scoped to exactly the jobs shown for that
+specific search/run (never a different, larger candidate-wide count).
+See "What the export contains" below for the full column list.
+
+## Multiple resumes / resume versions
+
+The Profile page lists every resume you've ever uploaded (filename,
+version label, upload date, status, resume ID) -- uploading a new one
+never deletes or overwrites an older one. When creating or editing a
+search, the "Resume / Profile version" selector lets you pin that
+search to a specific past resume/profile, or leave it on "Current
+profile" to always use whichever is active when the search runs. An
+old search stays tied to the resume it was created with even after you
+upload a newer one; a new search can use the newer one. The same job
+can legitimately score differently, and show a different resume, in
+two different searches pinned to two different resumes.
+
+## Sources currently ENABLED
+
+4 direct, live-validated sources -- `NAUKRI`, `HIRIST`, `IIMJOBS`,
+`APNA` (plus `MOCK`, a dev/test fixture) -- always on, no
+configuration needed. `APNA` additionally fetches each job's own
+detail page (bounded, rate-limited) for real JD text, posted date, and
+precise experience/location, truthfully reported in its own source
+audit (`detail_fetch_attempted/succeeded/failed`).
+
+7 more (`LINKEDIN`, `INDEED`, `FOUNDIT`, `INSTAHYRE`, `CUTSHORT`,
+`WELLFOUND`, `SHINE`) turn on automatically the moment at least one
+search-provider API key
 (`YOU_API_KEY`/`TAVILY_API_KEY`/`EXA_API_KEY`/`BRAVE_API_KEY`/
 `SERPER_API_KEY`) is configured in `.env` -- discovered through that
 provider's search API, never a direct crawler for these 7. Check
 `GET /api/sources` or the dashboard's "Sources" panel for the live,
 authoritative list; see CLAUDE.md's "Source Adapter Principle" for the
 full current-state detail.
+
+Without any provider key configured, only the 4 direct sources run --
+the app works fully, just with fewer boards. A source is never
+silently skipped: every configured source gets a truthful audit entry
+(`SUCCESS`/`ZERO`/`FAILED`/`BLOCKED`/`NOT_CONFIGURED`/`NOT_ATTEMPTED`),
+visible on the results page's own "Source Execution Audit" table.
 
 **11. `CAREER_PAGE`, `GREENHOUSE`/`LEVER`/`ASHBY`, `TIMESJOBS`, and the
 plain-registry-key `LINKEDIN`/`INDEED`/etc. skeletons** remain
@@ -157,13 +218,13 @@ submits anything; it only records a status *you* explicitly set,
 exactly like clicking `[Open Job]` and applying yourself, then telling
 the system you did.
 
-**17. Resume variant selection/tailoring: not built yet.**
-`config/profile.json` defines 5 variant labels (SRE-A/AWS-A/AZURE-A/
-DEVOPS-A/PLATFORM-A) and `jobs.resume_variant` exists as a column, but
-only one resume file exists on disk and nothing currently picks a
-variant or generates a tailored version for a specific job. Every
-result honestly shows an empty `resume_variant` field rather than
-guessing.
+**17. Resume variant selection: built, honestly scoped.** Every
+result's "Resume/Profile used" reflects the actual resume that scored
+it, per candidate, per search (never invented, never a Saroj-specific
+SRE-A/DEVOPS-A/... label unless you explicitly labeled your own resume
+that way). What is NOT built: automatic tailored-content generation
+(rewriting a resume's own text for a specific job) -- selection is
+"which of your own uploaded resumes," never invented content.
 
 **18. No-auto-application policy**: the system ends at
 SEARCH → MATCH → SCORE → SHOW → `[Open Job]` → human decides (and, per
@@ -186,6 +247,36 @@ production):
 ```
 
 Or run every `scripts/test_*.py` file for the complete suite.
+
+## Test/development searches never appear in your normal view
+
+Every saved search has a `search_type`: `USER` (the default -- every
+search you create through the normal UI), `TEST` (this project's own
+automated tests / manual live-verification), or `SYSTEM` (reserved,
+unused). The normal `/searches` page and Dashboard show and aggregate
+`USER` searches only -- a development/verification search never
+inflates your job counts or clutters your list. This is a real,
+persisted field, never guessed from a search's name.
+
+## Troubleshooting
+
+- **`npx playwright install chromium` fails or Naukri searches
+  error out**: Playwright's browser binary is a per-machine cache
+  (`~/Library/Caches/ms-playwright` on macOS), not part of this repo --
+  re-run the install command above.
+- **Port 8420 already in use**: another instance is likely still
+  running (`ps aux | grep uvicorn`); stop it, or start this one on a
+  different port (`--port 8421`) and open that URL instead.
+- **A search-provider board (LinkedIn/Indeed/etc.) never appears as
+  an option**: no provider API key is configured in `.env` yet --
+  check `GET /api/sources` or Settings → Search Providers for the live
+  reason (`NOT_CONFIGURED` vs an actual failure).
+- **"Profile needs to be confirmed" when trying to run a search**:
+  go to `/profile`, review the extracted/entered fields, and click
+  "Confirm profile" -- a DRAFT profile cannot be used to run a search.
+- **Nothing in `data/applications/` after first run**: the dev
+  database (`jobos_dev.db`) is created automatically on the first API
+  request, not at process startup -- open the app in a browser first.
 
 ## Important
 

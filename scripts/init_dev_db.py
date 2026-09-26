@@ -48,6 +48,7 @@ import migrate_v6_status_history
 import migrate_v7_candidate_resume_variant
 import migrate_v8_resume_profile_traceability
 import migrate_v9_candidate_job_search_matches
+import migrate_v10_search_type
 
 
 def init_dev_db(db_path=DEV_DB):
@@ -86,6 +87,7 @@ def init_dev_db(db_path=DEV_DB):
     migrate_v7_candidate_resume_variant.migrate(db_path)
     migrate_v8_resume_profile_traceability.migrate(db_path)
     migrate_v9_candidate_job_search_matches.migrate(db_path)
+    migrate_v10_search_type.migrate(db_path)
 
     return db_path
 

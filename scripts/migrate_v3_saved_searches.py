@@ -48,6 +48,7 @@ def _create_tables(conn):
             max_job_age_days INTEGER,
             sources_json TEXT,
             status TEXT NOT NULL DEFAULT 'ACTIVE',
+            search_type TEXT NOT NULL DEFAULT 'USER',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             FOREIGN KEY(candidate_id) REFERENCES candidates(candidate_id)
