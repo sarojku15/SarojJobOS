@@ -1,286 +1,265 @@
-# Saroj Job Search OS
+# JobOS
 
-Automated job discovery, matching, application preparation,
-browser-assisted application, tracking and follow-up system.
+**An AI-powered personal Job Search Operating System** that helps you
+discover, understand, match, score, shortlist, prepare for, and track
+job opportunities — while keeping the final application decision under
+your control.
 
 This is Saroj's own personal project, but the application itself is
-**fully generic and multi-user**: anyone who runs it locally gets
-their own completely independent candidate profile, resumes, saved
-searches, and results. A fresh install starts genuinely empty -- no
-Saroj-specific data is baked in or required. If Saroj has shared this
-repository with you, you can install and use it entirely for your own
-job search without seeing (or affecting) anyone else's data.
+**fully generic and multi-user**: anyone who runs it locally gets their
+own completely independent candidate profile, resumes, saved searches,
+and results. A fresh install starts genuinely empty.
 
-## Architecture
+## Navigation
 
-- n8n — workflow orchestration
-- Claude/Anthropic — JD analysis and application intelligence
-- Google Sheets — job/application tracker
-- Playwright — browser automation
-- Python — utilities and scoring
-- macOS launchd — scheduling
+[What is JobOS](#what-is-jobos) ·
+[Problem it solves](#the-problem-it-solves) ·
+[How it works](#how-jobos-works) ·
+[Features](#feature-overview) ·
+[Human-in-the-loop](#human-in-the-loop-model) ·
+[Quick Start](#quick-start) ·
+[JobOS in 5 minutes](#jobos-in-5-minutes) ·
+[Claude Code](#claude-code-integration) ·
+[Claude Skills](#claude-skills) ·
+[Architecture](#architecture) ·
+[Documentation](#documentation) ·
+[Troubleshooting](#troubleshooting) ·
+[Security](#security-and-privacy) ·
+[Development](#development-and-contribution)
 
-## Quick Start (fresh clone)
+## What is JobOS?
+
+A local, single-user-per-install web app + API that runs your own job
+search end to end: it discovers postings across multiple job boards,
+normalizes and deduplicates them, checks them against your real
+eligibility, scores them explainably against your own profile, and
+tracks your application pipeline — without ever submitting an
+application for you.
+
+## The problem it solves
+
+The traditional job search is repetitive manual labor:
+
+- Search multiple job boards separately
+- Read large numbers of job descriptions
+- Compare each one against your own profile by hand
+- Figure out what's actually missing from your skillset for a role
+- Pick the right resume version for each application
+- Track what you applied to, and when
+- Remember recruiter/interview activity
+- Follow up
+- Build your own status reports
+- Repeat this every day
+
+JobOS centralizes discovery, comparison, scoring, and tracking into one
+system, so you spend your time on the decisions only you can make —
+not the repetitive research.
+
+**Why use it**: one place for every source instead of ten open tabs,
+an explainable score instead of a gut feeling, an honest skill-gap list
+instead of guessing what's missing, and a tracked pipeline instead of
+a mental list of "did I already apply to this one?"
+
+## How JobOS works
+
+```
+User
+  |
+JobOS
+  |
+Discover  (query every enabled source)
+  |
+Normalize  (one common job shape, regardless of source)
+  |
+Deduplicate  (in-batch + across sources)
+  |
+Eligibility  (experience + location -- hard gate)
+  |
+Match / Score  (100-point engine, against YOUR profile)
+  |
+Explain  (strong matches / gaps, never a black box)
+  |
+Shortlist
+  |
+User Review  <-- you decide, always
+  |
+Application  <-- you apply yourself, always
+  |
+Tracking
+```
+
+Everything above the "User Review" line is automated. Everything from
+there down is **you** — JobOS records what you tell it, it never acts
+on your behalf. See [Human-in-the-loop model](#human-in-the-loop-model).
+
+## Feature overview
+
+| Capability | Status |
+|---|---|
+| Job discovery (11 sources: 4 direct + 7 provider-backed) | Built, live-validated |
+| Search management (create/edit/run/re-run) | Built |
+| Job normalization & deduplication | Built |
+| Eligibility filtering (experience + location) | Built |
+| Explainable 100-point scoring | Built |
+| Skill-gap identification | Built |
+| Candidate profile (resume-extracted or manual) | Built |
+| Resume management (multiple versions, never overwritten) | Built |
+| Resume/profile *selection* per search | Built |
+| Automatic resume *tailoring/rewriting* | Not built |
+| Application status tracking (18-state lifecycle) | Built |
+| Search run history | Built |
+| Excel export (scoped to what you're viewing) | Built |
+| Browser automation (Naukri/Hirist/IIMJobs/Apna) | Built, via Playwright |
+| n8n | Present (container runs), no JobOS workflows wired in yet |
+| Scheduling (recurring automated runs) | Template exists, deliberately not installed |
+| Claude Code integration (natural language) | Built (`.claude/skills/`) |
+| Company research | Optional, best-effort web search — not a persisted pipeline |
+| Interview preparation | Not built |
+
+## Human-in-the-loop model
+
+Everything in the [Feature overview](#feature-overview) above is what
+JobOS **can** do. This is what it will **never** do:
+
+- Automatically submit an application without your explicit approval
+- Bypass CAPTCHA or MFA/OTP
+- Circumvent anti-bot protections
+- Mark an application as submitted unless you told it you did that
+- Upload a resume to an employer on your behalf
+- Fabricate a skill, employer, score, or status
+
+The application-tracking status pipeline only ever *records* what you
+tell it you already did — it never acts on your behalf. Full detail:
+[docs/SECURITY.md](docs/SECURITY.md),
+[docs/APPLICATION_LIFECYCLE.md](docs/APPLICATION_LIFECYCLE.md).
+
+## Quick Start
 
 **Requirements**: Python 3.11+ (developed/tested on 3.13), Node.js 18+
-(only needed for Playwright, used by the Naukri adapter), macOS/Linux.
-No system packages beyond Python/Node are required.
+(Playwright only), macOS/Linux.
 
 ```bash
 git clone <this-repo-url>
 cd SarojJobOS
-
-# Python dependencies
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-
-# Node dependency (Playwright) + its browser binary
 npm install
 npx playwright install chromium
-
-# Optional: search-provider API keys (see "Configuration" below) --
-# the app runs fully without this step, using the 4 direct sources only.
-cp config/jobos.env.example .env   # then edit .env if you want the 7
-                                    # provider-backed boards too
-
-# Start the app -- the local dev database is created automatically on
-# first request; nothing to run by hand.
+cp config/jobos.env.example .env   # optional -- see docs/CONFIGURATION.md
 .venv/bin/uvicorn api.main:app --reload --port 8420
 ```
 
-Open **http://127.0.0.1:8420/** in a browser. That's it -- no build
-step, no separate frontend server (plain HTML/CSS/JS, see `web/`), no
-manual database initialization.
+Open **http://127.0.0.1:8420/**. No build step, no separate frontend
+server, no manual database init. Full walkthrough:
+[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 
-**1. Get started**: on the home page, either choose a `.pdf` resume
-and click "Upload Resume" (extracts your profile automatically), or
-click "Enter profile manually" under "Continue Without Resume" to skip
-straight to manual entry. Either path creates your candidate record
-for you -- there's no separate name/email/phone form up front. You can
-upload additional resume versions later from the Profile page; every
-version is kept, never overwritten (see "Multiple resumes" below).
+Check your setup any time: `scripts/jobos-doctor`.
 
-**2. Review and confirm your profile**: `/profile` shows everything
-extracted from your resume (or blank fields if you skipped it) --
-fill in/edit your name, email, phone, skills, experience, and job
-preferences, then click "Confirm profile." A search cannot run until
-your profile is confirmed.
+## JobOS in 5 minutes
 
-**3. Create a search**: go to `/searches/new`, fill in job titles,
-locations, experience/salary range, skills, work model, employment
-type, minimum score, freshness, and pick from the sources currently
-shown as available (only real, ENABLED sources are ever listed). You
-can also pin the search to a specific resume/profile version instead
-of always using whichever is currently active (see "Multiple resumes"
-below).
+1. **Configure your profile** — upload a resume or enter manually.
+2. **Add a resume** — every version is kept; none are ever overwritten.
+3. **Create a search** — roles, locations, sources, minimum score.
+4. **Run it** — click "Run now"; polls until complete.
+5. **Review results** — per-source audit + scored, explainable matches.
+6. **Understand the score** — click a result for matched skills/gaps.
+7. **Shortlist jobs** — status dropdown, no auto-apply ever.
+8. **Track your application** — Approve → (you apply) → Applied.
 
-**4. Run the search**: from `/dashboard`, the search's own
-`/searches/{id}` page, or the results page itself, click "Run now."
-The call returns immediately (`{run_id, status:"QUEUED"}`); the page
-polls `/api/runs/{run_id}` until it reaches a terminal status.
+Full detail: [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
 
-**5. View results**: `/searches/{id}/results` -- a summary (jobs
-found, hard-eligible, qualified, apply-today, duplicates, new),
-a per-source "Source Execution Audit" table (which sources were
-attempted, their real status, raw/eligible/displayed counts), and a
-filterable results table. Click any row for the full detail: score,
-matched/missing skills, freshness, eligibility, which resume/profile
-scored it, and a status dropdown (Shortlist → Approve → Applied, with
-the approval gate enforced server-side). No auto-apply button exists
-anywhere.
+## Claude Code integration
 
-**6. Edit an existing search**: from its detail page, click "Edit" --
-change any criteria or the pinned resume/profile. Editing never
-rewrites a past run's own results; only a future run uses the new
-setting.
+Once the app is running, just talk to Claude naturally:
 
-**7. Download Excel**: "Download Excel report" on the results or
-search-detail page -- scoped to exactly the jobs shown for that
-specific search/run (never a different, larger candidate-wide count).
-See "What the export contains" below for the full column list.
+> "Find new Senior SRE jobs matching my profile."
+> "Explain why these jobs match me."
+> "Show me skill gaps for this job."
+> "Show my current application pipeline."
+> "Generate today's job-search report."
 
-## Multiple resumes / resume versions
+Claude discovers JobOS's capabilities from `.claude/skills/*/SKILL.md`
+in this repository automatically — no setup needed beyond running
+Claude Code inside this project. Full guide:
+[docs/CLAUDE_GUIDE.md](docs/CLAUDE_GUIDE.md),
+[docs/CLAUDE_COOKBOOK.md](docs/CLAUDE_COOKBOOK.md).
 
-The Profile page lists every resume you've ever uploaded (filename,
-version label, upload date, status, resume ID) -- uploading a new one
-never deletes or overwrites an older one. When creating or editing a
-search, the "Resume / Profile version" selector lets you pin that
-search to a specific past resume/profile, or leave it on "Current
-profile" to always use whichever is active when the search runs. An
-old search stays tied to the resume it was created with even after you
-upload a newer one; a new search can use the newer one. The same job
-can legitimately score differently, and show a different resume, in
-two different searches pinned to two different resumes.
+## Claude Skills
 
-## Sources currently ENABLED
+| Skill | Purpose |
+|---|---|
+| `jobos-orchestrator` | Natural-language entry point; routes to the skills below |
+| `job-discovery-engine` | Standalone, ad-hoc, non-persisting discovery script — not the path a real tracked search uses (that's `jobos-orchestrator`'s own API calls) |
+| `job-matching` | Score/priority/skill-gap explanation |
+| `resume-manager` | Resume listing/upload, resume/profile-version selection |
+| `application-tracker` | Status pipeline reads + the one gated write path |
+| `job-report` | Excel export |
+| `company-research` | Optional, best-effort web research (not a built pipeline) |
+| `jobos` (`/jobos` command) | Legacy single-candidate CLI pipeline — separate, older system |
 
-4 direct, live-validated sources -- `NAUKRI`, `HIRIST`, `IIMJOBS`,
-`APNA` (plus `MOCK`, a dev/test fixture) -- always on, no
-configuration needed. `APNA` additionally fetches each job's own
-detail page (bounded, rate-limited) for real JD text, posted date, and
-precise experience/location, truthfully reported in its own source
-audit (`detail_fetch_attempted/succeeded/failed`).
+## Architecture
 
-7 more (`LINKEDIN`, `INDEED`, `FOUNDIT`, `INSTAHYRE`, `CUTSHORT`,
-`WELLFOUND`, `SHINE`) turn on automatically the moment at least one
-search-provider API key
-(`YOU_API_KEY`/`TAVILY_API_KEY`/`EXA_API_KEY`/`BRAVE_API_KEY`/
-`SERPER_API_KEY`) is configured in `.env` -- discovered through that
-provider's search API, never a direct crawler for these 7. Check
-`GET /api/sources` or the dashboard's "Sources" panel for the live,
-authoritative list; see CLAUDE.md's "Source Adapter Principle" for the
-full current-state detail.
+FastAPI (`api/`) + a plain HTML/CSS/JS frontend (`web/`), SQLite system
+of record, Playwright-driven direct adapters + a multi-provider search
+layer for 7 more boards, one shared scoring/eligibility/dedup engine.
+Full diagram and component list: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-Without any provider key configured, only the 4 direct sources run --
-the app works fully, just with fewer boards. A source is never
-silently skipped: every configured source gets a truthful audit entry
-(`SUCCESS`/`ZERO`/`FAILED`/`BLOCKED`/`NOT_CONFIGURED`/`NOT_ATTEMPTED`),
-visible on the results page's own "Source Execution Audit" table.
+A few subsystems worth knowing about up front, each documented in full:
 
-**11. `CAREER_PAGE`, `GREENHOUSE`/`LEVER`/`ASHBY`, `TIMESJOBS`, and the
-plain-registry-key `LINKEDIN`/`INDEED`/etc. skeletons** remain
-`NOT_ENABLED` (registered, no live behavior) -- reserved for a
-hypothetical future authorized *direct* crawler for boards already
-covered above via the search-provider path. `WEB_SEARCH` (see #14 of
-CLAUDE.md's own list) needs a backend wired in first.
+- **Scoring**: a 100-point engine across 10 dimensions, 70 of which
+  compare the job against *your own* profile, plus a mandatory-skill
+  hard gate a high score can never override — [docs/SCORING.md](docs/SCORING.md).
+- **Job sources**: 4 direct, live-validated sources always on; 7 more
+  enabled the moment one search-provider API key is configured. A
+  source is never silently skipped — [docs/JOB_SOURCES.md](docs/JOB_SOURCES.md).
+- **Application lifecycle**: 18 real states, one hard rule (`APPLIED`
+  is unreachable without `APPROVED` first) — [docs/APPLICATION_LIFECYCLE.md](docs/APPLICATION_LIFECYCLE.md).
+- **Automation**: a `launchd` template for scheduled runs exists but is
+  deliberately **not installed** by default; n8n runs as infrastructure
+  with no JobOS workflows wired into it yet.
 
-**12. Adding a new authorized source**: implement a
-`source_adapter.JobSourceAdapter` subclass (`status = NOT_ENABLED`
-until validated), register it in `scripts/source_registry.ADAPTERS`,
-add its entry to `scripts/source_capabilities.py`, write offline tests
-against fixtures, then run this project's phased live-validation
-process (offline → one live query → controlled multi-query) before
-ever setting `status = ENABLED`. No GUI/API/scoring/report code needs
-to change -- `/api/sources` and the search form both read the live
-registry. For a Greenhouse/Lever/Ashby company board specifically, just
-add an entry to `config/career_pages.json` (empty by default -- no
-company is hardcoded) and then run the same validation process.
+## Documentation
 
-**13. How Web Search discovery works**: `.claude/skills/job-discovery-engine/`
-is the orchestration Skill; `scripts/web_search_discovery_adapter.py`
-is the integration boundary. **This backend process (a plain
-FastAPI/uvicorn worker) cannot call Claude Code's own WebSearch tool
-directly**, and no search-API credential is configured in this
-environment -- so `WEB_SEARCH` is `NOT_ENABLED` today. The provider
-interface, quality-control validation
-(`.claude/skills/job-discovery-engine/scripts/validate_discovered_job.py`),
-and bounded query-string generation all exist and are tested; wiring in
-a real backend later is a one-line configuration call
-(`web_search_discovery_adapter.set_web_search_backend(...)`), not a
-redesign.
-
-**14. Security limitations (stated plainly, not hidden)**: this is a
-single-user local development tool. "Candidate identity" is just
-remembered in the browser's `localStorage` (see `web/app.js`) --
-**not** a real login/session system: any caller can still *claim* to be
-any candidate_id, there is no proof of identity. What **is** enforced
-server-side: every route keyed by a bare search_id/run_id now requires
-an explicit `?candidate_id=` and verifies the looked-up search/run
-actually belongs to that candidate_id (`search_store.
-get_saved_search_for_candidate()` / `get_run_status_for_candidate()`)
--- candidate A can no longer read, run, archive, or download the report
-for candidate B's search merely by guessing or reusing a search_id/
-run_id string (see `scripts/test_candidate_ownership_isolation.py`).
-**A real internet-facing deployment would still need actual
-authentication** (verifying *who* is making the request) layered on
-top of this -- this ownership check only verifies the record belongs
-to whichever candidate_id was supplied, not that the supplied
-candidate_id is really the caller.
-
-**15. How matching works, and why it's explainable, not a black box**:
-`scripts/score_job.py` computes a 100-point score across 10 named
-dimensions (role, SRE/DevOps practices, cloud, Kubernetes, IaC, CI/CD,
-observability, experience, location, domain fit). 6 of the 10
-dimensions (worth 70 of the 100 points) compare the job's text against
-**your own** profile -- your `target_roles` for the role dimension, your
-own listed cloud/Kubernetes/IaC/CI-CD/observability skills for the
-rest -- so the *same* job genuinely scores differently for two
-different candidates (see `scripts/test_multi_user_matching.py`).
-`scripts/score_explanation.py` turns the raw score into a `strong
-matches` / `gaps` breakdown, visible on every result's detail view.
-Two dimensions ("SRE/DevOps responsibilities" and "Overall/domain fit"
--- 20 of the 100 points) are still generic job-quality signals, not yet
-tied to a specific profile field.
-
-**16. Shortlist, approve, and track an application (no auto-apply, ever)**:
-`config/application_schema.json`'s existing status lifecycle
-(`FOUND` → `SHORTLISTED` → `READY_FOR_APPROVAL` → `APPROVED` →
-`APPLICATION_STARTED` → `APPLIED` → interview stages → terminal
-states) now has a real write path: `PATCH
-/api/candidates/{id}/jobs/{job_id}/status` with `{"status":
-"SHORTLISTED"}` (or `APPROVED`, etc.), scoped to your own candidate_id
-like every other route. The one hard rule this endpoint enforces:
-`APPLICATION_STARTED`/`APPLIED` is unreachable unless the job is
-already `APPROVED` -- there is no way to skip your own approval step
-through this endpoint or any other code path in this project. It never
-submits anything; it only records a status *you* explicitly set,
-exactly like clicking `[Open Job]` and applying yourself, then telling
-the system you did.
-
-**17. Resume variant selection: built, honestly scoped.** Every
-result's "Resume/Profile used" reflects the actual resume that scored
-it, per candidate, per search (never invented, never a Saroj-specific
-SRE-A/DEVOPS-A/... label unless you explicitly labeled your own resume
-that way). What is NOT built: automatic tailored-content generation
-(rewriting a resume's own text for a specific job) -- selection is
-"which of your own uploaded resumes," never invented content.
-
-**18. No-auto-application policy**: the system ends at
-SEARCH → MATCH → SCORE → SHOW → `[Open Job]` → human decides (and, per
-#16, optionally shortlists/approves/records their own application).
-There is no code path anywhere in `api/` or `web/` that submits an
-application, clicks Apply, or uploads a resume to an employer --
-verified by a static grep check in
-`scripts/test_phase9_api.py`/`test_phase10_discovery_engine.py` and
-re-affirmed by manual code audit each phase.
-
-Run the test suites (fully offline, isolated temp DBs, never touch
-production):
-
-```
-.venv/bin/python3 scripts/test_phase9_api.py
-.venv/bin/python3 scripts/test_phase10_discovery_engine.py
-.venv/bin/python3 scripts/test_multi_user_matching.py
-.venv/bin/python3 scripts/test_candidate_ownership_isolation.py
-.venv/bin/python3 scripts/test_application_lifecycle.py
-```
-
-Or run every `scripts/test_*.py` file for the complete suite.
-
-## Test/development searches never appear in your normal view
-
-Every saved search has a `search_type`: `USER` (the default -- every
-search you create through the normal UI), `TEST` (this project's own
-automated tests / manual live-verification), or `SYSTEM` (reserved,
-unused). The normal `/searches` page and Dashboard show and aggregate
-`USER` searches only -- a development/verification search never
-inflates your job counts or clutters your list. This is a real,
-persisted field, never guessed from a search's name.
+| Doc | Covers |
+|---|---|
+| [GETTING_STARTED.md](docs/GETTING_STARTED.md) | Full install walkthrough |
+| [USER_GUIDE.md](docs/USER_GUIDE.md) | Goal-oriented "I want to..." guide |
+| [CLAUDE_GUIDE.md](docs/CLAUDE_GUIDE.md) | How Claude Code operates JobOS |
+| [CLAUDE_COOKBOOK.md](docs/CLAUDE_COOKBOOK.md) | Natural-language prompt examples |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Components, diagrams, both pipelines |
+| [SCORING.md](docs/SCORING.md) | The real 100-point model |
+| [JOB_SOURCES.md](docs/JOB_SOURCES.md) | Every source's real status |
+| [APPLICATION_LIFECYCLE.md](docs/APPLICATION_LIFECYCLE.md) | The 18 states + approval gate |
+| [CONFIGURATION.md](docs/CONFIGURATION.md) | Every env var and config file |
+| [SECURITY.md](docs/SECURITY.md) | Secrets, privacy, safety boundaries |
+| [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Real, discoverable problems |
+| [GLOSSARY.md](docs/GLOSSARY.md) | Plain-language term definitions |
 
 ## Troubleshooting
 
-- **`npx playwright install chromium` fails or Naukri searches
-  error out**: Playwright's browser binary is a per-machine cache
-  (`~/Library/Caches/ms-playwright` on macOS), not part of this repo --
-  re-run the install command above.
-- **Port 8420 already in use**: another instance is likely still
-  running (`ps aux | grep uvicorn`); stop it, or start this one on a
-  different port (`--port 8421`) and open that URL instead.
-- **A search-provider board (LinkedIn/Indeed/etc.) never appears as
-  an option**: no provider API key is configured in `.env` yet --
-  check `GET /api/sources` or Settings → Search Providers for the live
-  reason (`NOT_CONFIGURED` vs an actual failure).
-- **"Profile needs to be confirmed" when trying to run a search**:
-  go to `/profile`, review the extracted/entered fields, and click
-  "Confirm profile" -- a DRAFT profile cannot be used to run a search.
-- **Nothing in `data/applications/` after first run**: the dev
-  database (`jobos_dev.db`) is created automatically on the first API
-  request, not at process startup -- open the app in a browser first.
+Playwright install issues, port conflicts, a provider board not
+appearing, "profile needs to be confirmed," and other real,
+discoverable problems: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+Or run `scripts/jobos-doctor` for a live diagnostic of your own setup.
 
-## Important
+## Security and privacy
 
-Never commit credentials, OAuth tokens, browser sessions,
-application data, or other personal information to Git.
+Secrets, resumes, and the production database are gitignored and never
+committed. Candidate data is strictly scoped per `candidate_id`
+(verified by automated multi-user isolation tests), though identity
+itself is `localStorage`-based, not a real login — see
+[docs/SECURITY.md](docs/SECURITY.md) for the full model and its stated
+limitations.
 
-Browser automation must not bypass CAPTCHA, MFA, anti-bot
-controls, rate limits, or website restrictions.
+## Development and contribution
+
+Run the full backend suite: `for f in scripts/test_*.py; do .venv/bin/python3 "$f"; done`.
+Frontend integrity check: `.venv/bin/python3 scripts/test_frontend_integrity.py`.
+See `CLAUDE.md` for the project's working conventions (extend, don't
+rebuild; smallest change that achieves the goal; run tests before
+calling anything done).
+
+Never commit credentials, OAuth tokens, browser sessions, application
+data, or other personal information to Git. Browser automation must
+never bypass CAPTCHA, MFA, anti-bot controls, rate limits, or website
+restrictions.

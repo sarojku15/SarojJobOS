@@ -1,6 +1,6 @@
 ---
 name: job-discovery-engine
-description: Generic, multi-source job discovery orchestration for SarojJobOS. Builds a bounded set of search queries from generic candidate/search criteria (any profession, not just SRE/DevOps), dispatches them across every currently-usable source (registered adapters today, ATS/career-page providers and Web Search discovery once configured), validates and normalizes the raw results into the existing CommonJob shape, and hands off to the EXISTING dedup/freshness/eligibility/scoring/report pipeline unchanged. Use this skill whenever the task is "find jobs matching this criteria" for any candidate -- never re-implement scoring, dedup, or freshness from scratch.
+description: Standalone, ad-hoc, NON-PERSISTING job discovery script (scripts/discover_jobs.py) that queries every enabled source for generic criteria and returns raw normalized jobs -- it does not score, deduplicate cross-source, or write to the database. Use ONLY for one-off/exploratory "just show me what's out there" requests that don't need to be saved or tracked. For a real JobOS candidate's tracked, scored, dashboard-visible search, use jobos-orchestrator's direct API calls (POST /api/candidates/{id}/searches + /run) instead -- this skill's output never appears there.
 ---
 
 # Job Discovery Engine
@@ -20,17 +20,37 @@ responsibilities and nothing else:
 reports.** Those are `scripts/score_job.py`, `scripts/canonical_job.py`
 / `scripts/cross_source_dedup.py`, `scripts/freshness.py`, and
 `scripts/generate_run_report.py` respectively -- already built, already
-tested, already reused unchanged by the rest of this project (see
-`data/reports/phase9_job_discovery_engine.md` for how this Skill wires
-into that pipeline via `api/search_store.py` / `scripts/search_worker.py`).
+tested. **Correction (caught on review): this Skill's own
+`discover_jobs.py` does NOT call into or get called by
+`scripts/search_worker.py`** -- they are two separate code paths that
+happen to share the same underlying `scripts/source_registry.
+discover_from_sources()` and adapter layer. `data/reports/
+phase9_job_discovery_engine.md` documents API/schema work done during
+the same project phase this Skill was built in, not a code-level import
+between the two. See "When NOT to use this Skill" below.
 
 ## When to use this Skill
 
-Any time you need to find jobs matching a candidate's criteria --
-regardless of the candidate's profession, target role, or location.
-The criteria are always the generic shape in
-`references/job-schema.md`'s "SearchCriteria" section, never assumed to
-be SRE/DevOps-specific.
+**Only** for an ad-hoc, non-persisted "what's out there" look — the
+results are never scored, never deduplicated across sources, and never
+written to the database, so they will not appear on any candidate's
+`/dashboard` or `/searches/{id}/results` page. The criteria are always
+the generic shape in `references/job-schema.md`'s "SearchCriteria"
+section, never assumed to be SRE/DevOps-specific.
+
+## When NOT to use this Skill
+
+For a real candidate's actual search — "find me jobs matching my
+profile," anything that should show up in their results/dashboard/
+export — use `jobos-orchestrator`'s direct calls to
+`POST /api/candidates/{id}/searches` and
+`POST /api/searches/{id}/run` instead (`scripts/search_worker.py`).
+That path and this Skill's `discover_jobs.py` both independently call
+the same underlying `scripts/source_registry.discover_from_sources()`,
+but only the API path scores, persists, and dedups the results — this
+Skill's script does not, and nothing here writes to it automatically.
+They are two separate code paths today, not one pipeline with two
+entry points.
 
 ## How to run it
 
@@ -42,18 +62,22 @@ or, from Python, import `discover_jobs.discover(criteria)` directly.
 See `references/discovery-policy.md` for the full source-selection
 policy this applies before making any call.
 
-## Source hierarchy (see `references/source-strategy.md` for detail)
+## Source hierarchy (see `references/source-strategy.md` for detail,
+and `docs/JOB_SOURCES.md` for the full current status table)
 
-1. **Existing, ENABLED adapters** (today: Naukri only) --
+1. **Existing, ENABLED direct adapters** (currently: `NAUKRI`,
+   `HIRIST`, `IIMJOBS`, `APNA`) --
    `scripts/source_registry.discover_from_sources()`, unchanged.
-2. **Official APIs / authorized integrations** -- none configured in
-   this environment today; the provider interface exists
-   (`scripts/greenhouse_adapter.py`, `scripts/lever_adapter.py`,
-   `scripts/ashby_adapter.py`) so adding a credential/board is
-   configuration, not a redesign.
-3. **Public ATS/career-page providers** -- same three modules; real,
-   working code against each platform's public JSON API, kept
-   `NOT_ENABLED` until a company board is configured AND this
+2. **Search-provider-backed sources** (currently: `LINKEDIN`, `INDEED`,
+   `FOUNDIT`, `INSTAHYRE`, `CUTSHORT`, `WELLFOUND`, `SHINE`) --
+   `ENABLED` only once at least one provider API key
+   (`YOU_API_KEY`/`TAVILY_API_KEY`/`EXA_API_KEY`/`BRAVE_API_KEY`/
+   `SERPER_API_KEY`) is configured; discovered through that provider's
+   own search API, never a direct crawler for these boards.
+3. **Public ATS/career-page providers** -- `scripts/greenhouse_adapter.py`,
+   `lever_adapter.py`, `ashby_adapter.py`; real, working code against
+   each platform's public JSON API, kept `NOT_ENABLED` until a company
+   board is configured in `config/career_pages.json` AND this
    project's phased live-validation process is actually run.
 4. **Web Search discovery** -- `scripts/web_search_discovery_adapter.py`.
    **This backend process cannot call Claude Code's own WebSearch tool

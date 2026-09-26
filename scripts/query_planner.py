@@ -177,6 +177,16 @@ def build_queries_from_search_profile(
     search_queue is expected to construct a real
     source_adapter.SearchQuery from each entry only at execution time,
     which this function -- queuing only, never executing -- does not do.
+
+    Iteration order is (role, location, source) -- source innermost --
+    so the `max_queries` cap is spent round-robin ACROSS sources rather
+    than exhausting one source's entire role x location matrix before
+    ever reaching the next source. (Bug found via a real end-to-end run:
+    with source outermost, a candidate with many roles/locations and
+    11 configured sources had the whole 50-query budget consumed by the
+    alphabetically-first source alone -- APNA -- leaving the other 10
+    sources NOT_ATTEMPTED even though they were explicitly selected.
+    Dedup/cap/determinism/output-shape behavior is otherwise identical.)
     """
     sources = sorted(set(search_profile.sources))
     roles = sorted(set(search_profile.target_roles))
@@ -185,9 +195,9 @@ def build_queries_from_search_profile(
     plan = []
     seen = set()
 
-    for source in sources:
-        for role in roles:
-            for location in locations:
+    for role in roles:
+        for location in locations:
+            for source in sources:
                 key = (source, role, location)
 
                 if key in seen:

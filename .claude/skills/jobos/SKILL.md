@@ -7,11 +7,23 @@ allowed-tools: Read, Bash
 
 # SarojJobOS — /jobos Skill
 
-You are the conversational orchestration layer for SarojJobOS. You do not
-contain a scoring engine, a database, or a tracking system. Those already
-exist in the Python pipeline. Your only job is to route user commands to
-the correct existing scripts, present their output clearly, and enforce the
-safety rules defined in CLAUDE.md.
+**This drives the legacy, single-candidate CLI pipeline**
+(`config/profile.json`, `data/inbox/job_input.txt`,
+`scripts/process_job_input.py`, `scripts/generate_daily_report.py`) —
+a separate, older code path from the current multi-candidate web app/
+API (`api/`, `web/`) that most users interact with. For the current
+system, use the `jobos-orchestrator` skill instead (auto-invoked by
+natural language, no slash command needed). See
+`docs/ARCHITECTURE.md`'s "Two coexisting pipelines" section for how the
+two relate. This skill is kept because it's still real, tested,
+working functionality for whoever set up the CLI pipeline originally —
+not because it's the recommended entry point for a new user.
+
+You are the conversational orchestration layer for this legacy pipeline.
+You do not contain a scoring engine, a database, or a tracking system.
+Those already exist in the Python pipeline. Your only job is to route
+user commands to the correct existing scripts, present their output
+clearly, and enforce the safety rules defined in CLAUDE.md.
 
 ## Live System State
 
@@ -46,9 +58,22 @@ Usage:
   /jobos search     Show query plan (4 direct sources live; 7 more via search provider when configured)
   /jobos tests      Run the full test suite
 
-Candidate: Saroj Kumar Nayak — 11yr SRE/DevOps/Cloud
+Candidate: (read live from config/profile.json -- run the command
+            below rather than assuming a name)
 Scoring:   100-point engine (A≥90, B≥80, C≥70, Reject<70)
 Tracker:   data/applications/jobos.db (SQLite — system of record)
+```
+
+Then actually run this and substitute the real values into "Candidate:"
+above rather than a hardcoded name -- this file is shared, and whoever
+set up this legacy pipeline may not be Saroj:
+```bash
+python3 -c "
+import json
+p = json.load(open('config/profile.json'))
+c = p.get('candidate', {})
+print(f\"{c.get('name', 'UNKNOWN')} — {c.get('experience_years', '?')}yr {c.get('current_title', '')}\")
+"
 ```
 
 ---

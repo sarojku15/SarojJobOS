@@ -7,9 +7,37 @@ human-approved application assistance for Saroj Kumar Nayak.
 
 Do not rebuild this project. It has a working foundation. Extend it.
 
+The application itself is a **generic, multi-candidate system** (see
+"Two coexisting pipelines" in `docs/ARCHITECTURE.md`) — this file is
+Saroj's own project-operating guide, not a description of every user's
+data. When acting for the current multi-candidate web app/API, always
+read a candidate's real profile live from the database for their own
+`candidate_id`; never assume the "Candidate Profile" section below
+applies to whoever you're currently helping.
+
+---
+
+## Documentation map
+
+Deep-dive docs live under `docs/` — this file stays the operating
+guide; docs/ holds the detail:
+
+`docs/ARCHITECTURE.md`, `docs/SCORING.md`, `docs/JOB_SOURCES.md`,
+`docs/APPLICATION_LIFECYCLE.md`, `docs/CONFIGURATION.md`,
+`docs/SECURITY.md`, `docs/TROUBLESHOOTING.md`, `docs/GLOSSARY.md`,
+`docs/GETTING_STARTED.md`, `docs/USER_GUIDE.md`, `docs/CLAUDE_GUIDE.md`,
+`docs/CLAUDE_COOKBOOK.md`.
+
 ---
 
 ## Candidate Profile
+
+**This section describes Saroj's own profile, as used by the legacy,
+single-candidate CLI pipeline (`config/profile.json`) — see
+`docs/ARCHITECTURE.md`'s "Two coexisting pipelines."** For the current
+multi-candidate web app/API, this information lives per-candidate in
+the database, built from their own resume/manual entry, and must be
+read live rather than assumed from this file.
 
 - Azure-certified Senior SRE / DevOps / Cloud / Platform Engineer
 - 11+ years experience
@@ -354,6 +382,56 @@ layer only.
 Do not assume every site permits the same automation method. For sites
 where automated interaction is restricted, implement compliant discovery
 and human handoff rather than attempting to bypass controls.
+
+---
+
+## Claude Skill Architecture
+
+Full detail: `docs/CLAUDE_GUIDE.md`, `docs/CLAUDE_COOKBOOK.md`.
+
+Skills live in `.claude/skills/*/SKILL.md`, discovered automatically by
+Claude Code from this repository. `jobos-orchestrator` is the primary
+natural-language entry point for the current multi-candidate app; a
+real, tracked search runs via its own direct FastAPI calls
+(`POST /api/candidates/{id}/searches` + `/run`), and it delegates
+score/gap explanation to `job-matching`, resume questions to
+`resume-manager`, status changes to `application-tracker`, and exports
+to `job-report`. **`job-discovery-engine` is a separate, non-persisting
+script (`discover_jobs.py`) for ad-hoc/untracked exploration only** —
+its output never reaches a candidate's dashboard, and it is not part of
+the real search-run path (they independently share the same underlying
+`source_registry`, nothing more). `company-research` is explicitly
+optional/best-effort, not a built pipeline component — never let it
+feed scoring or matching. `jobos` (the `/jobos` slash command,
+`disable-model-invocation: true`) drives the separate legacy CLI
+pipeline (`config/profile.json`) and must not be confused with the
+current system.
+
+Adding a new skill: give it the same structure as the existing ones
+(frontmatter `name`/`description`, then Purpose/When to use/When not to
+use/Inputs/Workflow/APIs/Safety/Output/Examples), make its `description`
+specific enough for automatic selection, and never let it duplicate an
+existing skill's responsibility — extend/improve instead (same
+"do not rebuild" principle as the rest of this project).
+
+---
+
+## How to Run / How to Test
+
+Run: `.venv/bin/uvicorn api.main:app --reload --port 8420` (dev DB
+auto-created on first request). Full walkthrough: `docs/GETTING_STARTED.md`.
+
+Test: `for f in scripts/test_*.py; do .venv/bin/python3 "$f"; done` for
+the full backend suite (currently ~89 files, all must pass before any
+significant change is considered complete), plus
+`.venv/bin/python3 scripts/test_frontend_integrity.py` for the
+web/*.html + app.js integrity checks. Diagnose environment issues with
+`scripts/jobos-doctor`.
+
+Every test uses an isolated temp DB, or (where it must touch a real DB
+path) verifies the production DB's SHA-256/size is unchanged before and
+after — never assume a test is safe to run against
+`data/applications/jobos.db` without checking this first.
 
 ---
 

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Thin, repo-consistent entry point -- see scripts/jobos_doctor.py for
+# the actual checks. Uses the project venv's python3 if it exists, so
+# dependency-import checks reflect what the app itself actually sees.
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -x "$DIR/.venv/bin/python3" ]; then
+  exec "$DIR/.venv/bin/python3" "$DIR/scripts/jobos_doctor.py" "$@"
+else
+  exec python3 "$DIR/scripts/jobos_doctor.py" "$@"
+fi
