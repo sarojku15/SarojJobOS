@@ -223,7 +223,10 @@ pass before any significant change is considered complete.
 ### Database
 
 - `data/applications/jobos.db` — SQLite, authoritative system of record
-- 32-column `jobs` table with full application lifecycle
+- `jobs` table with full application lifecycle (44 columns in the
+  production DB as of this writing; grown via additive migrations --
+  check `PRAGMA table_info(jobs)` for the current authoritative count
+  rather than trusting a number here)
 - Indexes on `status`, `priority`, `company`
 - Unique constraint on `(source, job_id)` — deduplication enforced at DB level
 

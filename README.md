@@ -52,22 +52,21 @@ Open **http://127.0.0.1:8420/** in a browser. That's it -- no build
 step, no separate frontend server (plain HTML/CSS/JS, see `web/`), no
 manual database initialization.
 
-**1. Create your candidate**: on the home page, enter a name (+
-optional email/phone) and click "Create candidate" -- or upload a
-resume directly, which creates the candidate for you automatically.
+**1. Get started**: on the home page, either choose a `.pdf` resume
+and click "Upload Resume" (extracts your profile automatically), or
+click "Enter profile manually" under "Continue Without Resume" to skip
+straight to manual entry. Either path creates your candidate record
+for you -- there's no separate name/email/phone form up front. You can
+upload additional resume versions later from the Profile page; every
+version is kept, never overwritten (see "Multiple resumes" below).
 
-**2. Upload your resume**: choose a `.pdf` file and click "Upload &
-extract profile" -- or click "Continue without a resume" to skip
-straight to manual entry. You can upload additional resume versions
-later from the Profile page; every version is kept, never overwritten
-(see "Multiple resumes" below).
+**2. Review and confirm your profile**: `/profile` shows everything
+extracted from your resume (or blank fields if you skipped it) --
+fill in/edit your name, email, phone, skills, experience, and job
+preferences, then click "Confirm profile." A search cannot run until
+your profile is confirmed.
 
-**3. Review and confirm your profile**: `/profile` shows everything
-extracted from your resume (identity, skills, experience, job
-preferences) -- edit anything, then click "Confirm profile." A search
-cannot run until your profile is confirmed.
-
-**4. Create a search**: go to `/searches/new`, fill in job titles,
+**3. Create a search**: go to `/searches/new`, fill in job titles,
 locations, experience/salary range, skills, work model, employment
 type, minimum score, freshness, and pick from the sources currently
 shown as available (only real, ENABLED sources are ever listed). You
@@ -75,12 +74,12 @@ can also pin the search to a specific resume/profile version instead
 of always using whichever is currently active (see "Multiple resumes"
 below).
 
-**5. Run the search**: from `/dashboard`, the search's own
+**4. Run the search**: from `/dashboard`, the search's own
 `/searches/{id}` page, or the results page itself, click "Run now."
 The call returns immediately (`{run_id, status:"QUEUED"}`); the page
 polls `/api/runs/{run_id}` until it reaches a terminal status.
 
-**6. View results**: `/searches/{id}/results` -- a summary (jobs
+**5. View results**: `/searches/{id}/results` -- a summary (jobs
 found, hard-eligible, qualified, apply-today, duplicates, new),
 a per-source "Source Execution Audit" table (which sources were
 attempted, their real status, raw/eligible/displayed counts), and a
@@ -90,12 +89,12 @@ scored it, and a status dropdown (Shortlist → Approve → Applied, with
 the approval gate enforced server-side). No auto-apply button exists
 anywhere.
 
-**7. Edit an existing search**: from its detail page, click "Edit" --
+**6. Edit an existing search**: from its detail page, click "Edit" --
 change any criteria or the pinned resume/profile. Editing never
 rewrites a past run's own results; only a future run uses the new
 setting.
 
-**8. Download Excel**: "Download Excel report" on the results or
+**7. Download Excel**: "Download Excel report" on the results or
 search-detail page -- scoped to exactly the jobs shown for that
 specific search/run (never a different, larger candidate-wide count).
 See "What the export contains" below for the full column list.
