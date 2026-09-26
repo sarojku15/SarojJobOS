@@ -126,6 +126,16 @@ document.getElementById("run-btn").addEventListener("click", async () => {
     const { run_id } = await api(`/api/searches/${searchId}/run?candidate_id=${candidateId}`, { method: "POST" });
     poll(run_id, statusEl);
   } catch (err) {
+    // 409 already_running (api/main.py's run_search()): this search
+    // already has a persisted QUEUED/RUNNING run -- never a generic
+    // failure banner, never a second run created. Show the existing
+    // run's own status and keep polling it, same as a fresh Run Now.
+    const detail = err.data && err.data.detail;
+    if (detail && typeof detail === "object" && detail.error === "already_running") {
+      showInfo(msg, `Search is already running (${detail.status}).`);
+      poll(detail.run_id, statusEl);
+      return;
+    }
     showError(msg, err);
   }
 });

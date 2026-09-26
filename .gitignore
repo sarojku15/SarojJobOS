@@ -17,6 +17,7 @@ playwright/.auth/
 # Job application personal data
 data/applications/
 data/private/
+data/backups/
 data/*.csv
 data/*.xlsx
 

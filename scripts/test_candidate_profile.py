@@ -23,6 +23,7 @@ from candidate_profile import (
     CandidateProfile,
     Provenance,
     ProfileStatus,
+    apply_search_target_override,
     normalize_candidate_profile,
     promote_to_confirmed,
     serialize_candidate_profile,
@@ -518,6 +519,81 @@ def test_16_existing_job_eligibility_can_consume_canonical_profile():
     return failures
 
 
+def test_17_apply_search_target_override_fixes_role_and_location_scoring():
+    """
+    Regression test for a real bug found via a live end-to-end run
+    (2026-09-26): score_job()/results_store.py always scored a job
+    against the CANDIDATE PROFILE's job_preferences.target_roles/
+    target_locations, never the saved SEARCH's own target_roles/
+    target_locations override (only used to build the discovery query
+    plan). A candidate whose profile-level preferences are empty (the
+    common case -- these are a per-search choice, not resume content)
+    got 0/20 "Core role alignment" and 0/5 "Location" points on EVERY
+    job, no matter what the search itself targeted.
+    """
+    failures = []
+
+    legacy = to_legacy_matching_profile(_confirmed_integration_profile())
+
+    if legacy["target_roles"]:
+        _fail(failures, f"test 17 setup: expected the integration profile to have no target_roles of its own, got {legacy['target_roles']!r}")
+        return failures
+
+    job = {
+        "title": "Senior Site Reliability Engineer",
+        "location": "Pune",
+        "work_model": "Onsite",
+        "jd_text": "AWS Kubernetes Terraform Jenkins Prometheus SLO incident management",
+        "mandatory_skills": [],
+        "preferred_skills": [],
+    }
+
+    # Before the override: no target_roles at all -> role alignment
+    # cannot match anything, and "Pune" isn't in the profile's own
+    # target_locations (Bengaluru/Hyderabad) -> location can't match
+    # either (job is not remote).
+    before = score_job(job, legacy)
+    if "Core role alignment" not in before["missing_skills"]:
+        _fail(failures, f"test 17 setup: expected 'Core role alignment' to be missing before the override, got matched={before['matched_skills']}")
+    if "Location" in before["matched_skills"]:
+        _fail(failures, f"test 17 setup: expected Location to NOT match before the override (job is in Pune, profile targets Bengaluru/Hyderabad), got matched={before['matched_skills']}")
+
+    # Simulate a saved search whose own target_roles/target_locations
+    # (frozen into its query-plan snapshot at submission time) are
+    # exactly what discovered this job.
+    query_plan_entries = [
+        {"role": "Senior Site Reliability Engineer", "location": "Pune", "source": "NAUKRI"},
+        {"role": "Senior SRE", "location": "Pune", "source": "NAUKRI"},
+    ]
+    apply_search_target_override(legacy, query_plan_entries)
+
+    if legacy["target_roles"] != ["Senior SRE", "Senior Site Reliability Engineer"]:
+        _fail(failures, f"test 17: expected target_roles overridden to the query plan's own roles (sorted), got {legacy['target_roles']!r}")
+    if legacy["target_locations"] != ["Pune"]:
+        _fail(failures, f"test 17: expected target_locations overridden to ['Pune'], got {legacy['target_locations']!r}")
+
+    after = score_job(job, legacy)
+    if "Core role alignment" not in after["matched_skills"]:
+        _fail(failures, f"test 17: expected 'Core role alignment' to match after the override, got matched={after['matched_skills']}")
+    if "Location" not in after["matched_skills"]:
+        _fail(failures, f"test 17: expected 'Location' to match after the override, got matched={after['matched_skills']}")
+    if after["score"] <= before["score"]:
+        _fail(failures, f"test 17: expected the override to raise the score (before={before['score']}, after={after['score']})")
+
+    # A search whose query plan has no role/location entries at all
+    # (empty snapshot) must leave an already-set legacy profile
+    # unchanged -- never silently blank out a real value.
+    unchanged = dict(legacy)
+    apply_search_target_override(unchanged, [])
+    if unchanged["target_roles"] != legacy["target_roles"] or unchanged["target_locations"] != legacy["target_locations"]:
+        _fail(failures, "test 17: an empty query_plan_entries must leave target_roles/target_locations unchanged")
+
+    if not failures:
+        print("PASS: test 17 -> apply_search_target_override() makes a saved search's own target_roles/target_locations reach scoring, fixing the real Core-role-alignment/Location scoring gap")
+
+    return failures
+
+
 def main():
     tests = [
         test_1_valid_minimal_draft_profile,
@@ -536,6 +612,7 @@ def main():
         test_14_existing_experience_eligibility_can_consume_canonical_profile,
         test_15_existing_location_eligibility_can_consume_canonical_profile,
         test_16_existing_job_eligibility_can_consume_canonical_profile,
+        test_17_apply_search_target_override_fixes_role_and_location_scoring,
     ]
 
     all_failures = []

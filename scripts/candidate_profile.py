@@ -743,6 +743,45 @@ def to_legacy_matching_profile(profile, allow_draft=False):
     }
 
 
+def apply_search_target_override(legacy_profile, query_plan_entries):
+    """
+    Override a to_legacy_matching_profile() dict's target_roles/
+    target_locations with the ACTUAL roles/locations a specific
+    search/run targeted (derived from its own frozen query-plan
+    snapshot's "queries" list -- each entry already has "role"/
+    "location" string keys), instead of scoring silently depending on
+    the candidate's PROFILE-level job_preferences.target_roles/
+    target_locations.
+
+    Root cause this fixes: a saved search's own target_roles/
+    target_locations (set at search-creation time, via
+    search_submission.py's target_roles_override/
+    target_locations_override) were previously used ONLY to build the
+    discovery query plan (which jobs to search FOR) -- scoring always
+    re-derived target_roles/target_locations from the candidate's
+    profile-level job_preferences instead, which are commonly empty
+    (these are normally a per-search choice, not something resume
+    extraction fills in). An empty target_roles makes
+    score_job.role_alignment_score() return False unconditionally, and
+    an empty target_locations makes the Location dimension miss
+    unconditionally -- 25 of the 100 points -- regardless of what the
+    search itself was actually configured to find.
+
+    Mutates and returns legacy_profile in place. A query_plan_entries
+    with no role/location values leaves legacy_profile unchanged (so a
+    search with no discoverable snapshot behaves exactly as before).
+    """
+    roles = sorted({entry["role"] for entry in query_plan_entries if entry.get("role")})
+    locations = sorted({entry["location"] for entry in query_plan_entries if entry.get("location")})
+
+    if roles:
+        legacy_profile["target_roles"] = roles
+    if locations:
+        legacy_profile["target_locations"] = locations
+
+    return legacy_profile
+
+
 def promote_to_confirmed(profile):
     """
     Validate `profile` against CONFIRMED-level minimum requirements and,

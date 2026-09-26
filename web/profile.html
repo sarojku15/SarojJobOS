@@ -103,6 +103,20 @@
 <script>
 let candidateId = null;
 
+// Bug fix: PUT /api/candidates/{id}/profile REPLACES the entire skills
+// structure with whatever categories are present in the payload (see
+// api/profile_store.py's _apply_skill_dict()) -- any category left out
+// resets to empty. The single flat "Skills" textbox below can only
+// show/edit skill NAMES, so this map remembers which category each
+// name currently belongs to (as loaded from the server) purely so a
+// save can put each name back where it came from instead of collapsing
+// everything into "other" and silently wiping resume-extracted
+// cloud/containers/IaC/CI-CD/observability categorization -- exactly
+// the bug that caused real matched jobs to score near-zero on those
+// dimensions. A name typed in fresh (not in this map) still goes to
+// "other", same as before.
+let skillCategoryByName = {};
+
 function csv(str) { return str.split(",").map((s) => s.trim()).filter(Boolean); }
 
 async function load() {
@@ -194,6 +208,12 @@ function populateForm(profile) {
   document.getElementById("p-industries").value = (profile.professional_summary.industries || []).join(", ");
   document.getElementById("p-summary").value = profile.professional_summary.summary || "";
 
+  skillCategoryByName = {};
+  for (const [category, items] of Object.entries(profile.skills || {})) {
+    for (const s of items) {
+      skillCategoryByName[s.name.trim().toLowerCase()] = category;
+    }
+  }
   const allSkillNames = Object.values(profile.skills).flat().map((s) => s.name);
   document.getElementById("p-skills").value = allSkillNames.join(", ");
 
@@ -208,6 +228,17 @@ function populateForm(profile) {
   document.getElementById("status-badge").innerHTML = `Status: ${badgeHtml(profile.metadata.profile_status)}`;
 }
 
+function buildSkillsPayload(skillNames) {
+  // Preserve each name's known category (see skillCategoryByName above)
+  // instead of collapsing every skill into "other" on every save.
+  const byCategory = {};
+  for (const name of skillNames) {
+    const category = skillCategoryByName[name.trim().toLowerCase()] || "other";
+    (byCategory[category] = byCategory[category] || []).push({ name });
+  }
+  return byCategory;
+}
+
 function buildUpdatePayload() {
   const skillNames = csv(document.getElementById("p-skills").value);
   return {
@@ -219,7 +250,7 @@ function buildUpdatePayload() {
     total_experience_years: document.getElementById("p-years").value === "" ? null : Number(document.getElementById("p-years").value),
     industries: csv(document.getElementById("p-industries").value),
     summary: document.getElementById("p-summary").value.trim() || null,
-    skills: { other: skillNames.map((name) => ({ name })) },
+    skills: buildSkillsPayload(skillNames),
     job_preferences: {
       target_roles: csv(document.getElementById("p-roles").value),
       target_locations: csv(document.getElementById("p-locations").value),

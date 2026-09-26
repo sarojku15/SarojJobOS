@@ -139,6 +139,17 @@ async function runSearch(searchId, btn) {
     showSuccess(msg, `Run started: ${status}`);
     pollRun(run_id, btn);
   } catch (err) {
+    // 409 already_running (api/main.py's run_search()): this search
+    // already has a persisted QUEUED/RUNNING run -- never a generic
+    // failure banner, never a second run created. Show the existing
+    // run's own status and keep polling it, same as a fresh Run Now.
+    const detail = err.data && err.data.detail;
+    if (detail && typeof detail === "object" && detail.error === "already_running") {
+      showInfo(msg, `Search is already running (${detail.status}).`);
+      btn.textContent = `Status: ${detail.status}`;
+      pollRun(detail.run_id, btn);
+      return;
+    }
     showError(msg, err);
     btn.disabled = false;
     btn.textContent = "Run now";

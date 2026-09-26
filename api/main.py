@@ -80,6 +80,30 @@ app = FastAPI(title="SarojJobOS Job Search")
 MAX_RESUME_BYTES = 8 * 1024 * 1024  # 8MB
 
 
+@app.on_event("startup")
+def _recover_orphaned_runs_on_startup():
+    """
+    See api/search_store.recover_orphaned_runs()'s own docstring for
+    why this is safe unconditionally in this project's architecture
+    (no worker can survive a process restart, so anything still
+    QUEUED/RUNNING at a fresh process's own startup is provably
+    orphaned, never a false positive). Found via a real end-to-end
+    test: a run left behind by a killed/restarted API process stayed
+    RUNNING forever with a stale, empty audit, and (before this fix)
+    could even outrank a real completed run as "the latest run" shown
+    on the results/dashboard/export pages -- see
+    get_latest_usable_run_id_for_search()'s docstring for the other,
+    display-side half of this same fix.
+    """
+    conn = db_mod.get_conn()
+    try:
+        recovered = search_store.recover_orphaned_runs(conn)
+        if recovered:
+            print(f"[startup] Recovered {recovered} orphaned run(s) left RUNNING/QUEUED by a previous process.")
+    finally:
+        conn.close()
+
+
 @app.middleware("http")
 async def _no_cache_for_static_assets(request, call_next):
     """
@@ -524,11 +548,27 @@ def run_search(search_id: str, candidate_id: str):
             raise HTTPException(404, str(error))
 
         try:
-            run_id = search_store.trigger_run(conn, db_mod.DEV_DB, saved_search)
+            trigger_result = search_store.trigger_run(conn, db_mod.DEV_DB, saved_search)
         except search_store.SearchStoreError as error:
             raise HTTPException(409, str(error))
 
-        return {"run_id": run_id, "status": "QUEUED"}
+        if trigger_result["already_running"]:
+            # Persisted-DB-state guard (search_store.get_active_run_for_
+            # search()) -- a second "Run Now" while this search already
+            # has a QUEUED/RUNNING run never creates another run or
+            # spawns another worker. 409 (not 200) so the UI can
+            # distinguish "here is your new run" from "search is
+            # already running" without inspecting response fields on
+            # every successful call; the existing run's own id/status
+            # are still exposed in the body for the caller to act on.
+            raise HTTPException(409, {
+                "error": "already_running",
+                "message": "This search is already running.",
+                "run_id": trigger_result["search_run_id"],
+                "status": trigger_result["status"],
+            })
+
+        return {"run_id": trigger_result["search_run_id"], "status": trigger_result["status"]}
     finally:
         conn.close()
 
@@ -561,14 +601,17 @@ def get_results(search_id: str, candidate_id: str):
         except results_store.ResultsNotReadyError as error:
             raise HTTPException(409, str(error))
         # run_id is resolved via the SAME single function
-        # (get_latest_run_id_for_search) that get_source_filter_summary()
-        # below uses internally -- one canonical "current run" for this
-        # saved search, never two independent computations that could
-        # drift and show one run's results/summary next to a
-        # DIFFERENT run's source audit. See that function's own
-        # docstring, and migrate_v5... / api/db.py's ensure_dev_db()
-        # fix for the real bug this closes.
-        run_id = search_store.get_latest_run_id_for_search(conn, search_id)
+        # (get_latest_usable_run_id_for_search) that get_source_filter_
+        # summary() below uses internally -- one canonical "current run"
+        # for this saved search, never two independent computations
+        # that could drift and show one run's results/summary next to
+        # a DIFFERENT run's source audit. Selects the newest run that
+        # is not RUNNING/QUEUED AND has at least one real
+        # search_run_sources audit row (falling back to the newest run
+        # overall if no run meets both conditions) -- see that
+        # function's own docstring, and migrate_v5... / api/db.py's
+        # ensure_dev_db() fix for the earlier, related bug this closes.
+        run_id = search_store.get_latest_usable_run_id_for_search(conn, search_id)
         sources = search_store.get_source_filter_summary(conn, search_id)
         # Additive only -- existing clients that read response["results"]/
         # ["sources"] are completely unaffected by the new run_id key.
@@ -746,7 +789,7 @@ def download_search_report(search_id: str, candidate_id: str):
             raise HTTPException(404, str(error))
         scoped_job_ids = results_store._job_ids_for_search(conn, candidate_id, search_id)
         scoped_run_ids = search_store.list_run_ids_for_search(conn, search_id)
-        scoped_latest_run_id = search_store.get_latest_run_id_for_search(conn, search_id)
+        scoped_latest_run_id = search_store.get_latest_usable_run_id_for_search(conn, search_id)
         resume_overrides = results_store.get_scoped_resume_overrides(conn, candidate_id, search_id)
     finally:
         conn.close()

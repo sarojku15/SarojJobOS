@@ -36,13 +36,13 @@ API_DIR = ROOT / "api"
 if str(API_DIR) not in sys.path:
     sys.path.insert(0, str(API_DIR))
 
-from candidate_profile import to_legacy_matching_profile
+from candidate_profile import apply_search_target_override, to_legacy_matching_profile
 import generate_run_report as report_mod
 from freshness import classify_freshness
 from experience_eligibility import detect_requirement_type
 
 from profile_store import load_active_profile, load_profile_version, ProfileStoreError
-from search_store import list_run_ids_for_search
+from search_store import get_latest_run_id_for_search, list_run_ids_for_search
 
 
 class ResultsNotReadyError(Exception):
@@ -94,6 +94,31 @@ def _job_ids_for_search(conn, candidate_id, saved_search_id):
             [candidate_id, *run_ids],
         ).fetchall()
     return {r[0] for r in rows}
+
+
+def _query_plan_entries_for_search(conn, saved_search_id):
+    """
+    The frozen query-plan "queries" list (each a {"role","location",...}
+    dict) from this saved search's own most recent run -- read-only,
+    for apply_search_target_override() below. [] if the search has
+    never been run (the live rescore then simply uses the candidate's
+    profile-level target_roles/target_locations exactly as before this
+    fix). Uses the same canonical "latest run for this search"
+    resolution as everything else (get_latest_run_id_for_search()) --
+    never a second, independent "which run" computation.
+    """
+    run_id = get_latest_run_id_for_search(conn, saved_search_id)
+    if run_id is None:
+        return []
+    row = conn.execute(
+        "SELECT query FROM search_runs WHERE search_run_id = ?", (run_id,)
+    ).fetchone()
+    if row is None or not row[0]:
+        return []
+    try:
+        return json.loads(row[0]).get("queries", [])
+    except (json.JSONDecodeError, AttributeError):
+        return []
 
 
 def _match_reason(ranking):
@@ -397,14 +422,6 @@ def get_dashboard_summary(conn, candidate_id):
         return None
 
     legacy_profile = to_legacy_matching_profile(profile)
-    matches = report_mod.load_candidate_job_matches(conn, candidate_id)
-    test_only_job_ids = _test_only_job_ids(conn, candidate_id)
-    scoped_job_ids = set(matches.keys()) - test_only_job_ids
-
-    jobs = report_mod.load_jobs(conn, exclude_test_mock=True)
-    jobs = [j for j in jobs if j.get("job_id") in scoped_job_ids]
-
-    report_rows, _dupes = report_mod.build_report_rows(jobs, legacy_profile, candidate_job_matches=matches)
 
     # Same test-isolation fix applied to the source-health aggregate:
     # only runs belonging to this candidate's OWN USER-type searches
@@ -422,12 +439,51 @@ def get_dashboard_summary(conn, candidate_id):
                 (candidate_id,),
             ).fetchall()
         }
-        source_health = report_mod.build_source_health(conn, candidate_id=candidate_id, run_ids_filter=user_run_ids)
     except Exception as error:
         if "no such column" in str(error) or "no such table" in str(error):
-            source_health = report_mod.build_source_health(conn, candidate_id=candidate_id)
+            user_run_ids = None
         else:
             raise
+
+    # Same fix as get_results_for_saved_search()/process_queue_item():
+    # the dashboard aggregates across every one of this candidate's OWN
+    # USER-type searches at once, so its role/location override is the
+    # UNION of every one of those searches' own frozen query-plan
+    # entries -- never the candidate profile's job_preferences target_
+    # roles/locations alone, which are commonly empty. Without this,
+    # the dashboard silently lost the same "Core role alignment"/
+    # "Location" points every affected search's own results view
+    # already correctly awards, making dashboard totals disagree with
+    # the results page for the exact same jobs.
+    if user_run_ids:
+        placeholders = ",".join("?" for _ in user_run_ids)
+        rows = conn.execute(
+            f"SELECT query FROM search_runs WHERE search_run_id IN ({placeholders})",
+            list(user_run_ids),
+        ).fetchall()
+        combined_entries = []
+        for (query_json,) in rows:
+            if not query_json:
+                continue
+            try:
+                combined_entries.extend(json.loads(query_json).get("queries", []))
+            except (json.JSONDecodeError, AttributeError):
+                continue
+        apply_search_target_override(legacy_profile, combined_entries)
+
+    matches = report_mod.load_candidate_job_matches(conn, candidate_id)
+    test_only_job_ids = _test_only_job_ids(conn, candidate_id)
+    scoped_job_ids = set(matches.keys()) - test_only_job_ids
+
+    jobs = report_mod.load_jobs(conn, exclude_test_mock=True)
+    jobs = [j for j in jobs if j.get("job_id") in scoped_job_ids]
+
+    report_rows, _dupes = report_mod.build_report_rows(jobs, legacy_profile, candidate_job_matches=matches)
+
+    if user_run_ids is not None:
+        source_health = report_mod.build_source_health(conn, candidate_id=candidate_id, run_ids_filter=user_run_ids)
+    else:
+        source_health = report_mod.build_source_health(conn, candidate_id=candidate_id)
     return report_mod.build_run_summary(report_rows, source_health)
 
 
@@ -521,6 +577,7 @@ def get_results_for_saved_search(conn, candidate_id, saved_search_id, pinned_pro
 
     if is_confirmed:
         legacy_profile = to_legacy_matching_profile(profile)
+        apply_search_target_override(legacy_profile, _query_plan_entries_for_search(conn, saved_search_id))
 
         jobs = report_mod.load_jobs(conn, exclude_test_mock=True)
         matches = report_mod.load_candidate_job_matches(conn, candidate_id)

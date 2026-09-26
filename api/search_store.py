@@ -301,6 +301,85 @@ def _run_worker_background(db_path, search_run_id, candidate_id):
         pass
 
 
+def recover_orphaned_runs(conn):
+    """
+    Startup recovery: mark every run left QUEUED/RUNNING as FAILED
+    with an explicit, honest reason. Safe unconditionally in this
+    project's architecture -- every worker is either a short-lived CLI
+    invocation that already exited by the time anything else runs, or
+    a daemon thread spawned inside trigger_run()'s own API request,
+    tied to THAT process's lifetime (scripts/run_search_worker.py's own
+    docstring: "There is no daemon/loop mode... no scheduler/daemon of
+    any kind exists yet in this project"). Neither can survive a
+    process restart. So by the time THIS runs (at a fresh process's own
+    startup), any row still QUEUED/RUNNING cannot have a genuinely live
+    worker behind it -- it is unconditionally orphaned, never a false
+    positive, and this never risks terminating a real in-progress run
+    (a real one is, by definition, running inside the same process that
+    is calling this function for the first time).
+
+    Reuses the existing, already-recognized "FAILED" terminal status
+    (never a new status value, so every existing status-handling code
+    path elsewhere is untouched) for both search_runs and search_queue,
+    exactly like _finalize_queue_item() already does for every other
+    failure reason.
+
+    Returns the number of runs recovered (0 if none were orphaned).
+    """
+    reason = "Worker process was not running after API restart."
+    now = _now()
+    rows = conn.execute(
+        "SELECT search_run_id FROM search_runs WHERE status IN ('QUEUED', 'RUNNING')"
+    ).fetchall()
+    if not rows:
+        return 0
+
+    run_ids = [r[0] for r in rows]
+    placeholders = ",".join("?" for _ in run_ids)
+    conn.execute(
+        f"""
+        UPDATE search_runs
+        SET status = 'FAILED', completed_at = ?, updated_at = ?, error_message = ?
+        WHERE search_run_id IN ({placeholders})
+        """,
+        [now, now, reason, *run_ids],
+    )
+    conn.execute(
+        f"UPDATE search_queue SET status = 'FAILED', completed_at = ? WHERE search_run_id IN ({placeholders})",
+        [now, *run_ids],
+    )
+    conn.commit()
+    return len(run_ids)
+
+
+def get_active_run_for_search(conn, saved_search_id):
+    """
+    The current in-progress (QUEUED or RUNNING) run for this saved
+    search, if any -- a plain persisted-DB-state read (never an
+    in-memory flag), so it stays correct across API process reloads/
+    restarts, exactly like every other run-status check in this
+    module. Returns (search_run_id, status), or None if this search
+    has no run currently in a non-terminal state -- a run that has
+    already reached COMPLETED/PARTIAL/FAILED/BLOCKED never blocks a
+    new one. Used by trigger_run() to prevent two concurrent runs for
+    the same saved search (found via a real end-to-end test: nothing
+    previously stopped a second "Run Now" while the first was still
+    executing).
+    """
+    row = conn.execute(
+        """
+        SELECT sr.search_run_id, sr.status
+        FROM saved_search_runs ssr
+        JOIN search_runs sr ON sr.search_run_id = ssr.search_run_id
+        WHERE ssr.saved_search_id = ? AND sr.status IN ('QUEUED', 'RUNNING')
+        ORDER BY sr.created_at DESC
+        LIMIT 1
+        """,
+        (saved_search_id,),
+    ).fetchone()
+    return (row[0], row[1]) if row else None
+
+
 def trigger_run(conn, db_path, saved_search):
     """
     Submit `saved_search` for execution: build a search plan using the
@@ -309,7 +388,21 @@ def trigger_run(conn, db_path, saved_search):
     substituted in via submit_search()'s additive override parameters,
     then start the existing search_worker in a background thread so
     this call returns immediately.
+
+    If this saved search already has a QUEUED/RUNNING run (see
+    get_active_run_for_search()), does NOT submit a new search plan or
+    spawn a new worker thread -- returns that existing run's own id/
+    status instead, with already_running=True, so the caller can tell
+    the user "search is already running" rather than silently starting
+    a second, resource-contending run against the same external sites.
+
+    Returns {"search_run_id": str, "status": str, "already_running": bool}.
     """
+    active = get_active_run_for_search(conn, saved_search["saved_search_id"])
+    if active is not None:
+        active_run_id, active_status = active
+        return {"search_run_id": active_run_id, "status": active_status, "already_running": True}
+
     try:
         result = submit_search(
             db_path=str(db_path),
@@ -345,7 +438,7 @@ def trigger_run(conn, db_path, saved_search):
     )
     thread.start()
 
-    return result.search_run_id
+    return {"search_run_id": result.search_run_id, "status": "QUEUED", "already_running": False}
 
 
 def get_run_sources(conn, search_run_id):
@@ -415,17 +508,98 @@ def get_run_status_for_candidate(conn, search_run_id, candidate_id):
 
 def get_latest_run_id_for_search(conn, saved_search_id):
     """
-    The single canonical "current run" for one saved search -- the
-    most recently created run tied to it, or None if it has never been
-    run. This is the ONE place that decides what "the current run" for
-    the results page means; get_source_filter_summary() below and
-    api/main.py's GET .../results route both call this SAME function
-    (never two independent "find the latest run" computations that
-    could silently drift apart and show one run's source audit next to
-    a different run's label).
+    The single canonical "most recently created run" for one saved
+    search, or None if it has never been run -- used wherever a run's
+    query-plan snapshot (valid the instant a run is created, before it
+    necessarily finishes) is the right thing to read.
+
+    For "which run's audit/results should a human be shown" (the
+    results page, its source-audit table, and the per-search Excel
+    export), use get_latest_usable_run_id_for_search() below instead --
+    it selects the newest run that is NOT RUNNING/QUEUED AND has at
+    least one real search_run_sources audit row (falling back to this
+    function's own "newest run overall" behavior if no run meets both
+    conditions), so a human view never shows an in-progress or
+    orphaned-and-never-actually-ran run's empty audit next to an
+    older, real, completed run's populated one.
     """
     run_ids = list_run_ids_for_search(conn, saved_search_id)
     return run_ids[-1] if run_ids else None
+
+
+def get_latest_usable_run_id_for_search(conn, saved_search_id):
+    """
+    The most recent run that has actually REACHED some terminal state
+    (COMPLETED/PARTIAL/FAILED/BLOCKED) -- i.e. the newest run that
+    isn't currently RUNNING/QUEUED. Falls back to get_latest_run_id_
+    for_search()'s "just the newest run" behavior when every run for
+    this search is still RUNNING/QUEUED (e.g. its very first run is
+    still in progress) -- so a brand-new search still shows that
+    in-progress run rather than nothing.
+
+    Deliberately does NOT prefer COMPLETED/PARTIAL over a genuinely-
+    attempted FAILED/BLOCKED: a run that actually executed and finished
+    BLOCKED (or FAILED) is real, honest truth about what just happened
+    and must never be hidden behind an older, rosier SUCCESS -- see
+    test_results_run_consistency.py's own "safety" checks, which this
+    function must keep passing unchanged. The discriminator is
+    therefore NOT status alone -- it's status AND whether the run ever
+    recorded any real per-source audit data (search_run_sources rows).
+    A run recovered by recover_orphaned_runs() above is FAILED but has
+    ZERO search_run_sources rows (it never actually executed anything
+    before its worker died) -- that kind of "FAILED" must NOT outrank
+    an older run that genuinely ran and produced real results, or the
+    exact bug this function fixes just reappears one status-value
+    later. A run that genuinely ran and got BLOCKED/FAILED partway
+    through DOES have real search_run_sources rows for whatever it did
+    attempt, and correctly outranks an older SUCCESS.
+
+    Root cause this fixes (found via a real end-to-end test): a second
+    run created moments after a real completed one (e.g. an accidental
+    duplicate "Run Now," or -- since this fix -- now prevented outright
+    by trigger_run()'s concurrent-run guard) could become orphaned
+    (its worker thread dies with an API restart and is never resumed --
+    a RUNNING row left behind is NOT automatically reclaimed on its
+    own; see scripts/search_worker.py's run_once() docstring, and
+    recover_orphaned_runs() above for the startup-recovery half of this
+    fix). Since it was chronologically newest, get_latest_run_id_for_
+    search() would then point every source-audit/results-run-id
+    display at that orphaned run's empty audit, right next to a real
+    completed run's populated one -- exactly the reported "Results =
+    <completed run> but Source Audit = <orphaned run>" bug.
+
+    Distinct from get_latest_run_id_for_search(), which remains
+    unchanged and is still the right choice wherever "this search's
+    most recently created run" is the actual question being asked
+    (e.g. resolving a query-plan snapshot, which is valid from the
+    moment a run is created, before it necessarily finishes) -- this
+    function is specifically for "which run's audit/results should a
+    human be shown."
+    """
+    try:
+        row = conn.execute(
+            """
+            SELECT sr.search_run_id
+            FROM saved_search_runs ssr
+            JOIN search_runs sr ON sr.search_run_id = ssr.search_run_id
+            WHERE ssr.saved_search_id = ?
+              AND sr.status NOT IN ('RUNNING', 'QUEUED')
+              AND EXISTS (SELECT 1 FROM search_run_sources srs WHERE srs.search_run_id = sr.search_run_id)
+            ORDER BY sr.created_at DESC
+            LIMIT 1
+            """,
+            (saved_search_id,),
+        ).fetchone()
+    except Exception as error:
+        if "no such table" not in str(error):
+            raise
+        # Defensive fallback for a DB predating migrate_v5_search_run_
+        # sources.py (same posture as get_run_sources()/get_source_
+        # filter_summary() elsewhere in this module).
+        row = None
+    if row:
+        return row[0]
+    return get_latest_run_id_for_search(conn, saved_search_id)
 
 
 def get_source_filter_summary(conn, saved_search_id):
@@ -449,7 +623,7 @@ def get_source_filter_summary(conn, saved_search_id):
     saved_search = get_saved_search(conn, saved_search_id)
     configured_sources = saved_search.get("sources") or []
 
-    latest_run_id = get_latest_run_id_for_search(conn, saved_search_id)
+    latest_run_id = get_latest_usable_run_id_for_search(conn, saved_search_id)
     latest_sources_by_key = {}
     if latest_run_id:
         for entry in get_run_sources(conn, latest_run_id):

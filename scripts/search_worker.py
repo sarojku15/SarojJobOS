@@ -91,7 +91,7 @@ from job_eligibility import assess_job_eligibility
 from location_taxonomy import LocationEligibility
 from score_job import score_job
 from search_submission import SearchSubmissionError, load_candidate_confirmed_profile
-from candidate_profile import to_legacy_matching_profile
+from candidate_profile import apply_search_target_override, to_legacy_matching_profile
 from source_adapter import SearchQuery
 from source_registry import board_name_for_source, discover_from_sources, list_sources
 from canonical_job import derive_canonical_job
@@ -1013,6 +1013,7 @@ def process_queue_item(conn, claimed, db_write_lock_note=None):
     try:
         candidate_profile = load_candidate_confirmed_profile(conn, candidate_id, profile_version=pinned_profile_version)
         legacy_profile = to_legacy_matching_profile(candidate_profile)
+        apply_search_target_override(legacy_profile, snapshot.get("queries", []))
         used_profile_version = _resolve_used_profile_version(conn, candidate_id, pinned_profile_version)
     except SearchSubmissionError as error:
         result.errors.append(str(error))
