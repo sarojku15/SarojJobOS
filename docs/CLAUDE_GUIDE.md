@@ -20,13 +20,14 @@ only runs via an explicit slash command, like `/jobos`).
 ├── commands/
 │   └── jobos.md              # /jobos slash command -> legacy skill
 └── skills/
-    ├── jobos-orchestrator/    # primary natural-language entry point
+    ├── jobos-orchestrator/    # primary natural-language entry point; also scheduling
     ├── job-discovery-engine/  # standalone, ad-hoc, non-persisting discovery script only
     ├── job-matching/          # score/gap explanation + analysis
-    ├── resume-manager/        # resumes + profile-version selection
-    ├── application-tracker/   # status pipeline (the only write path)
+    ├── resume-manager/        # resumes + profile-version selection + resume tailoring
+    ├── company-research/      # real, persisted, source-backed company research
+    ├── interview-prep/        # deterministic, evidence-based interview preparation
+    ├── application-tracker/   # status pipeline (the only write path) + follow-up dates
     ├── job-report/            # Excel export
-    ├── company-research/      # optional, best-effort web research
     └── jobos/                 # legacy single-candidate CLI pipeline
 ```
 
@@ -53,10 +54,12 @@ only runs via an explicit slash command, like `/jobos`).
 |---|---|
 | "Find X jobs in Y" / "run my searches" | `jobos-orchestrator` — real, tracked searches run via its own direct API calls (`POST /api/candidates/{id}/searches` + `/run`), **not** `job-discovery-engine` (that's a separate, non-persisting script for ad-hoc/untracked exploration only — see its own SKILL.md) |
 | "Why did this score Y" / "skill gaps" / "compare jobs" | `job-matching` |
-| "What resumes do I have" / "upload my resume" / "pin a resume" | `resume-manager` |
-| "Show my pipeline" / "mark this shortlisted/approved/applied" | `application-tracker` |
+| "What resumes do I have" / "upload my resume" / "pin a resume" / "tailor my resume for this job" | `resume-manager` |
+| "Research this company" / "refresh company research" | `company-research` (real, persisted pipeline — honest `NOT_ATTEMPTED` without a configured search-provider key) |
+| "Prepare me for this interview" / "save my answer" / "record the outcome" | `interview-prep` |
+| "Show my pipeline" / "mark this shortlisted/approved/applied" / "set a follow-up date" | `application-tracker` |
+| "Schedule this search every morning" / "is this search scheduled" | `jobos-orchestrator` (be explicit that an external trigger — n8n or cron/launchd — must actually be running) |
 | "Generate/download a report" | `job-report` |
-| "Tell me about this company" | `company-research` (best-effort, not a built pipeline — see its SKILL.md) |
 | `/jobos ...` explicitly | `jobos` (legacy CLI pipeline — separate system, see `docs/ARCHITECTURE.md`) |
 
 ## What requires human approval
@@ -91,6 +94,16 @@ user tells you they already achieved themselves. Concretely:
   live profile via the API for whichever `candidate_id` is in scope;
   `config/profile.json` is specifically the legacy CLI pipeline's
   single candidate (see `docs/ARCHITECTURE.md`).
+- That resume tailoring is AI rewriting — it's deterministic
+  reordering/emphasis of the candidate's own existing content, always
+  describe it that way.
+- That an interview-prep answer is a "model answer" — the correct term
+  is "suggested answer," and if `has_demonstrated_experience` is
+  `false`, present it as "Preparation required," never as if the
+  candidate has that experience.
+- That a saved search schedule is actually running — saving a schedule
+  only persists state; something external (n8n workflow or cron/
+  launchd) must be running to actually trigger it.
 
 ## Example prompts
 

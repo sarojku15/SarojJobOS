@@ -99,17 +99,74 @@ and the tracking states in full detail.
 | Scoring | `scripts/score_job.py`, `scripts/score_explanation.py` |
 | Dedup/freshness | `scripts/cross_source_dedup.py`, `scripts/canonical_job.py`, `scripts/freshness.py` |
 | Application lifecycle | `scripts/application_lifecycle.py` |
+| Resume tailoring | `scripts/resume_tailoring.py` (deterministic reorder/emphasis of the candidate's own profile content, never AI rewriting) |
+| Company research | `scripts/company_research.py` (reuses `search_provider_manager.py` — no second search implementation) |
+| Interview preparation | `scripts/interview_prep.py` (deterministic, evidence-based; reuses `score_job.py` for matched/missing skills) |
+| Search scheduling | `scripts/scheduler.py` (persisted state only, no daemon/loop), `scripts/run_scheduled_searches.py` (CLI trigger) |
 | Frontend | `web/*.html`, `web/app.js`, `web/style.css` (no build step) |
 | Claude Skills | `.claude/skills/*/SKILL.md`, `.claude/commands/*.md` |
 
-## Infrastructure present but not (yet) wired into JobOS workflows
+## Scheduling: the operating model
 
-- **n8n** (`docker-compose.yml`, port 5678): container runs, but
-  `workflows/` is empty — no JobOS automation currently runs through it.
+Recurring saved-search execution has exactly one source of truth and
+one execution path, regardless of which external clock is used:
+
+```
+External trigger (n8n Schedule Trigger, OR cron/launchd)
+        |
+        v
+POST /api/scheduler/run-due   (or scripts/run_scheduled_searches.py)
+        |
+        v
+scripts/scheduler.py            <- persisted state only, no daemon/loop
+   (finds due schedules, advances next_run_at via an
+    optimistic compare-and-swap UPDATE, then...)
+        |
+        v
+api/search_store.py trigger_run()   <- the SAME function "Run now" uses,
+   (already refuses a second run while one is QUEUED/RUNNING)         including its concurrency guard
+        |
+        v
+scripts/search_worker.py -> the existing discover/normalize/dedup/
+                              eligibility/score pipeline
+```
+
+`search_schedules` (`migrate_v14_search_schedules.py`) is the only
+persisted schedule state; nothing computes "is this due" independently
+of `scripts/scheduler.py`, and nothing spawns a second run-guard beside
+`trigger_run()`'s own. A crash between "claimed this tick" and
+"triggered the run" can only ever cause a **missed** run, never a
+**duplicate** one (the compare-and-swap `UPDATE ... WHERE next_run_at = ?`
+only succeeds for whichever caller reads the still-current value).
+
+**Pick exactly one external trigger** — never both at once (that's
+just duplicate polling against the same `run-due` endpoint):
+
+- **A. n8n** (recommended if n8n is already running): import
+  `n8n/workflows/jobos_scheduled_search_runner.json`, point its
+  `jobos_base_url` at your running API, activate it.
+- **B. cron/launchd** (lightweight alternative): run
+  `scripts/run_scheduled_searches.py` on a timer — same underlying
+  `scheduler.run_due_schedules()` call, no daemon/loop mode in the
+  script itself.
+
+See [CONFIGURATION.md](CONFIGURATION.md) for setup and
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md) for "a schedule never fires."
+
+## Infrastructure
+
+- **n8n** (`docker-compose.yml`, port 5678): two real, importable
+  workflows now exist under `n8n/workflows/` — `JobOS Scheduled Search
+  Runner` (the external clock for scheduling, above) and
+  `JobOS Follow-Up Reminder` (read-only; logs due/overdue follow-ups
+  via `GET /api/candidates/{id}/follow-ups`). Neither is active by
+  default on import — activation is a manual step, and neither ever
+  submits an application or writes anything n8n itself decided.
 - **macOS launchd** (`launchd/com.sarojjobos.dailysearch.plist`):
   ready-to-install template for the legacy CLI pipeline's daily
-  scheduled run. Deliberately **not installed** — installing it is a
-  separate, human-approved step.
+  scheduled run (a separate concern from the scheduling above).
+  Deliberately **not installed** — installing it is a separate,
+  human-approved step.
 - **Google Sheets**: mentioned as a planned tracker integration; not
   implemented. The Excel export (`.xlsx`, via `openpyxl`) is the real,
   working reporting mechanism today.
@@ -121,4 +178,6 @@ and the tracking states in full detail.
 - **Dev**: `data/applications/jobos_dev.db` — auto-created, safe to
   reset.
 - Both share the same schema, built additively via
-  `scripts/migrate_v*.py` files, chained in `scripts/init_dev_db.py`.
+  `scripts/migrate_v*.py` files, chained in `scripts/init_dev_db.py`
+  (currently v1-v15 — v11 tailored resumes, v12 company research, v13
+  interview prep, v14 search schedules, v15 `follow_up_date`).

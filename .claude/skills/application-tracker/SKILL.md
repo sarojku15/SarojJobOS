@@ -1,6 +1,6 @@
 ---
 name: application-tracker
-description: Read and update a JobOS job's application status (Shortlist, Approve, Applied, interview stages, etc.) for the current candidate, and show the status history or the overall application pipeline. The ONLY skill allowed to write a status change, and only ever records a status the user says they already acted on themselves — never applies, approves, or advances anything on its own initiative.
+description: Read and update a JobOS job's application status (Shortlist, Approve, Applied, interview stages, etc.) and follow-up reminder date for the current candidate, and show the status history or the overall application pipeline. The ONLY skill allowed to write a status change, and only ever records a status the user says they already acted on themselves — never applies, approves, or advances anything on its own initiative.
 ---
 
 # Application Tracker
@@ -50,12 +50,22 @@ notes).
 4. Before writing, always ask/confirm what actually happened if it's
    ambiguous ("did you already apply, or do you want to shortlist it
    for now?") rather than assuming the strongest status.
+5. **Follow-up date** (candidate+job scoped, `candidate_job_matches` —
+   never the shared `jobs` table, so it never leaks across candidates):
+   `PATCH /api/candidates/{id}/jobs/{job_id}/follow-up` with
+   `{"follow_up_date": "YYYY-MM-DD"}` to set/update, or
+   `{"follow_up_date": null}` to clear. Setting this **never** changes
+   the job's application status — it's a pure reminder date, unrelated
+   to the lifecycle gate above. List every job with a follow-up date
+   set via `GET /api/candidates/{id}/follow-ups` (soonest first).
 
 ## APIs / Tools
 
 `GET /api/candidates/{id}/dashboard`,
 `GET /api/candidates/{id}/jobs/{job_id}/status-history`,
-`PATCH /api/candidates/{id}/jobs/{job_id}/status`.
+`PATCH /api/candidates/{id}/jobs/{job_id}/status`,
+`PATCH /api/candidates/{id}/jobs/{job_id}/follow-up`,
+`GET /api/candidates/{id}/follow-ups`.
 
 ## Safety
 
@@ -78,13 +88,16 @@ optimistic guess about what "probably" happened.
 ## Examples
 
 - "Show my current application pipeline." → dashboard summary.
-- "Show applications needing follow-up." → filter dashboard/history
-  data for jobs stalled at `RECRUITER_CONTACTED`/`SCREENING_CALL`/etc.
-  past a reasonable time based on status-history timestamps. Note:
-  `config/application_schema.json`'s job-record shape includes a
-  `follow_up_date` field, but no current API route reads or writes it
-  — don't claim a specific follow-up date exists unless you've actually
-  seen it in a real API response.
+- "Show applications needing follow-up." →
+  `GET /api/candidates/{id}/follow-ups` for jobs with an explicit
+  follow-up date set (soonest/most-overdue first); also consider
+  jobs stalled at `RECRUITER_CONTACTED`/`SCREENING_CALL`/etc. past a
+  reasonable time based on status-history timestamps. Don't claim a
+  specific follow-up date exists unless you've actually seen it in a
+  real API response.
+- "Remind me to follow up on this job next Friday." → convert to an
+  absolute `YYYY-MM-DD` date and `PATCH .../follow-up`; confirm the
+  real date back to the user.
 - "I just got approved to apply for the Akamai job, mark it." →
   `PATCH` with `status: "APPROVED"`.
 - "Apply to this job for me." → **refuse the submission itself** — no

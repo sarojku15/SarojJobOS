@@ -278,6 +278,7 @@ function openDetail(idx) {
       <dt>Matched skills</dt><dd class="skill-tag-list">${skillTags(r.matched_skills)}</dd>
       <dt>Missing skills</dt><dd class="skill-tag-list">${skillTags(r.missing_skills, "missing")}</dd>
       <dt>Resume/Profile used</dt><dd>${escapeHtml(r.resume_variant || "Not available")}</dd>
+      <dt>Follow-up date</dt><dd>${r.follow_up_date ? escapeHtml(r.follow_up_date) : `<span class="hint">Not set</span>`}</dd>
       <dt>Application status</dt><dd>
         ${badgeHtml(r.status)}
         <select id="status-select" style="margin-left:8px">
@@ -294,6 +295,7 @@ function openDetail(idx) {
     <div class="button-row">
       ${r.job_url ? `<a class="job-link" target="_blank" rel="noopener" href="${r.job_url}">View Job</a>` : ""}
       ${r.application_url && r.application_url !== r.job_url ? `<a class="job-link" target="_blank" rel="noopener" href="${r.application_url}">Application</a>` : ""}
+      <button class="secondary small" onclick="window.location.href='/jobs/${r.job_id}?search_id=${searchId}'">Resume tailoring, company research &amp; interview prep &rarr;</button>
     </div>
   `;
 

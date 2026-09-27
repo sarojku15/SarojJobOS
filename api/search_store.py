@@ -10,6 +10,7 @@ No second query-planning, scoring, or worker implementation.
 """
 
 import json
+import sqlite3
 import sys
 import threading
 import uuid
@@ -137,7 +138,7 @@ def create_saved_search(conn, candidate_id, payload):
     return saved_search_id
 
 
-def _row_to_dict(row):
+def _row_to_dict(conn, row):
     d = dict(row)
     for key in ("target_roles_json", "target_locations_json", "work_models_json", "sources_json", "skills_json"):
         out_key = key[: -len("_json")]
@@ -145,6 +146,39 @@ def _row_to_dict(row):
         d[out_key] = json.loads(raw) if raw else ([] if out_key != "sources" else None)
     schedule_raw = d.pop("schedule_json", None)
     d["schedule"] = json.loads(schedule_raw) if schedule_raw else {"enabled": False, "frequency": None}
+
+    # Phase 4 integration fix: migrate_v14_search_schedules.py's own
+    # docstring already promised this ("api/search_store.py's
+    # saved-search response computes its 'schedule' field from THIS
+    # table when a row exists, falling back to the legacy schedule_json
+    # column only for a search that predates this migration") but the
+    # code was never actually wired up -- every saved-search response
+    # kept returning only the dead schedule_json field, so the real
+    # scheduler state (enabled/frequency/timezone/next_run_at/
+    # last_run_at/last_run_status/last_run_error) was invisible to any
+    # caller reading a saved search directly (UI search lists, the
+    # dashboard, scripts) without a second, separate schedule fetch.
+    # A row in search_schedules always wins over the legacy field once
+    # one exists -- see scripts/scheduler.py, the ONLY writer of that
+    # table.
+    try:
+        sched_row = conn.execute(
+            "SELECT enabled, frequency, timezone, next_run_at, last_run_at, last_run_status, last_run_error "
+            "FROM search_schedules WHERE saved_search_id = ?",
+            (d["saved_search_id"],),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        sched_row = None  # pre-migration DB -- legacy schedule_json fallback above already applies
+    if sched_row is not None:
+        d["schedule"] = {
+            "enabled": bool(sched_row["enabled"]),
+            "frequency": sched_row["frequency"],
+            "timezone": sched_row["timezone"],
+            "next_run_at": sched_row["next_run_at"],
+            "last_run_at": sched_row["last_run_at"],
+            "last_run_status": sched_row["last_run_status"],
+            "last_run_error": sched_row["last_run_error"],
+        }
     return d
 
 
@@ -154,7 +188,7 @@ def get_saved_search(conn, saved_search_id):
     ).fetchone()
     if row is None:
         raise SearchStoreError(f"Unknown saved search: {saved_search_id!r}")
-    return _row_to_dict(row)
+    return _row_to_dict(conn, row)
 
 
 def get_saved_search_for_candidate(conn, saved_search_id, candidate_id):
@@ -197,7 +231,7 @@ def list_saved_searches(conn, candidate_id, include_archived=False, search_types
         params.extend(search_types)
     query += " ORDER BY created_at DESC"
     rows = conn.execute(query, params).fetchall()
-    return [_row_to_dict(r) for r in rows]
+    return [_row_to_dict(conn, r) for r in rows]
 
 
 def update_saved_search(conn, saved_search_id, payload):

@@ -10,6 +10,7 @@ import json
 import os
 import shutil
 import socket
+import sqlite3
 import subprocess
 import sys
 import urllib.request
@@ -216,6 +217,75 @@ def main():
         except Exception as error:
             check("Fetch /api/sources", False, str(error))
         flush()
+
+    # --- Phase 1-4 migrations (resume tailoring / company research /
+    # interview prep / scheduling / follow-up date) ---------------------
+    section("Phase 1-4 migrations (v11-v15)")
+    migrations_ok = True
+    if dev_db.exists():
+        conn = sqlite3.connect(dev_db)
+        required_tables = [
+            ("tailored_resumes", "v11 resume tailoring"),
+            ("company_research", "v12 company research"),
+            ("interview_preparations", "v13 interview prep"),
+            ("interview_prep_questions", "v13 interview prep"),
+            ("search_schedules", "v14 scheduling"),
+        ]
+        for table, label in required_tables:
+            exists = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
+            ).fetchone() is not None
+            check(f"{table} table ({label})", exists,
+                  "" if exists else "missing -- run scripts/init_dev_db.py")
+            migrations_ok &= exists
+        has_follow_up_col = any(
+            row[1] == "follow_up_date"
+            for row in conn.execute("PRAGMA table_info(candidate_job_matches)").fetchall()
+        )
+        check("candidate_job_matches.follow_up_date column (v15)", has_follow_up_col,
+              "" if has_follow_up_col else "missing -- run scripts/init_dev_db.py")
+        migrations_ok &= has_follow_up_col
+
+        # Scheduler sanity: an enabled schedule with no next_run_at is a
+        # broken/inconsistent state scheduler.set_schedule() should never
+        # produce -- flags it rather than silently never firing.
+        try:
+            broken = conn.execute(
+                "SELECT saved_search_id FROM search_schedules WHERE enabled = 1 AND next_run_at IS NULL"
+            ).fetchall()
+            check("No enabled schedule missing next_run_at", len(broken) == 0,
+                  "" if not broken else f"{len(broken)} schedule(s) enabled with no next_run_at: {[r[0] for r in broken]}")
+            migrations_ok &= not broken
+        except sqlite3.OperationalError:
+            pass  # search_schedules table itself already reported missing above
+        conn.close()
+    else:
+        check("Migrations v11-v15", True, "dev DB not created yet -- migrations run automatically on first API request", optional=True)
+    overall_ok &= migrations_ok
+    flush()
+
+    # --- n8n workflows ---------------------------------------------------
+    section("n8n workflows")
+    workflows_dir = ROOT / "n8n" / "workflows"
+    workflows_ok = True
+    if workflows_dir.is_dir():
+        workflow_files = sorted(workflows_dir.glob("*.json"))
+        if not workflow_files:
+            check("n8n/workflows/*.json present", False, "no workflow JSON files found")
+            workflows_ok = False
+        for wf_path in workflow_files:
+            try:
+                wf = json.loads(wf_path.read_text())
+                ok = bool(wf.get("nodes")) and isinstance(wf.get("connections"), dict)
+                check(wf_path.name, ok, "" if ok else "missing nodes/connections")
+                workflows_ok &= ok
+            except json.JSONDecodeError as error:
+                check(wf_path.name, False, f"invalid JSON: {error}")
+                workflows_ok = False
+    else:
+        check("n8n/workflows/ present", False, "directory not found", optional=True)
+    overall_ok &= workflows_ok
+    flush()
 
     print()
     print(f"Status: {'READY' if overall_ok else 'ISSUES FOUND'}")

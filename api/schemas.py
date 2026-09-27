@@ -74,8 +74,48 @@ class ProfileUpdate(BaseModel):
 
 
 class ScheduleIn(BaseModel):
+    # NOTE: this is the legacy, informational-only field on
+    # SavedSearchCreate/Update (writes to saved_searches.schedule_json,
+    # never activates anything). To actually enable recurring
+    # execution, use PUT /api/searches/{id}/schedule (ScheduleSetIn
+    # below), backed by the real search_schedules table + scripts/
+    # scheduler.py -- see docs/ARCHITECTURE.md's "Scheduling" section.
     enabled: bool = False
     frequency: Optional[str] = None  # e.g. "DAILY" -- stored only, never activates a scheduler
+
+
+class ScheduleSetIn(BaseModel):
+    """The real scheduling control -- PUT /api/searches/{id}/schedule."""
+    enabled: bool
+    frequency: Optional[str] = None  # "hourly" / "daily" / "weekly" -- required if enabled=True
+    timezone: str = "UTC"
+
+
+class TailorResumeIn(BaseModel):
+    base_resume_id: str
+    job_id: str
+
+
+class CompanyResearchIn(BaseModel):
+    company_name: str = Field(..., min_length=1)
+    job_id: Optional[str] = None
+
+
+class InterviewPrepIn(BaseModel):
+    job_id: str
+    resume_id: Optional[str] = None
+    company_research_id: Optional[str] = None
+
+
+class InterviewAnswerIn(BaseModel):
+    candidate_answer: Optional[str] = None
+    confidence: Optional[int] = Field(None, ge=1, le=5)
+    notes: Optional[str] = None
+
+
+class InterviewOutcomeIn(BaseModel):
+    outcome_status: Optional[str] = None
+    outcome_notes: Optional[str] = None
 
 
 class SavedSearchCreate(BaseModel):
@@ -165,3 +205,10 @@ class CandidatePatch(BaseModel):
 
 class JobStatusUpdate(BaseModel):
     status: str = Field(..., min_length=1, max_length=60)
+
+
+class FollowUpDateIn(BaseModel):
+    # None/omitted clears the follow-up date. A plain ISO date string
+    # (e.g. "2026-10-05") -- never a datetime, this is a reminder date,
+    # not a timestamp.
+    follow_up_date: Optional[str] = None

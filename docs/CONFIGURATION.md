@@ -66,8 +66,36 @@ sees real keys with zero per-script setup.
 The app itself takes `--port` as a plain `uvicorn` flag (no hardcoded
 port in code); this project's own docs/scripts consistently use
 **8420** by convention. `docker-compose.yml` runs n8n on **5678**
-(`N8N_PORT`) — n8n is present as infrastructure but has no active
-JobOS workflows wired into it yet.
+(`N8N_PORT`).
+
+## Scheduling & automation
+
+No new environment variable is required for scheduling itself — a
+schedule's state (enabled/frequency/timezone/next_run_at) is entirely
+persisted in the database via
+`PUT /api/searches/{id}/schedule`, not `.env`. What you configure is
+**which external trigger actually calls it periodically** (pick one,
+see [ARCHITECTURE.md](ARCHITECTURE.md)'s "Scheduling" section):
+
+- **n8n**: `docker compose up -d` starts the container already defined
+  in `docker-compose.yml`; open `http://localhost:5678`, import
+  `n8n/workflows/jobos_scheduled_search_runner.json` and (optionally)
+  `n8n/workflows/jobos_follow_up_reminder.json`. Each workflow's own
+  "JobOS Config" node holds `jobos_base_url` (default
+  `http://localhost:8420`) — edit it if your API runs elsewhere. The
+  follow-up workflow additionally needs your own `candidate_id` filled
+  in (deliberately left blank in the committed file — never a real id
+  committed to the repo). Neither workflow activates itself on import.
+- **cron/launchd**: run
+  `.venv/bin/python3 scripts/run_scheduled_searches.py --once --db data/applications/jobos_dev.db`
+  on whatever interval you like (`--once` is required — there is no
+  daemon/loop mode; the script always does a single bounded pass and
+  exits, safe to invoke repeatedly).
+
+Company research and interview prep need no new configuration beyond
+the search-provider keys above (interview prep's company-specific
+questions simply don't appear without a linked research record; that's
+not an error).
 
 ## Browser automation
 

@@ -1,0 +1,124 @@
+{
+  "id": "jobos-scheduled-search-runner",
+  "name": "JobOS Scheduled Search Runner",
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {},
+  "nodes": [
+    {
+      "id": "sticky-readme",
+      "name": "Setup Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-40, -260],
+      "parameters": {
+        "width": 480,
+        "height": 300,
+        "content": "## JobOS Scheduled Search Runner\n\nThis workflow is ONLY the external clock. It calls JobOS's own\n`POST /api/scheduler/run-due`, which itself decides which saved\nsearches are due (scripts/scheduler.py) and triggers them through the\nEXISTING search_store.trigger_run() -> search worker pipeline. This\nworkflow never implements scheduling rules, never touches SQLite\ndirectly, and never picks which searches run.\n\n**Before activating:**\n1. Open the \"JobOS Config\" node and set `jobos_base_url` to your\n   running JobOS API (default assumes `http://localhost:8420`, the\n   dev server's default port -- see docs/GETTING_STARTED.md).\n2. Pick an interval on the Schedule Trigger (default: every 30\n   minutes). This only needs to be more frequent than your fastest\n   configured schedule frequency (hourly/daily/weekly) -- calling\n   run-due when nothing is due is a harmless no-op.\n3. Do not also run scripts/run_scheduled_searches.py via cron/launchd\n   at the same time -- pick ONE external trigger (see\n   docs/ARCHITECTURE.md's \"Scheduling\" section).\n\nNo application is ever submitted by this workflow -- it only starts\ndiscovery/scoring runs, exactly like clicking \"Run now\" in the UI."
+      }
+    },
+    {
+      "id": "trigger-schedule",
+      "name": "Every 30 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-40, 80],
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "minutes", "minutesInterval": 30 }
+          ]
+        }
+      }
+    },
+    {
+      "id": "set-config",
+      "name": "JobOS Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [180, 80],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "jobos-base-url",
+              "name": "jobos_base_url",
+              "value": "http://localhost:8420",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "http-run-due",
+      "name": "POST /api/scheduler/run-due",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 80],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.jobos_base_url }}/api/scheduler/run-due",
+        "options": {}
+      }
+    },
+    {
+      "id": "if-processed",
+      "name": "Any schedules processed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [620, 80],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "cond-processed",
+              "leftValue": "={{ $json.processed }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "gt" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "code-log-executions",
+      "name": "Log Executions & Failures",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [840, -20],
+      "parameters": {
+        "jsCode": "// Read-only summary of what JobOS's own scheduler.run_due_schedules()\n// already decided and executed -- this node never re-derives\n// due-ness or re-implements the concurrency guard, it only reports.\nconst body = $input.first().json;\nconst lines = (body.outcomes || []).map((o) => {\n  const tag = o.error ? `FAILED: ${o.error}` : o.status;\n  return `search=${o.saved_search_id} candidate=${o.candidate_id} run=${o.run_id || '-'} -> ${tag}`;\n});\nreturn [{ json: { summary: `Processed ${body.processed} due schedule(s)`, details: lines } }];\n"
+      }
+    },
+    {
+      "id": "noop-nothing-due",
+      "name": "Nothing Due",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [840, 180],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Every 30 Minutes": {
+      "main": [[{ "node": "JobOS Config", "type": "main", "index": 0 }]]
+    },
+    "JobOS Config": {
+      "main": [[{ "node": "POST /api/scheduler/run-due", "type": "main", "index": 0 }]]
+    },
+    "POST /api/scheduler/run-due": {
+      "main": [[{ "node": "Any schedules processed?", "type": "main", "index": 0 }]]
+    },
+    "Any schedules processed?": {
+      "main": [
+        [{ "node": "Log Executions & Failures", "type": "main", "index": 0 }],
+        [{ "node": "Nothing Due", "type": "main", "index": 0 }]
+      ]
+    }
+  }
+}

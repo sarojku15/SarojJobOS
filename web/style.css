@@ -136,6 +136,30 @@ button:hover:not(:disabled) { filter: brightness(0.95); }
 .badge.SUCCESS { background: #d7f5df; color: #197a3f; }
 .badge.ZERO { background: #f4f4f4; color: #777; }
 .badge.NOT_CONFIGURED, .badge.NOT_ATTEMPTED { background: #f4f4f4; color: #999; }
+.badge.READY, .badge.PASS { background: #d7f5df; color: #197a3f; }
+.badge.REJECTED { background: #fde0e0; color: #a02020; }
+.badge.SCHEDULED { background: #e4edff; color: #2445b0; }
+.badge.OVERDUE { background: #fde0e0; color: #a02020; }
+
+/* Phase 5 UI: job workspace (resume tailoring / company research /
+   interview prep / follow-up date) */
+.workspace-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.workspace-tabs button.tab-active { background: var(--brand); color: #fff; }
+.workspace-panel { margin-top: 14px; }
+.subtle-note { font-size: 12.5px; color: var(--muted); background: #fafbfd; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin: 8px 0; }
+.evidence-badge-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.question-item { border-top: 1px solid #eee; padding: 12px 0; }
+.question-item:first-child { border-top: none; padding-top: 0; }
+.question-item .q-text { font-weight: 600; font-size: 13.5px; margin-bottom: 4px; }
+.question-item .suggested-answer { font-size: 13px; color: #333; background: #fafbfd; border-radius: 6px; padding: 8px 10px; margin: 6px 0; }
+.category-heading { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); margin: 18px 0 6px; }
+.category-heading:first-child { margin-top: 0; }
+.source-link-list { font-size: 12.5px; margin: 4px 0 0; padding-left: 18px; }
+.source-link-list li { margin-bottom: 3px; }
+details.version-history { margin-top: 10px; border-top: 1px solid #eee; padding-top: 8px; }
+details.version-history summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--brand); }
+.version-history-item { font-size: 12.5px; color: var(--muted); padding: 6px 0; border-bottom: 1px dashed #eee; }
+.job-workspace-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px; }
 
 /* Onboarding (home) */
 .onboarding-hero { text-align: center; padding: 40px 16px 16px; }

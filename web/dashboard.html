@@ -61,6 +61,10 @@ async function load() {
         </div>
       </div>
       <div class="card">
+        <h2>Follow-ups</h2>
+        <div id="followups-block"></div>
+      </div>
+      <div class="card">
         <h2>Excel report</h2>
         <p class="hint">Every matched job across every search, in the standard 9-sheet workbook.</p>
         <button id="download-btn">Download Excel report</button>
@@ -76,6 +80,8 @@ async function load() {
           <div class="summary-tile"><div class="value">${data.summary.apply_today_count}</div><div class="label">Apply Today</div></div>
           <div class="summary-tile"><div class="value">${data.summary.duplicate_candidate_pairs}</div><div class="label">Duplicate Pairs</div></div>
           <div class="summary-tile"><div class="value">${data.summary.new_jobs_count}</div><div class="label">New Since Last Check</div></div>
+          <div class="summary-tile"><div class="value">${data.tailored_resume_count ?? 0}</div><div class="label">Tailored Resumes</div></div>
+          <div class="summary-tile"><div class="value">${data.interview_prep_count ?? 0}</div><div class="label">Interview Preps</div></div>
         </div>
       `;
     } else {
@@ -100,6 +106,9 @@ async function load() {
           // answers "which sources returned zero?" / "which failed?"
           // right on the dashboard, not just on the results page.
           const sourceAudit = s.latest_run ? sourceAuditSummaryHtml(s.latest_run.sources) : "";
+          const scheduleInfo = s.schedule && s.schedule.enabled
+            ? `${badgeHtml("SCHEDULED", "", `Scheduled (${s.schedule.frequency})`)} next: ${s.schedule.next_run_at ? new Date(s.schedule.next_run_at).toLocaleString() : "-"}`
+            : "";
           return `
             <div class="search-list-item">
               <div>
@@ -107,6 +116,7 @@ async function load() {
                 <div class="meta">${escapeHtml(s.target_roles.join(", "))} &mdash; ${escapeHtml(s.target_locations.join(", "))}</div>
                 <div class="meta">${runInfo}</div>
                 ${sourceAudit ? `<div class="meta source-audit-summary">${sourceAudit}</div>` : ""}
+                ${scheduleInfo ? `<div class="meta">${scheduleInfo}</div>` : ""}
               </div>
               <div class="button-row" style="margin-top:0">
                 <button class="small" data-run="${s.saved_search_id}">Run now</button>
@@ -125,8 +135,43 @@ async function load() {
     document.getElementById("download-btn").addEventListener("click", () => {
       window.location.href = `/api/candidates/${candidateId}/report`;
     });
+
+    await loadFollowUps();
   } catch (err) {
     showError(msg, err);
+  }
+}
+
+async function loadFollowUps() {
+  const container = document.getElementById("followups-block");
+  try {
+    const data = await api(`/api/candidates/${candidateId}/follow-ups`);
+    const rows = data.follow_ups || [];
+    if (!rows.length) {
+      showEmpty(container, "No follow-up dates set. Set one from a job's workspace page.");
+      return;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    container.innerHTML = rows
+      .slice(0, 10)
+      .map((r) => {
+        const overdue = r.follow_up_date < today;
+        return `
+          <div class="search-list-item">
+            <div>
+              <b>${escapeHtml(r.title || "")}</b>
+              <div class="meta">${escapeHtml(r.company || "")}</div>
+              <div class="meta">${overdue ? badgeHtml("OVERDUE") : badgeHtml("SCHEDULED", "", "Upcoming")} ${escapeHtml(r.follow_up_date)}</div>
+            </div>
+            <div class="button-row" style="margin-top:0">
+              ${r.job_url ? `<a class="job-link" target="_blank" rel="noopener" href="${r.job_url}">View Job</a>` : ""}
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+  } catch (err) {
+    showError(document.getElementById("msg"), err);
   }
 }
 

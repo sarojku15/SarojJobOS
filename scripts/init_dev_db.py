@@ -49,6 +49,11 @@ import migrate_v7_candidate_resume_variant
 import migrate_v8_resume_profile_traceability
 import migrate_v9_candidate_job_search_matches
 import migrate_v10_search_type
+import migrate_v11_tailored_resumes
+import migrate_v12_company_research
+import migrate_v13_interview_prep
+import migrate_v14_search_schedules
+import migrate_v15_follow_up_date
 
 
 def init_dev_db(db_path=DEV_DB):
@@ -88,6 +93,11 @@ def init_dev_db(db_path=DEV_DB):
     migrate_v8_resume_profile_traceability.migrate(db_path)
     migrate_v9_candidate_job_search_matches.migrate(db_path)
     migrate_v10_search_type.migrate(db_path)
+    migrate_v11_tailored_resumes.migrate(db_path)
+    migrate_v12_company_research.migrate(db_path)
+    migrate_v13_interview_prep.migrate(db_path)
+    migrate_v14_search_schedules.migrate(db_path)
+    migrate_v15_follow_up_date.migrate(db_path)
 
     return db_path
 

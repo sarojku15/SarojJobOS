@@ -1,0 +1,143 @@
+{
+  "id": "jobos-follow-up-reminder",
+  "name": "JobOS Follow-Up Reminder",
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {},
+  "nodes": [
+    {
+      "id": "sticky-readme",
+      "name": "Setup Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-40, -320],
+      "parameters": {
+        "width": 520,
+        "height": 340,
+        "content": "## JobOS Follow-Up Reminder\n\nReads follow-up dates through JobOS's own candidate-scoped, read-only\n`GET /api/candidates/{candidate_id}/follow-ups` endpoint (added\nspecifically for this workflow -- see docs/ARCHITECTURE.md). This\nworkflow never opens SQLite directly and never writes anything back to\nJobOS.\n\n**Before activating:**\n1. Open the \"JobOS Config\" node and set:\n   - `jobos_base_url` (default `http://localhost:8420`)\n   - `candidate_id` -- YOUR candidate id from the JobOS UI/API (Profile\n     page, or `GET /api/candidates` response after creating one). Left\n     blank by default in this committed file on purpose -- never a\n     real id committed to the repo.\n2. Pick a daily time on the Schedule Trigger (default: 8:00 AM,\n   `GENERIC_TIMEZONE`/`TZ` from docker-compose.yml).\n3. This workflow only LOGS due/overdue follow-ups to n8n's own\n   execution log by default (visible under this workflow's\n   Executions tab). To get an actual notification, add a Slack/Email/\n   Telegram node after \"Log Due Follow-Ups\" -- none is wired in by\n   default since no such provider is guaranteed configured (see\n   docs/CONFIGURATION.md).\n\nNever submits or changes any application status -- read-only."
+      }
+    },
+    {
+      "id": "trigger-schedule",
+      "name": "Daily at 8am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-40, 80],
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "days", "triggerAtHour": 8 }
+          ]
+        }
+      }
+    },
+    {
+      "id": "set-config",
+      "name": "JobOS Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [180, 80],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "jobos-base-url",
+              "name": "jobos_base_url",
+              "value": "http://localhost:8420",
+              "type": "string"
+            },
+            {
+              "id": "jobos-candidate-id",
+              "name": "candidate_id",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "http-follow-ups",
+      "name": "GET .../follow-ups",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 80],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.jobos_base_url }}/api/candidates/{{ $json.candidate_id }}/follow-ups",
+        "options": {}
+      }
+    },
+    {
+      "id": "code-filter-due",
+      "name": "Filter Due / Overdue",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [620, 80],
+      "parameters": {
+        "jsCode": "// Read-only date comparison ('is this reminder date today or in the\n// past?') -- not a JobOS business rule, this is the one piece of\n// logic the master task explicitly delegated to this workflow rather\n// than to a new JobOS API concept.\nconst today = new Date().toISOString().slice(0, 10);\nconst body = $input.first().json;\nconst due = (body.follow_ups || []).filter((f) => f.follow_up_date <= today);\nreturn due.map((f) => ({ json: { ...f, is_overdue: f.follow_up_date < today } }));\n"
+      }
+    },
+    {
+      "id": "if-any-due",
+      "name": "Any due?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [840, 80],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "cond-any-due",
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "gt" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "code-log-due",
+      "name": "Log Due Follow-Ups",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1060, -20],
+      "parameters": {
+        "jsCode": "// Formats one human-readable log line per due/overdue follow-up.\n// Wire a Slack/Email/Telegram node after this one to get an actual\n// notification -- see this workflow's Setup Notes sticky.\nreturn $input.all().map((item) => {\n  const f = item.json;\n  const tag = f.is_overdue ? 'OVERDUE' : 'DUE TODAY';\n  return { json: { message: `[${tag}] ${f.title} at ${f.company} -- follow up by ${f.follow_up_date} (job_id=${f.job_id})` } };\n});\n"
+      }
+    },
+    {
+      "id": "noop-nothing-due",
+      "name": "Nothing Due",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1060, 180],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Daily at 8am": {
+      "main": [[{ "node": "JobOS Config", "type": "main", "index": 0 }]]
+    },
+    "JobOS Config": {
+      "main": [[{ "node": "GET .../follow-ups", "type": "main", "index": 0 }]]
+    },
+    "GET .../follow-ups": {
+      "main": [[{ "node": "Filter Due / Overdue", "type": "main", "index": 0 }]]
+    },
+    "Filter Due / Overdue": {
+      "main": [[{ "node": "Any due?", "type": "main", "index": 0 }]]
+    },
+    "Any due?": {
+      "main": [
+        [{ "node": "Log Due Follow-Ups", "type": "main", "index": 0 }],
+        [{ "node": "Nothing Due", "type": "main", "index": 0 }]
+      ]
+    }
+  }
+}

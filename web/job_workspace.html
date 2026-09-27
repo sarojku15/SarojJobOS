@@ -1,0 +1,625 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Job Search OS — Job Workspace</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<header>
+  <span class="brand">Job Search OS</span>
+  <a href="/">Home</a>
+  <a href="/profile">Profile</a>
+  <a href="/searches">Searches</a>
+  <a href="/dashboard">Dashboard</a>
+</header>
+<main>
+  <div id="msg"></div>
+  <div id="content"><div class="loading-state">Loading job workspace...</div></div>
+</main>
+<script src="/static/app.js"></script>
+<script>
+const jobId = window.location.pathname.split("/")[2];
+const searchId = new URLSearchParams(window.location.search).get("search_id");
+let candidateId = null;
+let jobRow = null;
+let resumesCache = null;
+let companyResearchCache = null;
+
+/** This page's API errors are already written by the backend to be
+ * short and human-readable (eligibility reasons, ownership messages,
+ * etc.) -- shown directly rather than through friendlyErrorMessage(),
+ * which would otherwise mislabel a "job not eligible" 404 as a
+ * generic profile-loading failure. */
+function showApiError(container, err) {
+  container.innerHTML = "";
+  container.appendChild(el(`<div class="banner banner-error">${escapeHtml(err && err.message ? err.message : "Something went wrong.")}</div>`));
+}
+
+async function getResumes() {
+  if (!resumesCache) {
+    const data = await api(`/api/candidates/${candidateId}/resumes`);
+    resumesCache = data.resumes || [];
+  }
+  return resumesCache;
+}
+
+async function getCompanyResearchList(companyName) {
+  const data = await api(`/api/candidates/${candidateId}/company-research?company_name=${encodeURIComponent(companyName)}`);
+  companyResearchCache = data.company_research || [];
+  return companyResearchCache;
+}
+
+function resumeOptionsHtml(resumes, selectedId) {
+  if (!resumes.length) return `<option value="">No resumes uploaded yet</option>`;
+  return resumes.map((r) => `<option value="${r.resume_id}" ${r.resume_id === selectedId ? "selected" : ""}>${escapeHtml(r.filename)} (${escapeHtml(r.resume_version || "v?")})</option>`).join("");
+}
+
+function renderHeader(r) {
+  return `
+    <div class="card">
+      <div class="job-workspace-header">
+        <div>
+          <h1 style="margin-bottom:2px">${escapeHtml(r.title || "")}</h1>
+          <div class="hint">${escapeHtml(r.company || "")} &middot; ${escapeHtml(r.location || "")}</div>
+        </div>
+        <div>
+          ${r.priority ? badgeHtml(r.priority) : ""}
+          <span class="hint">Score: ${r.score ?? "-"}</span>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:8px">
+        Eligibility: ${r.eligible ? "Eligible" : "Not eligible"} (${escapeHtml(r.eligibility || "-")})
+      </div>
+      <div class="button-row" style="margin-top:10px">
+        ${r.job_url ? `<a class="job-link" target="_blank" rel="noopener" href="${r.job_url}">View Job</a>` : ""}
+        <button class="secondary small" onclick="window.location.href='/searches/${searchId}/results'">Back to results</button>
+      </div>
+    </div>
+  `;
+}
+
+// ------------------------------------------------------- resume tailoring
+
+function renderTailoringShell() {
+  return `
+    <div class="card">
+      <h2>Resume Tailoring</h2>
+      <p class="hint">ATS-oriented resume tailoring that reorders and emphasizes your existing experience and skills. It does not invent experience or skills -- every word comes from your own confirmed profile/resume.</p>
+      <div id="tailoring-msg"></div>
+      <div class="row">
+        <div>
+          <label>Base resume</label>
+          <select id="tailor-resume-select"><option>Loading...</option></select>
+        </div>
+      </div>
+      <button id="tailor-btn" type="button">Tailor Resume</button>
+      <div id="tailoring-content" class="workspace-panel"></div>
+    </div>
+  `;
+}
+
+async function initTailoringPanel() {
+  const msg = document.getElementById("tailoring-msg");
+  const select = document.getElementById("tailor-resume-select");
+  try {
+    const resumes = await getResumes();
+    select.innerHTML = resumeOptionsHtml(resumes);
+  } catch (err) {
+    showApiError(msg, err);
+  }
+  document.getElementById("tailor-btn").addEventListener("click", runTailoring);
+  await refreshTailoringList();
+}
+
+async function runTailoring() {
+  const msg = document.getElementById("tailoring-msg");
+  const btn = document.getElementById("tailor-btn");
+  const baseResumeId = document.getElementById("tailor-resume-select").value;
+  if (!baseResumeId) {
+    showApiError(msg, { message: "Select a base resume first." });
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = "Tailoring...";
+  try {
+    await api(`/api/candidates/${candidateId}/jobs/${jobId}/tailor-resume`, {
+      method: "POST",
+      body: { base_resume_id: baseResumeId, job_id: jobId },
+    });
+    showSuccess(msg, "Tailored resume generated.");
+    await refreshTailoringList();
+  } catch (err) {
+    showApiError(msg, err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Tailor Resume";
+  }
+}
+
+function tailoredResumeCardHtml(tr) {
+  const kw = (tr.keywords_emphasized || []).map((k) => `<span class="skill-tag">${escapeHtml(k)}</span>`).join("") || `<span class="hint">None</span>`;
+  const matched = (tr.matched_skills || []).map((k) => `<span class="skill-tag">${escapeHtml(k)}</span>`).join("") || `<span class="hint">None</span>`;
+  const missing = (tr.missing_skills || []).map((k) => `<span class="skill-tag missing">${escapeHtml(k)}</span>`).join("") || `<span class="hint">None</span>`;
+  const highlights = (tr.content.relevant_experience_highlights || []).map((h) => `
+    <div style="margin-top:6px">
+      <b>${escapeHtml(h.title || "")} at ${escapeHtml(h.employer || "")}</b>
+      <ul class="source-link-list">${(h.highlight_sentences || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("")}</ul>
+    </div>
+  `).join("") || `<span class="hint">No specific highlights identified for this job.</span>`;
+
+  return `
+    <dl>
+      <dt>Version</dt><dd>v${tr.tailoring_version}</dd>
+      <dt>Status</dt><dd>${badgeHtml(tr.status)} ${badgeHtml(tr.factual_safety_status, "", tr.factual_safety_status === "PASS" ? "Factual safety: PASS" : "Factual safety: REJECTED")}</dd>
+      <dt>Job association</dt><dd>Job ${escapeHtml(tr.job_id)} &middot; base resume ${escapeHtml(tr.base_resume_id)}</dd>
+      <dt>Keywords emphasized</dt><dd class="skill-tag-list">${kw}</dd>
+      <dt>Matched skills</dt><dd class="skill-tag-list">${matched}</dd>
+      <dt>Missing skills</dt><dd class="skill-tag-list">${missing}</dd>
+      <dt>Relevant experience highlights</dt><dd>${highlights}</dd>
+    </dl>
+    ${tr.factual_safety_status !== "PASS" ? `<div class="subtle-note">This version failed the automated factual-safety check (${(tr.factual_safety_notes || []).join(", ") || "unsupported content detected"}) and was not marked READY.</div>` : ""}
+    <div class="button-row">
+      <button class="small secondary" onclick="window.open('/api/candidates/${candidateId}/tailored-resumes/${tr.tailored_resume_id}/download', '_blank')">Download (.txt)</button>
+    </div>
+  `;
+}
+
+async function refreshTailoringList() {
+  const container = document.getElementById("tailoring-content");
+  try {
+    const data = await api(`/api/candidates/${candidateId}/jobs/${jobId}/tailored-resumes`);
+    const list = (data.tailored_resumes || []).slice().sort((a, b) => b.tailoring_version - a.tailoring_version);
+    if (!list.length) {
+      showEmpty(container, "No tailored resume generated yet for this job.");
+      return;
+    }
+    const [latest, ...previous] = list;
+    container.innerHTML = tailoredResumeCardHtml(latest);
+    if (previous.length) {
+      container.innerHTML += `
+        <details class="version-history">
+          <summary>Previous versions (${previous.length})</summary>
+          ${previous.map((tr) => `
+            <div class="version-history-item">
+              v${tr.tailoring_version} &middot; ${badgeHtml(tr.status)} &middot; ${escapeHtml(tr.created_at || "")}
+              &middot; <a href="/api/candidates/${candidateId}/tailored-resumes/${tr.tailored_resume_id}/download" target="_blank" rel="noopener">Download</a>
+            </div>
+          `).join("")}
+        </details>
+      `;
+    }
+  } catch (err) {
+    showApiError(container, err);
+  }
+}
+
+// ------------------------------------------------------ company research
+
+function renderCompanyResearchShell(r) {
+  return `
+    <div class="card">
+      <h2>Company Research</h2>
+      <p class="hint">Facts are only ever shown alongside the real source URL they came from. If a fact can't be confidently found, the field is left blank rather than guessed.</p>
+      <div id="research-msg"></div>
+      <div class="row">
+        <div>
+          <label>Company name</label>
+          <input id="research-company-name" type="text" value="${escapeHtml(r.company || "")}" />
+        </div>
+      </div>
+      <button id="research-btn" type="button">Research Company</button>
+      <div id="research-content" class="workspace-panel"></div>
+    </div>
+  `;
+}
+
+async function initCompanyResearchPanel() {
+  document.getElementById("research-btn").addEventListener("click", runCompanyResearch);
+  await refreshCompanyResearch();
+}
+
+async function runCompanyResearch() {
+  const msg = document.getElementById("research-msg");
+  const btn = document.getElementById("research-btn");
+  const companyName = document.getElementById("research-company-name").value.trim();
+  if (!companyName) {
+    showApiError(msg, { message: "Enter a company name first." });
+    return;
+  }
+  btn.disabled = true;
+  const isRefresh = companyResearchCache && companyResearchCache.length > 0;
+  btn.textContent = isRefresh ? "Refreshing..." : "Researching...";
+  try {
+    await api(`/api/candidates/${candidateId}/company-research`, {
+      method: "POST",
+      body: { company_name: companyName, job_id: jobId },
+    });
+    await refreshCompanyResearch();
+  } catch (err) {
+    showApiError(msg, err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = companyResearchCache && companyResearchCache.length > 0 ? "Refresh Research" : "Research Company";
+  }
+}
+
+function companyResearchCardHtml(cr) {
+  const statusHint = {
+    NOT_ATTEMPTED: "No search provider is configured. Add an API key on the Search Providers settings page to enable company research.",
+    FAILED: cr.error_message || "Every configured search provider failed.",
+    PARTIAL: "A search ran but no confidently-identified official site/description was found.",
+    SUCCESS: null,
+  }[cr.status];
+
+  const facts = [];
+  if (cr.website) facts.push(`<dt>Website</dt><dd><a href="${cr.website}" target="_blank" rel="noopener">${escapeHtml(cr.website)}</a></dd>`);
+  if (cr.description) facts.push(`<dt>Description</dt><dd>${escapeHtml(cr.description)} <span class="hint">(source: <a href="${cr.website}" target="_blank" rel="noopener">${escapeHtml(cr.website || "")}</a>)</span></dd>`);
+  if (cr.recent_info && cr.recent_info.length) {
+    facts.push(`<dt>Recent info</dt><dd><ul class="source-link-list">${cr.recent_info.map((info) =>
+      `<li>${escapeHtml(info.snippet || "")} &mdash; <a href="${info.url}" target="_blank" rel="noopener">source</a></li>`
+    ).join("")}</ul></dd>`);
+  }
+
+  return `
+    <dl>
+      <dt>Version</dt><dd>v${cr.version}</dd>
+      <dt>Status</dt><dd>${badgeHtml(cr.status)}</dd>
+      <dt>Researched at</dt><dd>${escapeHtml(cr.researched_at || "")}</dd>
+      ${facts.join("")}
+      ${cr.source_urls && cr.source_urls.length ? `<dt>All source URLs</dt><dd><ul class="source-link-list">${cr.source_urls.map((u) => `<li><a href="${u}" target="_blank" rel="noopener">${escapeHtml(u)}</a></li>`).join("")}</ul></dd>` : ""}
+    </dl>
+    ${statusHint ? `<div class="subtle-note">${escapeHtml(statusHint)}</div>` : ""}
+  `;
+}
+
+async function refreshCompanyResearch() {
+  const container = document.getElementById("research-content");
+  const companyName = document.getElementById("research-company-name").value.trim();
+  if (!companyName) {
+    showEmpty(container, "Enter a company name and click Research Company.");
+    return;
+  }
+  try {
+    const list = await getCompanyResearchList(companyName);
+    const sorted = list.slice().sort((a, b) => b.version - a.version);
+    if (!sorted.length) {
+      showEmpty(container, "No research has been run yet for this company.");
+      document.getElementById("research-btn").textContent = "Research Company";
+      return;
+    }
+    const [latest, ...previous] = sorted;
+    container.innerHTML = companyResearchCardHtml(latest);
+    if (previous.length) {
+      container.innerHTML += `
+        <details class="version-history">
+          <summary>Previous versions (${previous.length})</summary>
+          ${previous.map((cr) => `<div class="version-history-item">v${cr.version} &middot; ${badgeHtml(cr.status)} &middot; ${escapeHtml(cr.researched_at || "")}</div>`).join("")}
+        </details>
+      `;
+    }
+    document.getElementById("research-btn").textContent = "Refresh Research";
+  } catch (err) {
+    showApiError(container, err);
+  }
+}
+
+// ------------------------------------------------------- interview prep
+
+function renderInterviewPrepShell() {
+  return `
+    <div class="card">
+      <h2>Interview Preparation</h2>
+      <p class="hint">Deterministic and evidence-based -- suggested answers are drawn directly from your own confirmed profile/resume. Where no matching experience exists, it is clearly marked "Preparation required" rather than invented.</p>
+      <div id="prep-msg"></div>
+      <div class="row">
+        <div>
+          <label>Resume (optional)</label>
+          <select id="prep-resume-select"><option value="">None</option></select>
+        </div>
+        <div>
+          <label>Company research (optional)</label>
+          <select id="prep-research-select"><option value="">None</option></select>
+        </div>
+      </div>
+      <button id="prep-btn" type="button">Generate Interview Preparation</button>
+      <div id="prep-content" class="workspace-panel"></div>
+    </div>
+  `;
+}
+
+async function initInterviewPrepPanel() {
+  const msg = document.getElementById("prep-msg");
+
+  // Pre-select whatever an EXISTING prep record already used (or, for
+  // a first-ever generation, the latest company-research version) --
+  // found via real browser QA: without this, the dropdowns default to
+  // "None" on every page load, so clicking "Regenerate" without first
+  // re-picking an option silently drops the resume/company-research
+  // link a previous generation had, changing its question set (e.g.
+  // losing the company_specific category) without any indication.
+  let existingPrep = null;
+  let existingPrepFetchFailed = false;
+  try {
+    existingPrep = await api(`/api/candidates/${candidateId}/jobs/${jobId}/interview-prep`);
+  } catch (err) {
+    // No prep generated yet -- dropdowns just default sensibly below.
+    existingPrepFetchFailed = true;
+  }
+
+  try {
+    const resumes = await getResumes();
+    const preselectedResumeId = existingPrep ? existingPrep.resume_id : null;
+    document.getElementById("prep-resume-select").innerHTML = `<option value="">None</option>` + resumeOptionsHtml(resumes, preselectedResumeId);
+  } catch (err) {
+    showApiError(msg, err);
+  }
+  try {
+    const research = await getCompanyResearchList(jobRow.company || "");
+    const sorted = research.slice().sort((a, b) => b.version - a.version);
+    const preselectedResearchId = existingPrep && existingPrep.company_research_id
+      ? existingPrep.company_research_id
+      : (sorted[0] ? sorted[0].company_research_id : null);
+    const sel = document.getElementById("prep-research-select");
+    sel.innerHTML = `<option value="">None</option>` + sorted
+      .map((cr) => `<option value="${cr.company_research_id}" ${cr.company_research_id === preselectedResearchId ? "selected" : ""}>v${cr.version} &middot; ${cr.status} &middot; ${escapeHtml(cr.researched_at || "")}</option>`)
+      .join("");
+  } catch (err) {
+    // Non-fatal for this optional dropdown.
+  }
+  document.getElementById("prep-btn").addEventListener("click", runInterviewPrep);
+  // Render from the prep already fetched above rather than re-fetching
+  // the same endpoint a second time (the naive version of this did,
+  // producing a duplicate request -- and a duplicate, benign-but-noisy
+  // 404 in the console on every "no prep yet" first load).
+  if (existingPrepFetchFailed) {
+    showEmpty(document.getElementById("prep-content"), "No interview preparation generated yet for this job.");
+  } else {
+    renderInterviewPrep(existingPrep);
+  }
+}
+
+async function runInterviewPrep() {
+  const msg = document.getElementById("prep-msg");
+  const btn = document.getElementById("prep-btn");
+  const resumeId = document.getElementById("prep-resume-select").value || null;
+  const researchId = document.getElementById("prep-research-select").value || null;
+  btn.disabled = true;
+  btn.textContent = "Generating...";
+  try {
+    await api(`/api/candidates/${candidateId}/interview-prep`, {
+      method: "POST",
+      body: { job_id: jobId, resume_id: resumeId, company_research_id: researchId },
+    });
+    showSuccess(msg, "Interview preparation generated.");
+    await refreshInterviewPrep();
+  } catch (err) {
+    showApiError(msg, err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Regenerate Interview Preparation";
+  }
+}
+
+function questionItemHtml(q) {
+  const evidenceBadge = q.has_demonstrated_experience
+    ? badgeHtml("SUCCESS", "", "Evidence-based")
+    : badgeHtml("NOT_ATTEMPTED", "", "Preparation required");
+  return `
+    <div class="question-item" data-question-id="${q.question_id}">
+      <div class="evidence-badge-row">${evidenceBadge}</div>
+      <div class="q-text">${escapeHtml(q.question_text)}</div>
+      <div class="suggested-answer"><b>Suggested Answer:</b> ${escapeHtml(q.model_answer_text)}</div>
+      <label>Your answer</label>
+      <textarea class="candidate-answer-input">${escapeHtml(q.candidate_answer_text || "")}</textarea>
+      <div class="row">
+        <div>
+          <label>Confidence (1-5)</label>
+          <select class="confidence-input">
+            <option value="">-</option>
+            ${[1, 2, 3, 4, 5].map((n) => `<option value="${n}" ${q.confidence === n ? "selected" : ""}>${n}</option>`).join("")}
+          </select>
+        </div>
+      </div>
+      <label>Notes</label>
+      <textarea class="notes-input">${escapeHtml(q.notes || "")}</textarea>
+      <button class="small secondary save-answer-btn" type="button">Save</button>
+      <span class="hint save-answer-status"></span>
+    </div>
+  `;
+}
+
+function interviewPrepContentHtml(prep) {
+  const overview = prep.overview || {};
+  const matched = (overview.matched_skills || []).map((k) => `<span class="skill-tag">${escapeHtml(k)}</span>`).join("") || `<span class="hint">None</span>`;
+  const missing = (overview.missing_skills || []).map((k) => `<span class="skill-tag missing">${escapeHtml(k)}</span>`).join("") || `<span class="hint">None</span>`;
+
+  const byCategory = {};
+  (prep.questions || []).forEach((q) => {
+    (byCategory[q.category] = byCategory[q.category] || []).push(q);
+  });
+
+  const questionsHtml = Object.keys(byCategory).map((cat) => `
+    <div class="category-heading">${escapeHtml(cat.replace(/_/g, " "))}</div>
+    ${byCategory[cat].map(questionItemHtml).join("")}
+  `).join("");
+
+  return `
+    <dl>
+      <dt>Target role / company</dt><dd>${escapeHtml(overview.target_role || "")} at ${escapeHtml(overview.target_company || "")}</dd>
+      <dt>Matched skills</dt><dd class="skill-tag-list">${matched}</dd>
+      <dt>Missing skills</dt><dd class="skill-tag-list">${missing}</dd>
+      <dt>Checklist</dt><dd><ul class="source-link-list">${(prep.checklist || []).map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul></dd>
+      <dt>Questions to ask the interviewer</dt><dd><ul class="source-link-list">${(prep.questions_to_ask || []).map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul></dd>
+      ${(prep.skill_gap_plan || []).length ? `<dt>Skill gap plan</dt><dd><ul class="source-link-list">${prep.skill_gap_plan.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul></dd>` : ""}
+    </dl>
+    ${questionsHtml}
+    <div class="category-heading">Interview outcome</div>
+    <div class="row">
+      <div>
+        <label>Outcome status</label>
+        <select id="outcome-status-select">
+          <option value="">Not set</option>
+          ${["SCHEDULED", "COMPLETED", "PASSED", "REJECTED", "NO_RESPONSE"].map((s) => `<option value="${s}" ${prep.outcome_status === s ? "selected" : ""}>${s}</option>`).join("")}
+        </select>
+      </div>
+    </div>
+    <label>Outcome notes</label>
+    <textarea id="outcome-notes-input">${escapeHtml(prep.outcome_notes || "")}</textarea>
+    <button class="small secondary" id="save-outcome-btn" type="button">Save Outcome</button>
+    <span class="hint" id="outcome-save-status"></span>
+  `;
+}
+
+function wireQuestionSaveButtons(prepId) {
+  document.querySelectorAll(".question-item").forEach((item) => {
+    const questionId = item.dataset.questionId;
+    item.querySelector(".save-answer-btn").addEventListener("click", async () => {
+      const statusEl = item.querySelector(".save-answer-status");
+      const answer = item.querySelector(".candidate-answer-input").value;
+      const confidenceRaw = item.querySelector(".confidence-input").value;
+      const notes = item.querySelector(".notes-input").value;
+      try {
+        await api(`/api/candidates/${candidateId}/interview-prep-questions/${questionId}`, {
+          method: "PATCH",
+          body: { candidate_answer: answer || null, confidence: confidenceRaw ? Number(confidenceRaw) : null, notes: notes || null },
+        });
+        statusEl.textContent = "Saved.";
+      } catch (err) {
+        statusEl.textContent = err.message || "Could not save.";
+      }
+    });
+  });
+
+  const outcomeBtn = document.getElementById("save-outcome-btn");
+  if (outcomeBtn) {
+    outcomeBtn.addEventListener("click", async () => {
+      const statusEl = document.getElementById("outcome-save-status");
+      try {
+        await api(`/api/candidates/${candidateId}/interview-prep/${prepId}/outcome`, {
+          method: "PATCH",
+          body: {
+            outcome_status: document.getElementById("outcome-status-select").value || null,
+            outcome_notes: document.getElementById("outcome-notes-input").value || null,
+          },
+        });
+        statusEl.textContent = "Saved.";
+      } catch (err) {
+        statusEl.textContent = err.message || "Could not save.";
+      }
+    });
+  }
+}
+
+function renderInterviewPrep(prep) {
+  const container = document.getElementById("prep-content");
+  container.innerHTML = interviewPrepContentHtml(prep);
+  wireQuestionSaveButtons(prep.interview_prep_id);
+  document.getElementById("prep-btn").textContent = "Regenerate Interview Preparation";
+}
+
+async function refreshInterviewPrep() {
+  const container = document.getElementById("prep-content");
+  try {
+    const prep = await api(`/api/candidates/${candidateId}/jobs/${jobId}/interview-prep`);
+    renderInterviewPrep(prep);
+  } catch (err) {
+    if (err.status === 404) {
+      showEmpty(container, "No interview preparation generated yet for this job.");
+      document.getElementById("prep-btn").textContent = "Generate Interview Preparation";
+    } else {
+      showApiError(container, err);
+    }
+  }
+}
+
+// -------------------------------------------------------- follow-up date
+
+function renderFollowUpShell(r) {
+  return `
+    <div class="card">
+      <h2>Follow-up Date</h2>
+      <p class="hint">A personal reminder date for this job. It does not change the application status.</p>
+      <div id="followup-msg"></div>
+      <div class="row">
+        <div>
+          <label>Follow-up date</label>
+          <input id="followup-date-input" type="date" value="${r.follow_up_date ? escapeHtml(r.follow_up_date) : ""}" />
+        </div>
+      </div>
+      <div class="button-row">
+        <button id="followup-save-btn" type="button">Save</button>
+        <button class="secondary" id="followup-clear-btn" type="button">Clear</button>
+      </div>
+    </div>
+  `;
+}
+
+function initFollowUpPanel() {
+  document.getElementById("followup-save-btn").addEventListener("click", () => saveFollowUp(document.getElementById("followup-date-input").value || null));
+  document.getElementById("followup-clear-btn").addEventListener("click", () => {
+    document.getElementById("followup-date-input").value = "";
+    saveFollowUp(null);
+  });
+}
+
+async function saveFollowUp(value) {
+  const msg = document.getElementById("followup-msg");
+  try {
+    await api(`/api/candidates/${candidateId}/jobs/${jobId}/follow-up`, {
+      method: "PATCH",
+      body: { follow_up_date: value },
+    });
+    showSuccess(msg, value ? `Follow-up date set to ${value}.` : "Follow-up date cleared.");
+  } catch (err) {
+    showApiError(msg, err);
+  }
+}
+
+// ----------------------------------------------------------------- load
+
+async function load() {
+  const content = document.getElementById("content");
+  const msg = document.getElementById("msg");
+
+  candidateId = await resolveActiveCandidate();
+  if (!candidateId) {
+    showEmpty(content, "No candidate selected yet.");
+    return;
+  }
+  if (!searchId) {
+    showEmpty(content, "Open this page from a search's results list.");
+    return;
+  }
+
+  try {
+    const data = await api(`/api/searches/${searchId}/results?candidate_id=${candidateId}`);
+    jobRow = (data.results || []).find((r) => r.job_id === jobId);
+  } catch (err) {
+    showError(msg, err);
+    showEmpty(content, "This job could not be loaded.");
+    return;
+  }
+
+  if (!jobRow) {
+    showEmpty(content, "This job could not be found in that search's results.");
+    return;
+  }
+
+  content.innerHTML =
+    renderHeader(jobRow) +
+    renderTailoringShell() +
+    renderCompanyResearchShell(jobRow) +
+    renderInterviewPrepShell() +
+    renderFollowUpShell(jobRow);
+
+  await initTailoringPanel();
+  await initCompanyResearchPanel();
+  await initInterviewPrepPanel();
+  initFollowUpPanel();
+}
+
+load();
+</script>
+</body>
+</html>

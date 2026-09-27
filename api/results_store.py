@@ -169,6 +169,7 @@ def _row_to_result_dict(row):
         "matched_skills": list(explanation.get("strong_matches") or []),
         "missing_skills": list(explanation.get("gaps") or []),
         "resume_variant": row.resume_variant,
+        "follow_up_date": row.follow_up_date,
         "first_discovered": row.first_discovered,
         "last_seen": row.last_seen,
         "duplicate_suppressed": row.duplicate_suppressed,

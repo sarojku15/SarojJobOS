@@ -50,8 +50,13 @@ pnpm-debug.log*
 *.temp
 *.swp
 
-# n8n runtime data — contains database and encrypted credentials
+# n8n runtime data — contains database and encrypted credentials.
+# n8n/workflows/ is real, committed source (importable workflow JSON,
+# no secrets/credentials by construction -- see scripts/test_n8n_workflows.py),
+# never runtime data, so it's explicitly un-ignored below.
 n8n/*
+!n8n/workflows/
+!n8n/workflows/**
 
 # Personal resume and application data
 resumes/

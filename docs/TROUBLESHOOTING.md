@@ -51,6 +51,53 @@ shouldn't — both read from the same canonical, run-scoped functions
 a mismatch, that's a regression worth reporting with the specific
 `search_id`/`run_id`.
 
+## Resume tailoring / company research / interview prep
+
+**Tailoring a resume returns 404 "not eligible."** This candidate
+doesn't pass the same experience/location eligibility gate scoring
+uses for that job — not a bug. Check the job's own eligibility reason
+in the results view.
+
+**Company research always comes back `NOT_ATTEMPTED`.** No
+search-provider API key is configured — see
+[CONFIGURATION.md](CONFIGURATION.md)'s search-provider section
+(`YOU_API_KEY`/`TAVILY_API_KEY`/etc., or Settings → Search Providers).
+This is honest reporting, not a broken feature.
+
+**Interview prep has no "company-specific" questions.** That category
+only appears when a real, linked company-research record with actual
+content exists — link one (or run research first) if you want it.
+
+**A tailored resume's `factual_safety_status` is `REJECTED`.** This
+should be structurally rare (the pipeline only ever reorders/extracts
+existing text) — if you see it, it means the automated check found
+generated text that doesn't trace back to the original profile; treat
+it as a real bug worth reporting with the `tailored_resume_id`.
+
+## Scheduling
+
+**A schedule's `next_run_at` passed but nothing ran.** Scheduling
+persists state only — nothing fires unless an external trigger is
+actually running (see [CONFIGURATION.md](CONFIGURATION.md)'s
+"Scheduling & automation"). Check: is the n8n workflow activated and
+importing correctly, or is `scripts/run_scheduled_searches.py` actually
+being invoked by cron/launchd? Calling
+`POST /api/scheduler/run-due` manually (or via `curl`) will process any
+currently-due schedule immediately, regardless of which trigger you
+normally use — good for testing.
+
+**A schedule shows `SKIPPED_ALREADY_RUNNING`.** Working as intended —
+the previous run for that search hasn't reached a terminal state yet
+(same guard "Run Now" uses). It will run on its next due tick once the
+current one finishes.
+
+**Testing a schedule without waiting for the real interval.** Set the
+search's schedule via the UI, then call
+`POST /api/scheduler/run-due` directly — it processes whatever is
+currently due. To force an immediate due state during development, a
+schedule's `next_run_at` can be moved into the past directly in the
+dev DB (`jobos_dev.db`, never the production DB).
+
 ## Database
 
 **Dev database schema looks out of date / a column is missing.** Delete
@@ -71,6 +118,19 @@ discovery mechanism.
 `data/inbox/job_input.txt`) — a separate, older code path from the
 multi-candidate web app/API most users interact with. See
 [ARCHITECTURE.md](ARCHITECTURE.md) for how the two relate.
+
+## n8n workflows
+
+**A workflow fails to import, or a node shows a version-mismatch
+warning.** The committed JSON specifies node `typeVersion`s current at
+the time it was written; a different n8n build may prompt to "update
+node version" on import — accept the prompt, the workflow's logic
+(HTTP calls to JobOS's own API) doesn't depend on the exact node
+version.
+
+**The follow-up reminder workflow returns nothing.** Its "JobOS Config"
+node's `candidate_id` is blank by default (never a real id is committed
+to this repo) — fill in your own after importing.
 
 ## Still stuck?
 

@@ -105,16 +105,17 @@ on your behalf. See [Human-in-the-loop model](#human-in-the-loop-model).
 | Candidate profile (resume-extracted or manual) | Built |
 | Resume management (multiple versions, never overwritten) | Built |
 | Resume/profile *selection* per search | Built |
-| Automatic resume *tailoring/rewriting* | Not built |
+| Resume tailoring (ATS-oriented reorder/emphasis of your own content) | Built — deterministic, never AI rewriting, never invented content |
 | Application status tracking (18-state lifecycle) | Built |
+| Follow-up date tracking (candidate+job scoped reminder) | Built |
 | Search run history | Built |
 | Excel export (scoped to what you're viewing) | Built |
 | Browser automation (Naukri/Hirist/IIMJobs/Apna) | Built, via Playwright |
-| n8n | Present (container runs), no JobOS workflows wired in yet |
-| Scheduling (recurring automated runs) | Template exists, deliberately not installed |
+| n8n | Built — two importable workflows (`n8n/workflows/`): scheduled search runner + follow-up reminder |
+| Scheduling (recurring automated runs) | Built — persisted per-search schedule; needs an external trigger (n8n workflow or `run_scheduled_searches.py` via cron/launchd) actually running to fire |
 | Claude Code integration (natural language) | Built (`.claude/skills/`) |
-| Company research | Optional, best-effort web search — not a persisted pipeline |
-| Interview preparation | Not built |
+| Company research | Built — persisted, source-backed, via the existing multi-provider search layer (honest `NOT_ATTEMPTED` if no provider key is configured) |
+| Interview preparation | Built — deterministic, evidence-based questions + suggested answers |
 
 ## Human-in-the-loop model
 
@@ -188,13 +189,14 @@ Claude Code inside this project. Full guide:
 
 | Skill | Purpose |
 |---|---|
-| `jobos-orchestrator` | Natural-language entry point; routes to the skills below |
+| `jobos-orchestrator` | Natural-language entry point; routes to the skills below; also owns search-scheduling requests |
 | `job-discovery-engine` | Standalone, ad-hoc, non-persisting discovery script — not the path a real tracked search uses (that's `jobos-orchestrator`'s own API calls) |
 | `job-matching` | Score/priority/skill-gap explanation |
-| `resume-manager` | Resume listing/upload, resume/profile-version selection |
-| `application-tracker` | Status pipeline reads + the one gated write path |
+| `resume-manager` | Resume listing/upload/pinning, and ATS-oriented resume tailoring for a specific job (deterministic reorder/emphasis, never AI rewriting) |
+| `company-research` | Real, persisted, source-backed company research (reuses the existing multi-provider search layer) |
+| `interview-prep` | Deterministic, evidence-based interview question generation + suggested answers, candidate answers, and outcome tracking |
+| `application-tracker` | Status pipeline reads + the one gated write path, plus follow-up date set/clear |
 | `job-report` | Excel export |
-| `company-research` | Optional, best-effort web research (not a built pipeline) |
 | `jobos` (`/jobos` command) | Legacy single-candidate CLI pipeline — separate, older system |
 
 ## Architecture
@@ -214,9 +216,14 @@ A few subsystems worth knowing about up front, each documented in full:
   source is never silently skipped — [docs/JOB_SOURCES.md](docs/JOB_SOURCES.md).
 - **Application lifecycle**: 18 real states, one hard rule (`APPLIED`
   is unreachable without `APPROVED` first) — [docs/APPLICATION_LIFECYCLE.md](docs/APPLICATION_LIFECYCLE.md).
-- **Automation**: a `launchd` template for scheduled runs exists but is
-  deliberately **not installed** by default; n8n runs as infrastructure
-  with no JobOS workflows wired into it yet.
+- **Automation**: recurring saved-search execution is real and
+  persisted (`PUT /api/searches/{id}/schedule`), but needs exactly ONE
+  external trigger actually running to fire — either the
+  `JobOS Scheduled Search Runner` n8n workflow (`n8n/workflows/`) or
+  `scripts/run_scheduled_searches.py` via cron/launchd. Neither is
+  active by default; pick one, never both at once. A `launchd`
+  template for the older, legacy single-candidate CLI pipeline also
+  still exists, separately, and is likewise not installed by default.
 
 ## Documentation
 

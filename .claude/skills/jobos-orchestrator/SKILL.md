@@ -1,6 +1,6 @@
 ---
 name: jobos-orchestrator
-description: Primary natural-language entry point for the current, multi-candidate JobOS web app (the FastAPI app under api/, used through the browser at web/ — not the legacy /jobos slash-command CLI pipeline). Use this whenever the user asks, in plain language, to find/search/match/score jobs, review results, check skill gaps, pick/upload a resume, shortlist or track an application, or generate a report against their own JobOS candidate account. Runs real, tracked searches directly via the FastAPI search/run endpoints (never job-discovery-engine's separate non-persisting script -- see that skill's own "when not to use" note), and delegates score/gap explanation to job-matching, resume questions to resume-manager, status changes to application-tracker, and exports to job-report. Do not use for the legacy config/profile.json-driven /jobos command workflow — that is a separate, older pipeline.
+description: Primary natural-language entry point for the current, multi-candidate JobOS web app (the FastAPI app under api/, used through the browser at web/ — not the legacy /jobos slash-command CLI pipeline). Use this whenever the user asks, in plain language, to find/search/match/score jobs, review results, check skill gaps, pick/upload/tailor a resume, research a company, shortlist or track an application, set a follow-up date, prepare for an interview, schedule a recurring search, or generate a report against their own JobOS candidate account. Runs real, tracked searches directly via the FastAPI search/run endpoints (never job-discovery-engine's separate non-persisting script -- see that skill's own "when not to use" note), and delegates score/gap explanation to job-matching, resume/tailoring questions to resume-manager, company research to company-research, status/follow-up changes to application-tracker, interview prep to interview-prep, and exports to job-report. Do not use for the legacy config/profile.json-driven /jobos command workflow — that is a separate, older pipeline.
 ---
 
 # JobOS Orchestrator
@@ -65,8 +65,31 @@ jobs in Bangalore," "run my current searches," "why did this job score
    wasn't), and the top matches with their real scores.
 6. Delegate deeper questions to the focused skills below rather than
    re-implementing them here: score/gap explanation → job-matching;
-   resume questions → resume-manager; status changes → application-
-   tracker; exporting → job-report.
+   resume questions/tailoring → resume-manager; company research →
+   company-research; status/follow-up changes → application-tracker;
+   interview prep → interview-prep; exporting → job-report.
+
+## Workflow — example: "Schedule this search every morning"
+
+1. Confirm which saved search (`search_id`) via
+   `GET /api/candidates/{id}/searches` if not already known.
+2. `PUT /api/searches/{search_id}/schedule?candidate_id={id}` with
+   `{"enabled": true, "frequency": "daily", "timezone": "..."}`
+   (`frequency` must be `hourly`/`daily`/`weekly` — there is no
+   calendar/time-of-day concept, only elapsed-interval scheduling).
+3. **Be explicit that saving this does not itself start a background
+   process.** Persisted schedules only take effect when something
+   external actually calls them: either the
+   `JobOS Scheduled Search Runner` n8n workflow (`n8n/workflows/`,
+   calling `POST /api/scheduler/run-due` on a timer) or the
+   `scripts/run_scheduled_searches.py` CLI run periodically via
+   cron/launchd. If the user hasn't set up either, tell them plainly
+   that the schedule is saved but nothing will actually trigger it yet
+   — point them at `docs/USER_GUIDE.md`'s scheduling section.
+4. To check status: `GET /api/searches/{search_id}/schedule?candidate_id={id}`
+   — report the real `next_run_at`/`last_run_at`/`last_run_status`,
+   never a guess about when it "should" have run.
+5. To disable: same PUT with `{"enabled": false}`.
 
 ## Workflow — example: "Prepare this job for application"
 
@@ -90,7 +113,10 @@ jobs in Bangalore," "run my current searches," "why did this job score
 `GET /api/health`, `POST /api/candidates`, `GET/PUT /api/candidates/{id}/profile`,
 `POST /api/candidates/{id}/profile/confirm`, `POST/GET /api/candidates/{id}/searches`,
 `POST /api/searches/{id}/run`, `GET /api/runs/{id}`,
-`GET /api/searches/{id}/results`, `GET /api/sources`.
+`GET /api/searches/{id}/results`, `GET /api/sources`,
+`PUT/GET /api/searches/{id}/schedule`, `POST /api/scheduler/run-due`
+(delegate the domain-specific tailoring/research/interview-prep/status
+routes to their own skills rather than calling them directly here).
 
 ## Safety (non-negotiable, from `CLAUDE.md`)
 
@@ -121,6 +147,14 @@ status rather than a vague "search complete."
 - "Show my current application pipeline." → delegate to
   application-tracker.
 - "Generate today's job-search report." → delegate to job-report.
+- "Tailor my resume for this job." → delegate to resume-manager.
+- "Research this company." → delegate to company-research.
+- "Prepare me for this interview." → delegate to interview-prep.
+- "Schedule this search to run every morning." → see the scheduling
+  workflow above; be explicit that an external runner (n8n or cron/
+  launchd) must actually be active for it to take effect.
+- "Remind me to follow up on this job." → delegate to
+  application-tracker.
 - "Apply to this job for me." → **do not submit anything.** There is no
   code path for this anywhere in the project. Explain plainly: JobOS
   can prepare information (score, gaps, resume in use) and give you the

@@ -501,11 +501,15 @@ Do not modify `config/profile.json`, `scripts/score_job.py`, or
 | Dead-link / posting-availability checking | Missing (distinct from freshness classification above — this would mean verifying a URL still resolves to a live posting) |
 | Resume variant files (DEVOPS-A, AZURE-A, AWS-A, PLATFORM-A) | Missing |
 | Resume variant selection logic | Missing |
+| Resume tailoring (current multi-candidate app only) | **Built**: `scripts/resume_tailoring.py`, deterministic ATS-oriented reordering/emphasis of the candidate's own confirmed profile/resume content — never AI rewriting, never invented content. A separate, unrelated concept from the legacy pipeline's "Resume Variants" above. |
+| Company research (current multi-candidate app only) | **Built**: `scripts/company_research.py`, persisted/versioned, reuses the existing multi-provider search layer — honest `NOT_ATTEMPTED`/`FAILED`/`PARTIAL`/`SUCCESS` states, every fact paired with its source URL. |
+| Interview preparation (current multi-candidate app only) | **Built**: `scripts/interview_prep.py`, deterministic and evidence-based — real resume quotes where experience exists, "Preparation required" where it doesn't. |
+| Recurring saved-search scheduling (current multi-candidate app only) | **Built**: `scripts/scheduler.py` + `search_schedules` table, persisted state only (no daemon/loop); needs an external trigger (the n8n workflow above, or `scripts/run_scheduled_searches.py` via cron/launchd) actually running to fire. Distinct from the legacy pipeline's separate macOS launchd item below. |
 | Human approval workflow | **Built**: `PATCH /api/candidates/{id}/jobs/{job_id}/status` moves a job through `config/application_schema.json`'s existing lifecycle (SHORTLISTED → READY_FOR_APPROVAL → APPROVED → APPLICATION_STARTED/APPLIED → ...), scoped to the owning candidate, with a hard-enforced gate: APPLICATION_STARTED/APPLIED is unreachable unless already APPROVED. See `scripts/application_lifecycle.py` and `scripts/test_application_lifecycle.py`. No UI button for it yet (API only). |
-| Application submission pipeline | Missing |
-| Follow-up automation | Missing |
+| Application submission pipeline | Missing (by design — never automated, human approval required) |
+| Follow-up automation | **Built** (current multi-candidate app only): candidate+job-scoped `follow_up_date` (`candidate_job_matches`, never the legacy single-candidate `jobs` table), set/read via `PATCH/GET /api/candidates/{id}/jobs/{job_id}/follow-up` + `GET /api/candidates/{id}/follow-ups`, surfaced on the dashboard and via the `JobOS Follow-Up Reminder` n8n workflow |
 | Google Sheets integration | Missing |
-| n8n workflows | Missing |
+| n8n workflows | **Built** (current multi-candidate app only): two real, importable workflows under `n8n/workflows/` — `jobos_scheduled_search_runner.json` (external clock for the real, persisted search-scheduling feature, calling `POST /api/scheduler/run-due`) and `jobos_follow_up_reminder.json` (read-only, logs due/overdue follow-ups). Neither submits an application; neither is active by default on import. See `docs/ARCHITECTURE.md`'s "Scheduling" section. |
 | macOS launchd scheduling | Ready-to-install template exists (`launchd/com.sarojjobos.dailysearch.plist`, Phase 7.2) — explicitly **not installed/loaded** (verified via `launchctl list`); installing it is a deliberate, separate, human-approved step |
 | claude-job-skill integration | Not evaluated yet |
 | Excel tracker integration | Not integrated |

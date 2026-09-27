@@ -131,7 +131,12 @@ try:
     # exactly what a process-killed-mid-run leaves behind. ---
     conn = db_mod.get_conn()
     run_2 = "orphaned-run-2-simulated"
-    now = "2026-09-27T00:00:00.000000+00:00"
+    # A fixed literal timestamp here would silently rely on wall-clock
+    # time staying "earlier" than it forever -- computed relative to
+    # the real current time instead, so this is never flaky no matter
+    # what day/time this test actually runs.
+    import datetime
+    now = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=1)).isoformat()
     conn.execute(
         """
         INSERT INTO search_runs (search_run_id, candidate_id, status, source, query, started_at, created_at, updated_at)

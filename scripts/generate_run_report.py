@@ -238,6 +238,10 @@ class ReportRow:
     # search/run to attribute every row to. Never invented.
     search_id: str = ""
     search_run_id: str = ""
+    # Phase 6 audit fix: candidate_job_matches.follow_up_date
+    # (migrate_v15_follow_up_date.py) -- correctly candidate+job
+    # scoped, never the shared global `jobs` table. None when unset.
+    follow_up_date: object = None
     eligible: bool = False
     report_status: str = ""
     previously_seen: object = None  # True/False/None (None = not applicable -- no candidate_job_matches row exists, e.g. non-qualifying jobs)
@@ -301,11 +305,27 @@ def load_candidate_job_matches(conn, candidate_id):
     unlike jobs.created_at (global, not candidate-scoped).
     """
     conn.row_factory = sqlite3.Row
-    rows = conn.execute(
-        "SELECT job_id, created_at, updated_at, candidate_status, resume_variant FROM candidate_job_matches WHERE candidate_id = ?",
-        (candidate_id,),
-    ).fetchall()
-    return {row["job_id"]: dict(row) for row in rows}
+    try:
+        rows = conn.execute(
+            "SELECT job_id, created_at, updated_at, candidate_status, resume_variant, follow_up_date FROM candidate_job_matches WHERE candidate_id = ?",
+            (candidate_id,),
+        ).fetchall()
+    except sqlite3.OperationalError as error:
+        if "no such column: follow_up_date" not in str(error):
+            raise
+        # Defensive fallback for a DB predating migrate_v15_follow_up_
+        # date.py (same posture as every other additive-migration
+        # fallback in this project).
+        rows = conn.execute(
+            "SELECT job_id, created_at, updated_at, candidate_status, resume_variant FROM candidate_job_matches WHERE candidate_id = ?",
+            (candidate_id,),
+        ).fetchall()
+    result = {}
+    for row in rows:
+        d = dict(row)
+        d.setdefault("follow_up_date", None)
+        result[row["job_id"]] = d
+    return result
 
 
 def _identity_key(job):
@@ -535,11 +555,13 @@ def build_report_rows(jobs, candidate_profile, since=None, candidate_job_matches
         # and stays permanently empty in practice (see
         # migrate_v7_candidate_resume_variant.py).
         resume_variant = (match_row or {}).get("resume_variant") or str(job.get("resume_variant") or "")
+        follow_up_date = (match_row or {}).get("follow_up_date")
 
         row = ReportRow(
             ranking=ranking,
             status=status,
             resume_variant=resume_variant,
+            follow_up_date=follow_up_date,
             application_url=str(job.get("application_url") or ""),
             first_discovered=created_at,
             last_seen=last_seen,
@@ -728,6 +750,7 @@ _JOB_SHEET_COLUMNS = [
     # search_run_id params -- same appended-at-the-end convention.
     ("Search ID", lambda r: r.search_id),
     ("Search Run ID", lambda r: r.search_run_id),
+    ("Follow-up Date", lambda r: r.follow_up_date or ""),
 ]
 
 _URL_COLUMNS = {"Job URL", "Application URL"}

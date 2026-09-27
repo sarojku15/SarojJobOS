@@ -40,6 +40,31 @@
   </div>
 
   <div class="card">
+    <h2>Scheduling</h2>
+    <p class="hint">Scheduled searches are executed by the configured JobOS scheduler/automation runner (an n8n workflow or the <code>run_scheduled_searches.py</code> CLI, run periodically) -- enabling a schedule here only persists the setting, it does not itself start a background process in this browser or on this server. See docs/USER_GUIDE.md for how to activate the runner.</p>
+    <div id="schedule-msg"></div>
+    <div class="row">
+      <div>
+        <label class="inline"><input type="checkbox" id="schedule-enabled" /> Enabled</label>
+      </div>
+      <div>
+        <label>Frequency</label>
+        <select id="schedule-frequency">
+          <option value="hourly">Hourly</option>
+          <option value="daily" selected>Daily</option>
+          <option value="weekly">Weekly</option>
+        </select>
+      </div>
+      <div>
+        <label>Timezone</label>
+        <input id="schedule-timezone" type="text" value="UTC" />
+      </div>
+    </div>
+    <button id="schedule-save-btn" type="button">Save Schedule</button>
+    <div id="schedule-status" class="hint" style="margin-top:10px"></div>
+  </div>
+
+  <div class="card">
     <h2>Manage</h2>
     <button class="danger" id="archive-btn">Archive this search</button>
   </div>
@@ -92,10 +117,53 @@ async function load() {
     `;
 
     renderPinnedProfileCell(search);
+    await loadSchedule();
   } catch (err) {
     showError(msg, err);
   }
 }
+
+async function loadSchedule() {
+  const statusEl = document.getElementById("schedule-status");
+  try {
+    const sched = await api(`/api/searches/${searchId}/schedule?candidate_id=${candidateId}`);
+    document.getElementById("schedule-enabled").checked = !!sched.enabled;
+    if (sched.frequency) document.getElementById("schedule-frequency").value = sched.frequency;
+    document.getElementById("schedule-timezone").value = sched.timezone || "UTC";
+    const parts = [];
+    if (sched.enabled) {
+      parts.push(`${badgeHtml("SCHEDULED", "", "Scheduled")} next run: ${sched.next_run_at ? new Date(sched.next_run_at).toLocaleString() : "-"}`);
+    } else {
+      parts.push("Not scheduled.");
+    }
+    if (sched.last_run_at) {
+      parts.push(`last run: ${new Date(sched.last_run_at).toLocaleString()} (${badgeHtml(sched.last_run_status || "-")})`);
+    }
+    if (sched.last_run_error) {
+      parts.push(`<span style="color:#a02020">last error: ${escapeHtml(sched.last_run_error)}</span>`);
+    }
+    statusEl.innerHTML = parts.join(" &middot; ");
+  } catch (err) {
+    statusEl.textContent = "Could not load schedule.";
+  }
+}
+
+document.getElementById("schedule-save-btn").addEventListener("click", async () => {
+  const msg = document.getElementById("schedule-msg");
+  const enabled = document.getElementById("schedule-enabled").checked;
+  const frequency = document.getElementById("schedule-frequency").value;
+  const timezone = document.getElementById("schedule-timezone").value.trim() || "UTC";
+  try {
+    await api(`/api/searches/${searchId}/schedule?candidate_id=${candidateId}`, {
+      method: "PUT",
+      body: { enabled, frequency: enabled ? frequency : null, timezone },
+    });
+    showSuccess(msg, enabled ? "Schedule saved." : "Schedule disabled.");
+    await loadSchedule();
+  } catch (err) {
+    showError(msg, err);
+  }
+});
 
 async function renderPinnedProfileCell(search) {
   const cell = document.getElementById("pin-cell");

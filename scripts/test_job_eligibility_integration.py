@@ -302,6 +302,15 @@ def test_b5_no_other_production_caller_bypasses_the_gate():
         # for jobs already found eligible, exactly mirroring
         # search_worker.py's own pattern above.
         "job_ranking.py",
+        # resume_tailoring.py / interview_prep.py (Phase 1/3, added
+        # 2026-09-27): manually reviewed -- both call
+        # assess_job_eligibility() first and raise (never tailor a
+        # resume / generate interview prep) if the job isn't eligible
+        # for this candidate, passing the SAME experience_assessment
+        # into score_job() rather than a second computation, exactly
+        # mirroring search_worker.py's own pattern above.
+        "resume_tailoring.py",
+        "interview_prep.py",
     }
 
     # Matches an actual invocation with a `job` argument (score_job(job

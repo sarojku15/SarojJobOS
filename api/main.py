@@ -11,6 +11,7 @@ data/applications/jobos_dev.db (see api/db.py) -- never production.
 
 import json
 import shutil
+import sqlite3
 import sys
 import uuid
 from pathlib import Path
@@ -59,17 +60,28 @@ import application_lifecycle
 import resume_store
 import resume_variant_selector
 import search_provider_settings_api as sp_settings_api
+import resume_tailoring
+import company_research
+import interview_prep
+import scheduler
 from schemas import (
     CandidateCreate,
     CandidatePatch,
+    CompanyResearchIn,
+    FollowUpDateIn,
+    InterviewAnswerIn,
+    InterviewOutcomeIn,
+    InterviewPrepIn,
     JobStatusUpdate,
     ManualJobImportIn,
     ProfileUpdate,
     SavedSearchCreate,
     SavedSearchUpdate,
+    ScheduleSetIn,
     SearchProviderKeyIn,
     SearchProviderOrderIn,
     SearchProviderResetUsageIn,
+    TailorResumeIn,
 )
 
 from candidate_profile import serialize_candidate_profile, validate_candidate_profile
@@ -705,6 +717,35 @@ def update_job_status(candidate_id: str, job_id: str, update: JobStatusUpdate):
         conn.close()
 
 
+@app.patch("/api/candidates/{candidate_id}/jobs/{job_id}/follow-up")
+def update_job_follow_up_date(candidate_id: str, job_id: str, payload: FollowUpDateIn):
+    """
+    Phase 6 audit fix: follow_up_date was a schema field
+    (config/application_schema.json's legacy job-record shape) with no
+    API route anywhere reading or writing it. Correctly scoped to
+    candidate_job_matches (candidate+job, migrate_v15_follow_up_date.py)
+    -- never the shared, global `jobs` table, which would leak one
+    candidate's own follow-up reminder onto every other candidate who
+    also matched the same job.
+    """
+    conn = db_mod.get_conn()
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM candidate_job_matches WHERE candidate_id = ? AND job_id = ?",
+            (candidate_id, job_id),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(404, f"No match record for candidate {candidate_id!r} and job {job_id!r}.")
+        conn.execute(
+            "UPDATE candidate_job_matches SET follow_up_date = ? WHERE candidate_id = ? AND job_id = ?",
+            (payload.follow_up_date, candidate_id, job_id),
+        )
+        conn.commit()
+        return {"candidate_id": candidate_id, "job_id": job_id, "follow_up_date": payload.follow_up_date}
+    finally:
+        conn.close()
+
+
 @app.get("/api/candidates/{candidate_id}/jobs/{job_id}/status-history")
 def get_job_status_history(candidate_id: str, job_id: str):
     """Ordered transition history for THIS candidate's own status on
@@ -844,13 +885,310 @@ def dashboard(candidate_id: str):
 
         source_caps = search_store.source_capability_summary()
 
+        # Additive, isolated COUNT queries only -- deliberately NOT
+        # touching results_store.get_dashboard_summary() (the
+        # non-negotiable, already-validated 185/46-job scoring/
+        # eligibility aggregate) to surface these two new-feature
+        # counts on the dashboard.
+        tailored_resume_count = conn.execute(
+            "SELECT COUNT(DISTINCT job_id) FROM tailored_resumes WHERE candidate_id = ? AND status = 'READY'",
+            (candidate_id,),
+        ).fetchone()[0]
+        interview_prep_count = conn.execute(
+            "SELECT COUNT(*) FROM interview_preparations WHERE candidate_id = ?",
+            (candidate_id,),
+        ).fetchone()[0]
+
         return {
             "candidate_id": candidate_id,
             "profile_status": profile_status,
             "searches": searches,
             "summary": summary,
             "sources": source_caps,
+            "tailored_resume_count": tailored_resume_count,
+            "interview_prep_count": interview_prep_count,
         }
+    finally:
+        conn.close()
+
+
+@app.get("/api/candidates/{candidate_id}/follow-ups")
+def list_follow_ups(candidate_id: str):
+    """
+    Candidate-scoped list of every job this candidate has set a
+    follow_up_date on (candidate_job_matches, migrate_v15_follow_up_
+    date.py -- never the global jobs table), soonest first. Serves
+    two callers: the dashboard's "Follow-ups" widget, and the n8n
+    Follow-Up Reminder workflow (see n8n/workflows/) -- one query, no
+    duplicated logic. A candidate must supply their OWN candidate_id
+    (same DB-query-scoping convention as every other route in this
+    API, which has no separate auth layer -- see web/app.js's own
+    docstring on this).
+    """
+    conn = db_mod.get_conn()
+    try:
+        try:
+            profile_store.get_candidate(conn, candidate_id)
+        except profile_store.ProfileStoreError as error:
+            raise HTTPException(404, str(error))
+        rows = conn.execute(
+            """
+            SELECT cjm.job_id, cjm.follow_up_date, cjm.candidate_status,
+                   j.title, j.company, j.job_url, j.application_url
+            FROM candidate_job_matches cjm
+            JOIN jobs j ON j.job_id = cjm.job_id
+            WHERE cjm.candidate_id = ? AND cjm.follow_up_date IS NOT NULL
+            ORDER BY cjm.follow_up_date ASC
+            """,
+            (candidate_id,),
+        ).fetchall()
+        return {"follow_ups": [dict(r) for r in rows]}
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------- resume tailoring
+
+@app.post("/api/candidates/{candidate_id}/jobs/{job_id}/tailor-resume")
+def tailor_resume(candidate_id: str, job_id: str, payload: TailorResumeIn):
+    conn = db_mod.get_conn()
+    try:
+        try:
+            profile = profile_store.load_active_profile(conn, candidate_id)
+        except profile_store.ProfileStoreError as error:
+            raise HTTPException(404, str(error))
+        if profile.metadata.profile_status.value != "CONFIRMED":
+            raise HTTPException(409, "Profile must be CONFIRMED before tailoring a resume.")
+        try:
+            result = resume_tailoring.create_tailored_resume(
+                conn, candidate_id, payload.base_resume_id, job_id, profile
+            )
+        except resume_tailoring.ResumeTailoringError as error:
+            raise HTTPException(404, str(error))
+        return result
+    finally:
+        conn.close()
+
+
+@app.get("/api/candidates/{candidate_id}/jobs/{job_id}/tailored-resumes")
+def list_tailored_resumes_for_job(candidate_id: str, job_id: str):
+    conn = db_mod.get_conn()
+    try:
+        return {"tailored_resumes": resume_tailoring.list_tailored_resumes(conn, candidate_id, job_id=job_id)}
+    finally:
+        conn.close()
+
+
+@app.get("/api/candidates/{candidate_id}/tailored-resumes/{tailored_resume_id}")
+def get_tailored_resume(candidate_id: str, tailored_resume_id: str):
+    conn = db_mod.get_conn()
+    try:
+        try:
+            return resume_tailoring.get_tailored_resume(conn, candidate_id, tailored_resume_id)
+        except resume_tailoring.ResumeTailoringError as error:
+            raise HTTPException(404, str(error))
+    finally:
+        conn.close()
+
+
+@app.get("/api/candidates/{candidate_id}/tailored-resumes/{tailored_resume_id}/download")
+def download_tailored_resume(candidate_id: str, tailored_resume_id: str):
+    conn = db_mod.get_conn()
+    try:
+        try:
+            record = resume_tailoring.get_tailored_resume(conn, candidate_id, tailored_resume_id)
+        except resume_tailoring.ResumeTailoringError as error:
+            raise HTTPException(404, str(error))
+    finally:
+        conn.close()
+    text = resume_tailoring.render_plain_text(record)
+    return _plain_text_response(text, f"{tailored_resume_id}.txt")
+
+
+def _plain_text_response(text, filename):
+    from fastapi import Response
+    return Response(content=text, media_type="text/plain", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+# --------------------------------------------------------- company research
+
+@app.post("/api/candidates/{candidate_id}/company-research")
+def run_company_research(candidate_id: str, payload: CompanyResearchIn):
+    conn = db_mod.get_conn()
+    try:
+        try:
+            profile_store.get_candidate(conn, candidate_id)
+        except profile_store.ProfileStoreError as error:
+            raise HTTPException(404, str(error))
+        if payload.job_id is not None:
+            # job_id is optional context (jobs is a global table, so no
+            # per-candidate ownership concept applies -- see
+            # resume_tailoring.py's own comment on this same point),
+            # but a caller-supplied id that doesn't exist at all should
+            # never be silently persisted as if it were valid.
+            job_row = conn.execute("SELECT 1 FROM jobs WHERE job_id = ?", (payload.job_id,)).fetchone()
+            if job_row is None:
+                raise HTTPException(404, f"Unknown job: {payload.job_id!r}")
+        return company_research.research_company(conn, candidate_id, payload.company_name, job_id=payload.job_id)
+    finally:
+        conn.close()
+
+
+@app.get("/api/candidates/{candidate_id}/company-research")
+def list_company_research_route(candidate_id: str, company_name: str | None = None):
+    conn = db_mod.get_conn()
+    try:
+        return {"company_research": company_research.list_company_research(conn, candidate_id, company_name=company_name)}
+    finally:
+        conn.close()
+
+
+@app.get("/api/candidates/{candidate_id}/company-research/{company_research_id}")
+def get_company_research_route(candidate_id: str, company_research_id: str):
+    conn = db_mod.get_conn()
+    try:
+        try:
+            return company_research.get_company_research(conn, candidate_id, company_research_id)
+        except ValueError as error:
+            raise HTTPException(404, str(error))
+    finally:
+        conn.close()
+
+
+# ------------------------------------------------------- interview prep
+
+@app.post("/api/candidates/{candidate_id}/interview-prep")
+def create_interview_prep_route(candidate_id: str, payload: InterviewPrepIn):
+    conn = db_mod.get_conn()
+    try:
+        try:
+            profile = profile_store.load_active_profile(conn, candidate_id)
+        except profile_store.ProfileStoreError as error:
+            raise HTTPException(404, str(error))
+        if profile.metadata.profile_status.value != "CONFIRMED":
+            raise HTTPException(409, "Profile must be CONFIRMED before generating interview preparation.")
+        try:
+            return interview_prep.create_interview_prep(
+                conn, candidate_id, payload.job_id, profile,
+                resume_id=payload.resume_id, company_research_id=payload.company_research_id,
+            )
+        except ValueError as error:
+            raise HTTPException(404, str(error))
+    finally:
+        conn.close()
+
+
+@app.get("/api/candidates/{candidate_id}/jobs/{job_id}/interview-prep")
+def get_interview_prep_for_job(candidate_id: str, job_id: str):
+    conn = db_mod.get_conn()
+    try:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT interview_prep_id FROM interview_preparations WHERE candidate_id = ? AND job_id = ?",
+            (candidate_id, job_id),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(404, f"No interview preparation exists yet for job {job_id!r}.")
+        return interview_prep.get_interview_prep(conn, candidate_id, row["interview_prep_id"])
+    finally:
+        conn.close()
+
+
+@app.get("/api/candidates/{candidate_id}/interview-prep/{interview_prep_id}")
+def get_interview_prep_route(candidate_id: str, interview_prep_id: str):
+    conn = db_mod.get_conn()
+    try:
+        try:
+            return interview_prep.get_interview_prep(conn, candidate_id, interview_prep_id)
+        except ValueError as error:
+            raise HTTPException(404, str(error))
+    finally:
+        conn.close()
+
+
+@app.patch("/api/candidates/{candidate_id}/interview-prep-questions/{question_id}")
+def update_interview_answer(candidate_id: str, question_id: str, payload: InterviewAnswerIn):
+    conn = db_mod.get_conn()
+    try:
+        try:
+            interview_prep.update_question_answer(
+                conn, candidate_id, question_id,
+                candidate_answer=payload.candidate_answer, confidence=payload.confidence, notes=payload.notes,
+            )
+        except ValueError as error:
+            raise HTTPException(404, str(error))
+        return {"status": "OK"}
+    finally:
+        conn.close()
+
+
+@app.patch("/api/candidates/{candidate_id}/interview-prep/{interview_prep_id}/outcome")
+def update_interview_outcome(candidate_id: str, interview_prep_id: str, payload: InterviewOutcomeIn):
+    conn = db_mod.get_conn()
+    try:
+        try:
+            interview_prep.update_outcome(
+                conn, candidate_id, interview_prep_id,
+                outcome_status=payload.outcome_status, outcome_notes=payload.outcome_notes,
+            )
+        except ValueError as error:
+            raise HTTPException(404, str(error))
+        return {"status": "OK"}
+    finally:
+        conn.close()
+
+
+# --------------------------------------------------------------- scheduling
+
+@app.put("/api/searches/{search_id}/schedule")
+def set_search_schedule(search_id: str, candidate_id: str, payload: ScheduleSetIn):
+    conn = db_mod.get_conn()
+    try:
+        try:
+            search_store.get_saved_search_for_candidate(conn, search_id, candidate_id)
+        except search_store.SearchStoreError as error:
+            raise HTTPException(404, str(error))
+        try:
+            return scheduler.set_schedule(
+                conn, candidate_id, search_id,
+                enabled=payload.enabled, frequency=payload.frequency, timezone_name=payload.timezone,
+            )
+        except scheduler.SchedulerError as error:
+            raise HTTPException(422, str(error))
+    finally:
+        conn.close()
+
+
+@app.get("/api/searches/{search_id}/schedule")
+def get_search_schedule(search_id: str, candidate_id: str):
+    conn = db_mod.get_conn()
+    try:
+        try:
+            search_store.get_saved_search_for_candidate(conn, search_id, candidate_id)
+        except search_store.SearchStoreError as error:
+            raise HTTPException(404, str(error))
+        row = scheduler.get_schedule(conn, search_id)
+        return row or {"saved_search_id": search_id, "enabled": False, "frequency": None, "timezone": "UTC",
+                       "next_run_at": None, "last_run_at": None, "last_run_status": None, "last_run_error": None}
+    finally:
+        conn.close()
+
+
+@app.post("/api/scheduler/run-due")
+def run_due_schedules_route():
+    """
+    Maintenance/automation entry point: processes every currently due,
+    enabled schedule ONCE (scheduler.run_due_schedules() -- exactly the
+    same bounded primitive scripts/run_scheduled_searches.py's CLI
+    wrapper calls), across every candidate. Intended to be invoked by
+    an external clock (n8n's own Schedule Trigger node, cron, or
+    launchd) -- this route itself is not a scheduler, it does not loop
+    or persist any in-memory timer.
+    """
+    conn = db_mod.get_conn()
+    try:
+        outcomes = scheduler.run_due_schedules(conn, db_mod.DEV_DB)
+        return {"processed": len(outcomes), "outcomes": outcomes}
     finally:
         conn.close()
 
@@ -911,6 +1249,16 @@ def serve_search_detail_page(search_id: str):
 @app.get("/dashboard")
 def serve_dashboard_page():
     return FileResponse(WEB_DIR / "dashboard.html")
+
+
+@app.get("/jobs/{job_id}")
+def serve_job_workspace_page(job_id: str):
+    # Phase 5 UI: resume tailoring / company research / interview prep /
+    # follow-up date, all for one job. Loads its own data client-side
+    # from ?search_id=... (see job_workspace.html's own load()) --
+    # this route itself just serves the static shell, matching every
+    # other detail page in this app (search_detail.html, etc).
+    return FileResponse(WEB_DIR / "job_workspace.html")
 
 
 app.mount("/static", StaticFiles(directory=str(WEB_DIR)), name="static")

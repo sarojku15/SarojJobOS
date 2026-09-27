@@ -384,6 +384,11 @@ specific job:
    "leveraged", "results-driven", "dynamic".
 6. Keep cover letters under 300 words.
 
-This capability is not yet implemented in the Python pipeline. Until it is,
-you may assist with it manually in-session, strictly following rules 1–4
-above.
+This capability is not yet implemented in the Python pipeline **behind
+this legacy `config/profile.json` command**. Until it is, you may
+assist with it manually in-session, strictly following rules 1–4
+above. (The separate, current multi-candidate app DOES have a real,
+deterministic resume-tailoring pipeline — `scripts/resume_tailoring.py`,
+via `resume-manager`'s SKILL.md — but it operates on that system's own
+DB-backed candidate profile, not `config/profile.json`, and is not
+wired into this command.)
