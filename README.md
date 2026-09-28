@@ -221,8 +221,12 @@ A few subsystems worth knowing about up front, each documented in full:
   external trigger actually running to fire — either the
   `JobOS Scheduled Search Runner` n8n workflow (`n8n/workflows/`) or
   `scripts/run_scheduled_searches.py` via cron/launchd. Neither is
-  active by default; pick one, never both at once. A `launchd`
-  template for the older, legacy single-candidate CLI pipeline also
+  active by default; pick one, never both at once. Real automation
+  should point at the separate production/automation API
+  (`scripts/run_production_api.py`, port 8421, the real
+  `jobos.db`) — never the interactive dev server (port 8420,
+  `jobos_dev.db`) — see [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+  A `launchd` template for the older, legacy single-candidate CLI pipeline also
   still exists, separately, and is likewise not installed by default.
 
 ## Documentation

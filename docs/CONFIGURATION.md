@@ -55,18 +55,58 @@ sees real keys with zero per-script setup.
 ## Database
 
 - **Production**: `data/applications/jobos.db` — treat as sacred; never
-  edit or migrate it directly. It's excluded from git (`data/applications/`
-  in `.gitignore`).
+  edit its data directly, and never run `scripts/init_dev_db.py`
+  against it (that script explicitly refuses to). Schema-only changes
+  are possible through exactly one guarded, backed-up, explicit path:
+  `scripts/migrate_production_schema.py` (see "Two API instances"
+  below) — never run automatically, never silent. It's excluded from
+  git (`data/applications/` in `.gitignore`).
 - **Dev**: `data/applications/jobos_dev.db` — created automatically by
   the API on first request; safe to delete and let it regenerate.
   Initialized/migrated by `scripts/init_dev_db.py`.
+- **Backups**: `data/backups/` (gitignored) — every production schema
+  migration writes a timestamped `jobos_before_automation_migration_<ts>.db`
+  copy here first, verified with `PRAGMA integrity_check`, before
+  touching the real file.
 
 ## Ports
 
 The app itself takes `--port` as a plain `uvicorn` flag (no hardcoded
 port in code); this project's own docs/scripts consistently use
-**8420** by convention. `docker-compose.yml` runs n8n on **5678**
-(`N8N_PORT`).
+**8420** for the dev API and **8421** for the production/automation
+API (see below) by convention. `docker-compose.yml` runs n8n on
+**5678** (`N8N_PORT`).
+
+## Two API instances: dev vs. production/automation
+
+`api/db.py` picks its database file **once, at process import time**,
+from the `JOBOS_DB_PATH` environment variable — unset (the default for
+every normal `uvicorn api.main:app --reload --port 8420` launch) means
+`jobos_dev.db`, exactly as always. No client request, header, or query
+parameter can ever change this for an already-running process.
+
+A second, separate process can be launched against the real production
+database for genuine automation (n8n, cron) use:
+
+```bash
+.venv/bin/python3 scripts/run_production_api.py   # 127.0.0.1:8421 -> jobos.db
+```
+
+This is the **only** place `JOBOS_DB_PATH` is ever set, and it's a
+separate process from the dev server — running both simultaneously is
+expected and safe (they open the same SQLite engine against two
+completely different files). Before this is useful, production's
+schema must already include the automation tables
+(`saved_searches`, `search_schedules`, `tailored_resumes`,
+`company_research`, `interview_preparations`, etc.) — run
+`scripts/migrate_production_schema.py --confirm` once, first (it backs
+up, verifies integrity before and after, and confirms no existing row
+was touched, before reporting success).
+
+From inside the n8n Docker container, reach the production API at
+`http://host.docker.internal:8421` — **never** `localhost`/`127.0.0.1`,
+which resolve to the container itself, not the Mac host running the
+API.
 
 ## Scheduling & automation
 

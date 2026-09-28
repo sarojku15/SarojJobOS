@@ -94,6 +94,15 @@ Claude Skills, provider configuration) and reports `READY` or exactly
 what's missing — see [TROUBLESHOOTING.md](TROUBLESHOOTING.md) if
 anything fails.
 
+## Setting up real automation (n8n/cron)
+
+The steps above give you the interactive dev server (port 8420,
+`jobos_dev.db`) — fine for trying JobOS out, but real recurring
+automation (n8n, cron) should never point at it. See
+[CONFIGURATION.md](CONFIGURATION.md)'s "Two API instances" section for
+running the separate production/automation API on port 8421 against
+your real `jobos.db`, and migrating its schema once beforehand.
+
 ## Using it with Claude
 
 Once the app is running, just talk to Claude naturally — "find AWS

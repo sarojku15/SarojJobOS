@@ -85,7 +85,12 @@ jobs in Bangalore," "run my current searches," "why did this job score
    `scripts/run_scheduled_searches.py` CLI run periodically via
    cron/launchd. If the user hasn't set up either, tell them plainly
    that the schedule is saved but nothing will actually trigger it yet
-   — point them at `docs/USER_GUIDE.md`'s scheduling section.
+   — point them at `docs/USER_GUIDE.md`'s scheduling section. Real
+   automation should point at the separate production/automation API
+   (`scripts/run_production_api.py`, port 8421, the real `jobos.db`),
+   never the interactive dev server (port 8420, `jobos_dev.db`) this
+   skill otherwise talks to — see `docs/CONFIGURATION.md`'s "Two API
+   instances" section.
 4. To check status: `GET /api/searches/{search_id}/schedule?candidate_id={id}`
    — report the real `next_run_at`/`last_run_at`/`last_run_status`,
    never a guess about when it "should" have run.

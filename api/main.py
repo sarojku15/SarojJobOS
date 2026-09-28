@@ -158,7 +158,7 @@ def _profile_response(profile, validation=None):
 
 @app.get("/api/health")
 def health():
-    return {"status": "OK", "db": "jobos_dev.db"}
+    return {"status": "OK", "db": db_mod.DEV_DB.name}
 
 
 # ---------------------------------------------------------------- candidates

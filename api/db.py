@@ -1,20 +1,34 @@
 """
 Phase 9 API database access.
 
-Always opens data/applications/jobos_dev.db -- the Phase 9 local
-development database created by scripts/init_dev_db.py -- and NEVER
-the production database (data/applications/jobos.db). There is no
-environment variable, header, or request parameter anywhere in this
-API that can redirect it elsewhere; this is deliberate, so the API
-surface can never be pointed at production data by a client.
+By default -- and for every normal developer launch
+(`uvicorn api.main:app --reload --port 8420`) -- always opens
+data/applications/jobos_dev.db, exactly as before. There is still no
+header or request parameter anywhere in this API that can redirect a
+CLIENT to a different database; that surface is unchanged.
+
+The one narrow, explicit exception: an operator (never a client
+request) can launch a SEPARATE process pointed at the production
+database by setting the JOBOS_DB_PATH environment variable before this
+module is first imported -- see scripts/run_production_api.py, the
+only place this repository ever does that. Reading it once, here, at
+import time (not per-request) means a stray environment variable set
+in some unrelated shell can never retroactively redirect an
+already-running dev server; the value is fixed for the lifetime of
+whichever process imported this module.
 """
 
+import os
 import sqlite3
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DEV_DB = ROOT / "data" / "applications" / "jobos_dev.db"
+DEFAULT_DEV_DB = ROOT / "data" / "applications" / "jobos_dev.db"
+PRODUCTION_DB = ROOT / "data" / "applications" / "jobos.db"
+
+_db_path_override = os.environ.get("JOBOS_DB_PATH")
+DEV_DB = Path(_db_path_override).resolve() if _db_path_override else DEFAULT_DEV_DB
 
 SCRIPTS_DIR = ROOT / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
@@ -46,9 +60,19 @@ def ensure_dev_db():
     only actually done once per process (not per-request) via this
     module-level flag, since PRAGMA table_info introspection on every
     request would be wasteful.
+
+    Never runs against the production DB path: init_dev_db.init_dev_db()
+    itself refuses that (a deliberate guard), and production schema is
+    only ever brought up to date explicitly, out-of-band, via
+    scripts/migrate_production_schema.py -- never silently auto-run by
+    a request to this API, unlike the dev DB's own convenience
+    auto-migration.
     """
     global _migrations_applied
     if _migrations_applied:
+        return
+    if DEV_DB.resolve() == PRODUCTION_DB.resolve():
+        _migrations_applied = True
         return
     import init_dev_db
 

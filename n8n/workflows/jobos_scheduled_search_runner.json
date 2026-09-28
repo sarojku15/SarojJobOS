@@ -14,7 +14,7 @@
       "parameters": {
         "width": 480,
         "height": 300,
-        "content": "## JobOS Scheduled Search Runner\n\nThis workflow is ONLY the external clock. It calls JobOS's own\n`POST /api/scheduler/run-due`, which itself decides which saved\nsearches are due (scripts/scheduler.py) and triggers them through the\nEXISTING search_store.trigger_run() -> search worker pipeline. This\nworkflow never implements scheduling rules, never touches SQLite\ndirectly, and never picks which searches run.\n\n**Before activating:**\n1. Open the \"JobOS Config\" node and set `jobos_base_url` to your\n   running JobOS API (default assumes `http://localhost:8420`, the\n   dev server's default port -- see docs/GETTING_STARTED.md).\n2. Pick an interval on the Schedule Trigger (default: every 30\n   minutes). This only needs to be more frequent than your fastest\n   configured schedule frequency (hourly/daily/weekly) -- calling\n   run-due when nothing is due is a harmless no-op.\n3. Do not also run scripts/run_scheduled_searches.py via cron/launchd\n   at the same time -- pick ONE external trigger (see\n   docs/ARCHITECTURE.md's \"Scheduling\" section).\n\nNo application is ever submitted by this workflow -- it only starts\ndiscovery/scoring runs, exactly like clicking \"Run now\" in the UI."
+        "content": "## JobOS Scheduled Search Runner\n\nThis workflow is ONLY the external clock. It calls JobOS's own\n`POST /api/scheduler/run-due`, which itself decides which saved\nsearches are due (scripts/scheduler.py) and triggers them through the\nEXISTING search_store.trigger_run() -> search worker pipeline. This\nworkflow never implements scheduling rules, never touches SQLite\ndirectly, and never picks which searches run.\n\n**Two separate API instances exist -- point this workflow at the\nright one:**\n- Dev API (`127.0.0.1:8420`, jobos_dev.db) -- for interactive\n  development only, NOT real automation data.\n- Production/automation API (`127.0.0.1:8421`, jobos.db) -- started\n  with `scripts/run_production_api.py`; this is what real recurring\n  automation should point at.\n\n**Before activating:**\n1. Open the \"JobOS Config\" node and set `jobos_base_url` to\n   `http://host.docker.internal:8421` (default, since n8n runs in\n   Docker and 8421 is the production/automation API -- see\n   docs/ARCHITECTURE.md's \"Scheduling\" section). Never `localhost`\n   from inside the container -- it won't reach the Mac host.\n2. Pick an interval on the Schedule Trigger (default: every 30\n   minutes). This only needs to be more frequent than your fastest\n   configured schedule frequency (hourly/daily/weekly) -- calling\n   run-due when nothing is due is a harmless no-op.\n3. Do not also run scripts/run_scheduled_searches.py via cron/launchd\n   at the same time -- pick ONE external trigger.\n\nNo application is ever submitted by this workflow -- it only starts\ndiscovery/scoring runs, exactly like clicking \"Run now\" in the UI."
       }
     },
     {
@@ -45,7 +45,7 @@
             {
               "id": "jobos-base-url",
               "name": "jobos_base_url",
-              "value": "http://localhost:8420",
+              "value": "http://host.docker.internal:8421",
               "type": "string"
             }
           ]

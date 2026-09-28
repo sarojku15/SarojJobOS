@@ -69,6 +69,19 @@ either uses a fresh isolated temp DB or, where it must open a real DB
 path, verifies the production DB's SHA-256/size is byte-identical
 before and after.
 
+Two API processes can exist side by side: the normal dev server
+(`jobos_dev.db`, the default for every ordinary launch) and a separate,
+explicitly-launched production/automation process
+(`scripts/run_production_api.py`, `jobos.db`) used only by n8n/cron
+automation. Which one a given process uses is fixed at that process's
+own startup (an environment variable an operator sets, never something
+a client request/header can influence) — n8n never opens SQLite
+directly, it only ever calls this production API's normal, candidate-
+scoped HTTP routes, identically to the dev API. Production's schema is
+only ever changed via the one explicit, backed-up, integrity-checked
+path (`scripts/migrate_production_schema.py --confirm`) — never
+silently, never on a request.
+
 ## API access
 
 No authentication token is required to call the local API — it's

@@ -146,9 +146,18 @@ just duplicate polling against the same `run-due` endpoint):
   `n8n/workflows/jobos_scheduled_search_runner.json`, point its
   `jobos_base_url` at your running API, activate it.
 - **B. cron/launchd** (lightweight alternative): run
-  `scripts/run_scheduled_searches.py` on a timer — same underlying
-  `scheduler.run_due_schedules()` call, no daemon/loop mode in the
-  script itself.
+  `scripts/run_scheduled_searches.py --once` on a timer — same
+  underlying `scheduler.run_due_schedules()` call, no daemon/loop mode
+  in the script itself.
+
+**Real automation must point at the production API (port 8421,
+`jobos.db`), never the dev API (port 8420, `jobos_dev.db`)** — see
+[CONFIGURATION.md](CONFIGURATION.md)'s "Two API instances" section for
+how to run `scripts/run_production_api.py` and, once, migrate
+production's schema via `scripts/migrate_production_schema.py`. The
+`api/db.py` module itself never lets a client request redirect which
+database is active — only an operator launching that separate process
+can, and the default dev launch command is completely unaffected.
 
 See [CONFIGURATION.md](CONFIGURATION.md) for setup and
 [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for "a schedule never fires."

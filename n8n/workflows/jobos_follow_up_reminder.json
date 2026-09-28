@@ -14,7 +14,7 @@
       "parameters": {
         "width": 520,
         "height": 340,
-        "content": "## JobOS Follow-Up Reminder\n\nReads follow-up dates through JobOS's own candidate-scoped, read-only\n`GET /api/candidates/{candidate_id}/follow-ups` endpoint (added\nspecifically for this workflow -- see docs/ARCHITECTURE.md). This\nworkflow never opens SQLite directly and never writes anything back to\nJobOS.\n\n**Before activating:**\n1. Open the \"JobOS Config\" node and set:\n   - `jobos_base_url` (default `http://localhost:8420`)\n   - `candidate_id` -- YOUR candidate id from the JobOS UI/API (Profile\n     page, or `GET /api/candidates` response after creating one). Left\n     blank by default in this committed file on purpose -- never a\n     real id committed to the repo.\n2. Pick a daily time on the Schedule Trigger (default: 8:00 AM,\n   `GENERIC_TIMEZONE`/`TZ` from docker-compose.yml).\n3. This workflow only LOGS due/overdue follow-ups to n8n's own\n   execution log by default (visible under this workflow's\n   Executions tab). To get an actual notification, add a Slack/Email/\n   Telegram node after \"Log Due Follow-Ups\" -- none is wired in by\n   default since no such provider is guaranteed configured (see\n   docs/CONFIGURATION.md).\n\nNever submits or changes any application status -- read-only."
+        "content": "## JobOS Follow-Up Reminder\n\nReads follow-up dates through JobOS's own candidate-scoped, read-only\n`GET /api/candidates/{candidate_id}/follow-ups` endpoint (added\nspecifically for this workflow -- see docs/ARCHITECTURE.md). This\nworkflow never opens SQLite directly and never writes anything back to\nJobOS.\n\n**Two separate API instances exist -- point this workflow at the\nright one:**\n- Dev API (`127.0.0.1:8420`, jobos_dev.db) -- interactive development\n  only, not your real data.\n- Production/automation API (`127.0.0.1:8421`, jobos.db) -- started\n  with `scripts/run_production_api.py`; this is where your real\n  candidate/follow-up data actually lives.\n\n**Before activating:**\n1. Open the \"JobOS Config\" node and set:\n   - `jobos_base_url` (default `http://host.docker.internal:8421` --\n     never `localhost` from inside the n8n container, it won't reach\n     the Mac host).\n   - `candidate_id` -- YOUR real candidate id from the production API\n     (e.g. `GET http://127.0.0.1:8421/api/candidates/{id}`). Left\n     blank by default in this committed file on purpose -- never a\n     real candidate id committed to the repo.\n2. Pick a daily time on the Schedule Trigger (default: 8:00 AM,\n   `GENERIC_TIMEZONE`/`TZ` from docker-compose.yml).\n3. This workflow only LOGS due/overdue follow-ups to n8n's own\n   execution log by default (visible under this workflow's\n   Executions tab). To get an actual notification, add a Slack/Email/\n   Telegram node after \"Log Due Follow-Ups\" -- none is wired in by\n   default since no such provider is guaranteed configured (see\n   docs/CONFIGURATION.md).\n\nNever submits or changes any application status -- read-only."
       }
     },
     {
@@ -45,7 +45,7 @@
             {
               "id": "jobos-base-url",
               "name": "jobos_base_url",
-              "value": "http://localhost:8420",
+              "value": "http://host.docker.internal:8421",
               "type": "string"
             },
             {
