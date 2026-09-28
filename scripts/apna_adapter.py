@@ -26,6 +26,7 @@ production.apna.co -- no CAPTCHA/Turnstile/login-wall was observed on
 either endpoint in any live check this phase.
 """
 
+import http.client
 import json
 import time
 import urllib.error
@@ -78,6 +79,14 @@ def _http_get(url):
         with urllib.request.urlopen(request, timeout=_FETCH_TIMEOUT_SECONDS) as response:
             return response.status, response.read().decode("utf-8", errors="replace")
     except urllib.error.URLError as error:
+        raise AdapterTimeoutError("APNA", detail=f"GET {url} failed: {error}") from error
+    # A timeout/reset occurring mid-body inside response.read() raises
+    # a raw socket/http.client exception, not URLError -- confirmed
+    # live in production ("[Errno 54] Connection reset by peer" /
+    # "The read operation timed out"), each escaping uncaught and
+    # aborting discover_from_sources()'s entire batch instead of being
+    # isolated to this one query.
+    except (TimeoutError, ConnectionError, http.client.HTTPException) as error:
         raise AdapterTimeoutError("APNA", detail=f"GET {url} failed: {error}") from error
 
 

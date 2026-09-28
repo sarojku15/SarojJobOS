@@ -357,6 +357,61 @@ with patch("time.sleep", return_value=None):
 
 
 # ---------------------------------------------------------------------
+# 12b. Malformed JSON response (2026-09-28 hardening pass) --
+# json.loads(response.read()) previously escaped _http_request_with_
+# retry() as a raw JSONDecodeError (not a URLError/OSError/TimeoutError
+# subclass, so none of the existing except clauses caught it), which
+# would propagate uncaught out of the entire shared provider layer and
+# abort a whole multi-source search batch instead of being isolated to
+# one provider/query -- see the exception-boundary audit. Same
+# retry-then-raise shape already proven for NETWORK_ERROR/TIMEOUT above.
+# ---------------------------------------------------------------------
+
+
+def _urlopen_malformed_json_always(*args, **kwargs):
+    return _FakeResponse(b"<html>502 Bad Gateway</html>")
+
+
+with patch("time.sleep", return_value=None):
+    with patch("urllib.request.urlopen", side_effect=_urlopen_malformed_json_always):
+        provider = search_provider.SerperProvider(api_key="fake-key-for-this-test")
+        try:
+            provider.search("test query", num=1, recency=None)
+            check(False, "12b-A/B. SerperProvider must raise after exhausting retries on a persistently malformed (non-JSON) response, not let JSONDecodeError escape")
+        except search_provider.ProviderSearchError as error:
+            check(True, "12b-A. malformed JSON response does not escape as a raw json.JSONDecodeError -- caught and converted")
+            check(error.error_type == search_provider.ProviderErrorType.UNKNOWN, f"12b-B. converted to the existing ProviderSearchError contract (error_type=UNKNOWN), got {error.error_type}")
+        except json.JSONDecodeError:
+            check(False, "12b-A. a raw json.JSONDecodeError escaped _http_request_with_retry() uncaught")
+
+
+def _urlopen_malformed_json_then_success(*args, **kwargs):
+    if not hasattr(_urlopen_malformed_json_then_success, "calls"):
+        _urlopen_malformed_json_then_success.calls = 0
+    _urlopen_malformed_json_then_success.calls += 1
+    if _urlopen_malformed_json_then_success.calls == 1:
+        return _FakeResponse(b"not json at all")
+    return _FakeResponse(json.dumps({"organic": [{"title": "T", "link": "https://example.com/1", "snippet": "s"}]}).encode())
+
+
+with patch("time.sleep", return_value=None):
+    with patch("urllib.request.urlopen", side_effect=_urlopen_malformed_json_then_success):
+        provider = search_provider.SerperProvider(api_key="fake-key-for-this-test")
+        results = provider.search("test query", num=1, recency=None)
+        check(len(results) == 1 and _urlopen_malformed_json_then_success.calls == 2, f"12b. existing retry behavior preserved -- a malformed body on attempt 1 retries and succeeds on attempt 2 (calls={_urlopen_malformed_json_then_success.calls})")
+
+
+def _urlopen_valid_json_success(*args, **kwargs):
+    return _FakeResponse(json.dumps({"organic": [{"title": "T2", "link": "https://example.com/2", "snippet": "s2"}]}).encode())
+
+
+with patch("urllib.request.urlopen", side_effect=_urlopen_valid_json_success):
+    provider = search_provider.SerperProvider(api_key="fake-key-for-this-test")
+    results = provider.search("test query", num=1, recency=None)
+    check(len(results) == 1 and results[0]["title"] == "T2", "12b-D. a well-formed JSON response is completely unaffected by this fix -- parses and returns exactly as before")
+
+
+# ---------------------------------------------------------------------
 # 13. Missing API key handling
 # ---------------------------------------------------------------------
 

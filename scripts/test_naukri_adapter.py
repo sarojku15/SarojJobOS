@@ -341,6 +341,76 @@ def main():
             f"got {type(error).__name__}: {error}"
         )
 
+    # --- 10. real NaukriFetcher subprocess exception handling
+    # (2026-09-28 hardening pass) -- subprocess.run() itself (not the
+    # bridge script) can fail before ever producing a CompletedProcess.
+    # Only subprocess.TimeoutExpired was previously caught; FileNotFound/
+    # OSError/UnicodeDecodeError escaped uncaught. Uses the REAL
+    # NaukriFetcher (not FakeFetcher) with subprocess.run patched.
+    import subprocess as _subprocess
+    from unittest.mock import patch as _patch
+    from naukri_fetcher import NaukriFetcher
+
+    class _FakeCompletedProcess:
+        def __init__(self, returncode, stdout, stderr):
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = stderr
+
+    print("Case 10a: fetcher_subprocess_file_not_found")
+    with _patch.object(_subprocess, "run", side_effect=FileNotFoundError("node: command not found")):
+        try:
+            NaukriFetcher().fetch("https://www.naukri.com/")
+            failures.append("fetcher_subprocess_file_not_found: expected AdapterTimeoutError, none raised")
+        except AdapterTimeoutError:
+            print("  PASS: FileNotFoundError (missing `node`) converted to AdapterTimeoutError")
+        except Exception as error:
+            failures.append(f"fetcher_subprocess_file_not_found: expected AdapterTimeoutError, got {type(error).__name__}: {error}")
+
+    print("Case 10b: fetcher_subprocess_unicode_decode_error")
+    with _patch.object(_subprocess, "run", side_effect=UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")):
+        try:
+            NaukriFetcher().fetch("https://www.naukri.com/")
+            failures.append("fetcher_subprocess_unicode_decode_error: expected AdapterTimeoutError, none raised")
+        except AdapterTimeoutError:
+            print("  PASS: UnicodeDecodeError decoding subprocess output converted to AdapterTimeoutError")
+        except Exception as error:
+            failures.append(f"fetcher_subprocess_unicode_decode_error: expected AdapterTimeoutError, got {type(error).__name__}: {error}")
+
+    print("Case 10c: fetcher_subprocess_timeout_still_works")
+    with _patch.object(_subprocess, "run", side_effect=_subprocess.TimeoutExpired(cmd=["node"], timeout=75)):
+        try:
+            NaukriFetcher().fetch("https://www.naukri.com/")
+            failures.append("fetcher_subprocess_timeout_still_works: expected AdapterTimeoutError, none raised")
+        except AdapterTimeoutError:
+            print("  PASS: subprocess.TimeoutExpired still converts to AdapterTimeoutError exactly as before")
+        except Exception as error:
+            failures.append(f"fetcher_subprocess_timeout_still_works: expected AdapterTimeoutError, got {type(error).__name__}: {error}")
+
+    print("Case 10d: fetcher_subprocess_nonzero_returncode_still_works")
+    with _patch.object(_subprocess, "run", return_value=_FakeCompletedProcess(1, "", "bridge crashed")):
+        try:
+            NaukriFetcher().fetch("https://www.naukri.com/")
+            failures.append("fetcher_subprocess_nonzero_returncode_still_works: expected AdapterTimeoutError, none raised")
+        except AdapterTimeoutError as error:
+            if "bridge crashed" in str(error):
+                print("  PASS: non-zero return code still converts to AdapterTimeoutError with stderr detail, unaffected by this fix")
+            else:
+                failures.append(f"fetcher_subprocess_nonzero_returncode_still_works: AdapterTimeoutError raised but detail lost stderr: {error}")
+        except Exception as error:
+            failures.append(f"fetcher_subprocess_nonzero_returncode_still_works: expected AdapterTimeoutError, got {type(error).__name__}: {error}")
+
+    print("Case 10e: fetcher_subprocess_success_still_works")
+    with _patch.object(_subprocess, "run", return_value=_FakeCompletedProcess(0, "<html>ok</html>", "")):
+        try:
+            body = NaukriFetcher().fetch("https://www.naukri.com/")
+            if body == "<html>ok</html>":
+                print("  PASS: a successful subprocess run still returns stdout unaffected by this fix")
+            else:
+                failures.append(f"fetcher_subprocess_success_still_works: unexpected body {body!r}")
+        except Exception as error:
+            failures.append(f"fetcher_subprocess_success_still_works: expected success, got {type(error).__name__}: {error}")
+
     if failures:
         print("\nFAILURES:")
         for failure in failures:

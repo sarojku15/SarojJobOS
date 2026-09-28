@@ -294,7 +294,27 @@ def discover_from_sources(queries, run_report=None):
 
         source_started_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
-        health = adapter.health_check()
+        try:
+            health = adapter.health_check()
+        except Exception as error:
+            # Same defensive boundary as the per-query loop below,
+            # applied to health_check() itself -- it runs BEFORE `state`
+            # is even constructed, so an adapter bug here previously
+            # escaped uncaught just as easily, aborting the entire
+            # multi-source batch before this source's queries (or any
+            # later source) ever got a chance. No query was attempted,
+            # so this is represented as blocked (this source could not
+            # be used this run) rather than invented as a query-level
+            # failure -- the real exception is still recorded in
+            # unexpected_errors for honest diagnostics. Other sources
+            # are unaffected: the outer for-loop simply continues.
+            state = SourceRunState(source=source, started_at=source_started_at, blocked=True, blocked_reason=BlockReason.UNKNOWN_BLOCK)
+            state.unexpected_errors.append(f"health_check() raised {type(error).__name__}: {error}")
+            state.completed_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            if run_report is not None:
+                run_report.append(state)
+            continue
+
         state = SourceRunState(source=source, health=health, started_at=source_started_at)
 
         health_failed = not (health.reachable and health.block_reason == BlockReason.NONE)
@@ -341,6 +361,30 @@ def discover_from_sources(queries, run_report=None):
 
             except AdapterTimeoutError:
                 state.queries_failed += 1
+                continue
+
+            except Exception as error:
+                # Defensive boundary (2026-09-28 hardening pass): an
+                # adapter is EXPECTED to only ever raise
+                # AdapterBlockedError/AdapterTimeoutError from search()
+                # -- anything else is an adapter bug/gap (e.g. a raw
+                # network exception an adapter forgot to wrap). Before
+                # this boundary existed, such an exception propagated
+                # straight out of this function, past every other
+                # not-yet-attempted source, and aborted the ENTIRE
+                # multi-source batch -- discarding jobs already found
+                # by sources that had already completed successfully
+                # earlier in this same call. Treated exactly like an
+                # AdapterTimeoutError (isolated to this one query,
+                # counted in queries_failed so _aggregate_status()'s
+                # existing PARTIAL/FAILED logic already handles it
+                # unchanged) rather than a silent continue: the real
+                # exception is recorded in state.unexpected_errors for
+                # diagnostics (search_worker.py folds this into the
+                # run's error_message, same visibility as any other
+                # query-level failure).
+                state.queries_failed += 1
+                state.unexpected_errors.append(f"{type(error).__name__}: {error}")
                 continue
 
         state.completed_at = datetime.now(timezone.utc).isoformat(timespec="seconds")

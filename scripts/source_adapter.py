@@ -184,6 +184,15 @@ class SourceRunState:
     # source-specific detail beyond the common raw/eligible/displayed
     # counts every adapter already reports.
     extra_details: dict = field(default_factory=dict)
+    # One entry per query whose adapter.search() raised something other
+    # than AdapterBlockedError/AdapterTimeoutError (2026-09-28 hardening
+    # pass) -- an adapter bug/gap that source_registry.discover_from_
+    # sources() now isolates to that one query (counted in
+    # queries_failed, same as an AdapterTimeoutError) instead of letting
+    # it escape and abort the entire multi-source run. Empty for the
+    # overwhelming majority of runs; never invented, only ever the
+    # real str(exception) observed.
+    unexpected_errors: list = field(default_factory=list)
 
 
 @dataclass

@@ -58,6 +58,13 @@ class _FakeBehavior:
     raise_blocked = False
     raise_timeout = False
     raise_exception = False
+    # None (default) preserves existing behavior exactly: raise_exception
+    # applies to every query, unconditionally, same as before this field
+    # existed. A set of query.location values restricts raise_exception
+    # to only those queries -- used to prove per-query isolation (2026-
+    # 09-28 hardening pass) through the REAL search_worker.py ->
+    # discover_from_sources() call chain, not just an isolated unit test.
+    raise_exception_for_locations = None
     health_reachable = True
 
     @classmethod
@@ -66,6 +73,7 @@ class _FakeBehavior:
         cls.raise_blocked = False
         cls.raise_timeout = False
         cls.raise_exception = False
+        cls.raise_exception_for_locations = None
         cls.health_reachable = True
 
 
@@ -77,7 +85,10 @@ class FakeAdapter(JobSourceAdapter):
         return AdapterHealth(source=self.name, reachable=_FakeBehavior.health_reachable, block_reason=BlockReason.NONE if _FakeBehavior.health_reachable else BlockReason.UNKNOWN_BLOCK)
 
     def search(self, query):
-        if _FakeBehavior.raise_exception:
+        if _FakeBehavior.raise_exception and (
+            _FakeBehavior.raise_exception_for_locations is None
+            or query.location in _FakeBehavior.raise_exception_for_locations
+        ):
             raise RuntimeError("simulated unexpected adapter exception")
         if _FakeBehavior.raise_blocked:
             raise AdapterBlockedError("FAKE", BlockReason.UNKNOWN_BLOCK)
@@ -1079,6 +1090,64 @@ def test_36_queries_completed_correct_when_zero_raw_results():
     return failures
 
 
+def test_37_unexpected_exception_isolated_per_query_not_whole_run():
+    """
+    Full end-to-end regression test for the 2026-09-28 production
+    incident (candidate cand_f8e02887226e's real browser searches):
+    an unwrapped exception on ONE query (e.g. a network exception an
+    adapter forgot to wrap) previously escaped discover_from_sources()
+    entirely, aborting the WHOLE run -- queries_completed stuck at 0,
+    jobs_discovered/eligible/scored all 0, status FAILED, even though
+    another query in the SAME run would have succeeded.
+
+    Two queries (Bengaluru, Chennai) against the same FAKE source:
+    Chennai's query raises an unexpected RuntimeError; Bengaluru's
+    succeeds and finds one real job. Expected, through the REAL
+    search_worker.py -> discover_from_sources() call chain (not a
+    mocked/isolated unit test): both queries are reflected in
+    queries_completed (not stuck at 0), Bengaluru's job is actually
+    discovered/persisted, and the run resolves PARTIAL (not FAILED).
+    """
+    failures = []
+    _FakeBehavior.reset()
+    _FakeBehavior.jobs = [_fake_job(location="Bengaluru")]
+    _FakeBehavior.raise_exception = True
+    _FakeBehavior.raise_exception_for_locations = {"Chennai"}
+    db = _new_isolated_db()
+    _seed_confirmed_candidate(db, "cand-37", ["Senior Site Reliability Engineer"], ["Bengaluru", "Chennai"], experience_years=9)
+    result0 = _submit(db, "cand-37")
+
+    conn = sqlite3.connect(db)
+    claimed = claim_next_queue_item(conn)
+    result = process_queue_item(conn, claimed)
+    queries_completed, jobs_discovered, status, error_message = conn.execute(
+        "SELECT queries_completed, jobs_discovered, status, error_message FROM search_runs WHERE search_run_id = ?",
+        (result0.search_run_id,),
+    ).fetchone()
+    match_count = conn.execute(
+        "SELECT COUNT(*) FROM candidate_job_matches WHERE candidate_id = ?", ("cand-37",)
+    ).fetchone()[0]
+    conn.close()
+
+    if status != "PARTIAL":
+        _fail(failures, f"test 37: expected status PARTIAL (1 of 2 queries succeeded), got {status} -- the unexpected exception must not abort the whole run")
+    if queries_completed != 2:
+        _fail(failures, f"test 37: expected queries_completed=2 (both queries counted, not stuck at 0 -- the exact real-incident symptom), got {queries_completed}")
+    if jobs_discovered != 1:
+        _fail(failures, f"test 37: expected jobs_discovered=1 (Bengaluru's real result preserved despite Chennai's exception), got {jobs_discovered}")
+    if match_count != 1:
+        _fail(failures, f"test 37: expected 1 real candidate_job_match persisted end-to-end, got {match_count}")
+    if not error_message or "RuntimeError" not in error_message:
+        _fail(failures, f"test 37: expected the unexpected exception recorded in search_runs.error_message for diagnostics, got {error_message!r}")
+    if result.raw_count != 1:
+        _fail(failures, f"test 37: expected the worker's own raw_count=1, got {result.raw_count}")
+
+    if not failures:
+        print("PASS: test 37 -> an unexpected exception on one query is isolated; the other query's real job survives end-to-end, status PARTIAL, queries_completed correctly reflects both queries (regression test for the 2026-09-28 production incident)")
+
+    return failures
+
+
 def test_35_existing_production_jobs_remain_intact():
     """
     Static/architectural guarantee check: the worker never DELETEs from
@@ -1217,6 +1286,7 @@ def main():
         test_34_queue_accounting_correct,
         test_35_existing_production_jobs_remain_intact,
         test_36_queries_completed_correct_when_zero_raw_results,
+        test_37_unexpected_exception_isolated_per_query_not_whole_run,
         test_static_no_hardcoding_and_clean_imports,
         test_static_sqlite_connection_is_explicit_not_global_singleton,
     ]

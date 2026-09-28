@@ -325,6 +325,24 @@ def _http_request_with_retry(
                 continue
             raise ProviderSearchError(provider_name, ProviderErrorType.NETWORK_ERROR, last_detail) from error
 
+        except json.JSONDecodeError as error:
+            # response.read() succeeded (no network exception above) but
+            # the body wasn't valid JSON -- e.g. a proxy/gateway error
+            # page or a truncated/garbled body. Previously escaped this
+            # function as a raw JSONDecodeError (a ValueError subclass,
+            # not matched by any except above), propagating out of
+            # SearchProviderManager/search_provider_adapter uncaught and
+            # aborting the entire multi-source search batch instead of
+            # being isolated to this one provider/query. Same
+            # retry-then-raise shape as NETWORK_ERROR above -- a retry
+            # may simply get a well-formed body next time.
+            last_error_type = ProviderErrorType.UNKNOWN
+            last_detail = f"malformed JSON response: {error}"
+            if attempt < retry_count - 1:
+                time.sleep(2**attempt)
+                continue
+            raise ProviderSearchError(provider_name, ProviderErrorType.UNKNOWN, last_detail) from error
+
     raise ProviderSearchError(provider_name, last_error_type, last_detail)
 
 

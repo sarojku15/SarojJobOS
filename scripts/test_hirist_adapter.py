@@ -478,6 +478,75 @@ def test_default_sources_includes_hirist_phase11(failures):
     print(f"PASS: 14 -> search_profile._default_sources() includes {{'NAUKRI', 'HIRIST', 'IIMJOBS', 'APNA'}} (got {sorted(defaults)}) -- Hirist's now-real ENABLED status flows through the existing, unmodified default-source logic")
 
 
+def test_fetcher_subprocess_exception_handling(failures):
+    """
+    15. Real HiristFetcher subprocess exception handling (2026-09-28
+    hardening pass). subprocess.run() itself (not the bridge script)
+    can fail before ever producing a CompletedProcess -- only
+    subprocess.TimeoutExpired was previously caught; FileNotFoundError/
+    OSError/UnicodeDecodeError escaped uncaught. Uses the REAL
+    HiristFetcher with subprocess.run patched -- still no real Node/
+    Playwright process is ever spawned.
+    """
+    import subprocess as _subprocess
+    from unittest.mock import patch as _patch
+
+    class _FakeCompletedProcess:
+        def __init__(self, returncode, stdout, stderr):
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = stderr
+
+    with _patch.object(_subprocess, "run", side_effect=FileNotFoundError("node: command not found")):
+        try:
+            HiristFetcher().fetch("https://www.hirist.com/")
+            _fail(failures, "15a: fetcher_subprocess_file_not_found: expected AdapterTimeoutError, none raised")
+        except AdapterTimeoutError:
+            print("PASS: 15a -> FileNotFoundError (missing `node`) converted to AdapterTimeoutError")
+        except Exception as error:
+            _fail(failures, f"15a: fetcher_subprocess_file_not_found: expected AdapterTimeoutError, got {type(error).__name__}: {error}")
+
+    with _patch.object(_subprocess, "run", side_effect=UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")):
+        try:
+            HiristFetcher().fetch("https://www.hirist.com/")
+            _fail(failures, "15b: fetcher_subprocess_unicode_decode_error: expected AdapterTimeoutError, none raised")
+        except AdapterTimeoutError:
+            print("PASS: 15b -> UnicodeDecodeError decoding subprocess output converted to AdapterTimeoutError")
+        except Exception as error:
+            _fail(failures, f"15b: fetcher_subprocess_unicode_decode_error: expected AdapterTimeoutError, got {type(error).__name__}: {error}")
+
+    with _patch.object(_subprocess, "run", side_effect=_subprocess.TimeoutExpired(cmd=["node"], timeout=75)):
+        try:
+            HiristFetcher().fetch("https://www.hirist.com/")
+            _fail(failures, "15c: fetcher_subprocess_timeout_still_works: expected AdapterTimeoutError, none raised")
+        except AdapterTimeoutError:
+            print("PASS: 15c -> subprocess.TimeoutExpired still converts to AdapterTimeoutError exactly as before")
+        except Exception as error:
+            _fail(failures, f"15c: fetcher_subprocess_timeout_still_works: expected AdapterTimeoutError, got {type(error).__name__}: {error}")
+
+    with _patch.object(_subprocess, "run", return_value=_FakeCompletedProcess(1, "", "bridge crashed")):
+        try:
+            HiristFetcher().fetch("https://www.hirist.com/")
+            _fail(failures, "15d: fetcher_subprocess_nonzero_returncode_still_works: expected AdapterTimeoutError, none raised")
+        except AdapterTimeoutError as error:
+            if "bridge crashed" in str(error):
+                print("PASS: 15d -> non-zero return code still converts to AdapterTimeoutError with stderr detail, unaffected by this fix")
+            else:
+                _fail(failures, f"15d: fetcher_subprocess_nonzero_returncode_still_works: AdapterTimeoutError raised but detail lost stderr: {error}")
+        except Exception as error:
+            _fail(failures, f"15d: fetcher_subprocess_nonzero_returncode_still_works: expected AdapterTimeoutError, got {type(error).__name__}: {error}")
+
+    with _patch.object(_subprocess, "run", return_value=_FakeCompletedProcess(0, "<html>ok</html>", "")):
+        try:
+            body = HiristFetcher().fetch("https://www.hirist.com/")
+            if body == "<html>ok</html>":
+                print("PASS: 15e -> a successful subprocess run still returns stdout unaffected by this fix")
+            else:
+                _fail(failures, f"15e: fetcher_subprocess_success_still_works: unexpected body {body!r}")
+        except Exception as error:
+            _fail(failures, f"15e: fetcher_subprocess_success_still_works: expected success, got {type(error).__name__}: {error}")
+
+
 def main():
     print("HIRIST ADAPTER OFFLINE IMPLEMENTATION TEST (Phase 6 Step 3)")
     print("===============================================================")
@@ -498,6 +567,7 @@ def main():
     test_parser_never_invents_unsupported_fields(failures)
     test_adapter_enabled_phase11(failures)
     test_default_sources_includes_hirist_phase11(failures)
+    test_fetcher_subprocess_exception_handling(failures)
 
     if failures:
         print("\nFAILURES:")

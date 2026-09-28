@@ -1044,6 +1044,17 @@ def process_queue_item(conn, claimed, db_write_lock_note=None):
     result.timed_out_queries = sum(state.queries_failed for state in run_report)
     result.succeeded_queries = sum(state.queries_succeeded for state in run_report)
 
+    # An adapter exception outside the known AdapterBlockedError/
+    # AdapterTimeoutError contract is now isolated per-query/per-source
+    # by discover_from_sources() itself (2026-09-28 hardening pass)
+    # rather than escaping into the `except Exception` below -- surfaced
+    # here into the same result.errors/error_message mechanism as any
+    # other query-level failure (e.g. "Malformed raw job...") so it
+    # stays visible for diagnostics, without being treated as fatal.
+    for state in run_report:
+        for detail in state.unexpected_errors:
+            result.errors.append(f"{state.source}: {detail}")
+
     any_query_attempted = any(state.queries_attempted > 0 for state in run_report)
 
     # --- normalization (pure, no DB) ---

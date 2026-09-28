@@ -617,6 +617,214 @@ def test_future_extensibility_new_not_enabled_adapter_excluded(failures):
         del source_registry.ADAPTERS["FUTURE_SOURCE_NOT_YET_BUILT"]
 
 
+def test_discover_from_sources_isolates_unexpected_query_exception(failures):
+    """15. Exception-boundary hardening (2026-09-28): a query raising an
+    exception OUTSIDE the AdapterBlockedError/AdapterTimeoutError
+    contract (an adapter bug/gap, e.g. an unwrapped network exception)
+    must be isolated to that one query -- not abort the entire batch.
+
+    query 1 (LocA) -> success -> jobs A/B
+    query 2 (LocB) -> raises unexpected RuntimeError
+    query 3 (LocC) -> success -> jobs C/D
+
+    Expected: returned jobs contain A/B/C/D, query 2 has an error
+    record, query 3 still executes, no whole-batch exception escapes,
+    and the aggregated status reflects a partial/failed-query condition."""
+
+    class _FlakyAdapter(JobSourceAdapter):
+        name = "FAKE_FLAKY_MS"
+        status = AdapterStatus.ENABLED
+        capabilities = frozenset({AdapterCapability.SEARCH})
+
+        def health_check(self):
+            from source_adapter import AdapterHealth, BlockReason
+            return AdapterHealth(source=self.name, reachable=True, block_reason=BlockReason.NONE)
+
+        def search(self, query):
+            if query.location == "LocB":
+                raise RuntimeError("simulated adapter bug -- unwrapped exception")
+            suffix = "AB" if query.location == "LocA" else "CD"
+            return [
+                {"source": self.name, "company": "Fake Co", "title": query.role, "location": query.location, "job_url": f"https://example.com/{suffix}1"},
+                {"source": self.name, "company": "Fake Co", "title": query.role, "location": query.location, "job_url": f"https://example.com/{suffix}2"},
+            ]
+
+    source_registry.ADAPTERS["FAKE_FLAKY_MS"] = _FlakyAdapter
+
+    try:
+        run_report = []
+        queries = [
+            ("FAKE_FLAKY_MS", SearchQuery(role="R", location="LocA")),
+            ("FAKE_FLAKY_MS", SearchQuery(role="R", location="LocB")),
+            ("FAKE_FLAKY_MS", SearchQuery(role="R", location="LocC")),
+        ]
+        try:
+            jobs = source_registry.discover_from_sources(queries, run_report=run_report)
+        except Exception as error:
+            _fail(failures, f"15: an unexpected query exception escaped discover_from_sources() entirely: {type(error).__name__}: {error}")
+            return
+
+        urls = {job["job_url"] for job in jobs}
+        expected_urls = {"https://example.com/AB1", "https://example.com/AB2", "https://example.com/CD1", "https://example.com/CD2"}
+        if urls != expected_urls:
+            _fail(failures, f"15: expected jobs A/B/C/D preserved despite query 2's exception, got job_urls={urls}")
+
+        state = next((s for s in run_report if s.source == "FAKE_FLAKY_MS"), None)
+        if state is None:
+            _fail(failures, "15: no SourceRunState recorded for FAKE_FLAKY_MS")
+        else:
+            if state.queries_succeeded != 2:
+                _fail(failures, f"15: expected 2 succeeded queries (LocA, LocC), got {state.queries_succeeded}")
+            if state.queries_failed != 1:
+                _fail(failures, f"15: expected 1 failed query (LocB), got {state.queries_failed}")
+            if len(state.unexpected_errors) != 1 or "RuntimeError" not in state.unexpected_errors[0]:
+                _fail(failures, f"15: expected exactly 1 unexpected_errors entry mentioning RuntimeError, got {state.unexpected_errors}")
+            if state.blocked:
+                _fail(failures, "15: an unexpected query exception must not be conflated with AdapterBlockedError (state.blocked)")
+
+        from search_worker import _aggregate_status
+        status = _aggregate_status(run_report, had_unexpected_exception=False, any_query_attempted=True)
+        if status != "PARTIAL":
+            _fail(failures, f"15: expected aggregated status PARTIAL (2 succeeded + 1 unexpected-exception query), got {status}")
+
+        if not failures:
+            print("PASS: 15 -> query 2's unexpected RuntimeError is isolated; jobs A/B/C/D preserved, query 3 still executes, status is PARTIAL")
+    finally:
+        del source_registry.ADAPTERS["FAKE_FLAKY_MS"]
+
+
+def test_discover_from_sources_isolates_multiple_unexpected_exceptions(failures):
+    """16. Same hardening, harsher case:
+
+    query 1 -> success
+    query 2 -> unexpected exception (RuntimeError)
+    query 3 -> unexpected exception (a DIFFERENT type, ValueError --
+               proves this isn't RuntimeError-specific)
+
+    Expected: query 1's successful results are still returned and both
+    failures are accurately reported -- no crash, even though only one
+    of three queries actually succeeded."""
+
+    class _MostlyBrokenAdapter(JobSourceAdapter):
+        name = "FAKE_MOSTLY_BROKEN_MS"
+        status = AdapterStatus.ENABLED
+        capabilities = frozenset({AdapterCapability.SEARCH})
+
+        def health_check(self):
+            from source_adapter import AdapterHealth, BlockReason
+            return AdapterHealth(source=self.name, reachable=True, block_reason=BlockReason.NONE)
+
+        def search(self, query):
+            if query.location == "LocOK":
+                return [{"source": self.name, "company": "Fake Co", "title": query.role, "location": query.location, "job_url": "https://example.com/ok"}]
+            if query.location == "LocRuntimeError":
+                raise RuntimeError("simulated adapter bug 1")
+            raise ValueError("simulated adapter bug 2 -- a different exception type")
+
+    source_registry.ADAPTERS["FAKE_MOSTLY_BROKEN_MS"] = _MostlyBrokenAdapter
+
+    try:
+        run_report = []
+        queries = [
+            ("FAKE_MOSTLY_BROKEN_MS", SearchQuery(role="R", location="LocOK")),
+            ("FAKE_MOSTLY_BROKEN_MS", SearchQuery(role="R", location="LocRuntimeError")),
+            ("FAKE_MOSTLY_BROKEN_MS", SearchQuery(role="R", location="LocValueError")),
+        ]
+        try:
+            jobs = source_registry.discover_from_sources(queries, run_report=run_report)
+        except Exception as error:
+            _fail(failures, f"16: an unexpected query exception escaped discover_from_sources() entirely: {type(error).__name__}: {error}")
+            return
+
+        if [job["job_url"] for job in jobs] != ["https://example.com/ok"]:
+            _fail(failures, f"16: expected only query 1's single successful job preserved, got {jobs}")
+
+        state = next((s for s in run_report if s.source == "FAKE_MOSTLY_BROKEN_MS"), None)
+        if state is None:
+            _fail(failures, "16: no SourceRunState recorded for FAKE_MOSTLY_BROKEN_MS")
+        else:
+            if state.queries_succeeded != 1 or state.queries_failed != 2:
+                _fail(failures, f"16: expected 1 succeeded / 2 failed, got succeeded={state.queries_succeeded} failed={state.queries_failed}")
+            if len(state.unexpected_errors) != 2:
+                _fail(failures, f"16: expected 2 unexpected_errors entries (one per distinct exception type), got {state.unexpected_errors}")
+
+        from search_worker import _aggregate_status
+        status = _aggregate_status(run_report, had_unexpected_exception=False, any_query_attempted=True)
+        if status != "PARTIAL":
+            _fail(failures, f"16: expected aggregated status PARTIAL (1 succeeded + 2 unexpected-exception queries), got {status}")
+
+        if not failures:
+            print("PASS: 16 -> two DIFFERENT unexpected exception types (RuntimeError, ValueError) are both isolated; query 1's result survives, both failures are accurately reported")
+    finally:
+        del source_registry.ADAPTERS["FAKE_MOSTLY_BROKEN_MS"]
+
+
+def test_discover_from_sources_isolates_health_check_exception(failures):
+    """17. The same defensive boundary applied to health_check() itself
+    (which runs BEFORE the per-query loop, for each source): a source
+    whose health_check() raises unexpectedly must not prevent OTHER
+    sources from being searched, and results already gathered from an
+    earlier-completed source must not be discarded."""
+
+    class _HealthCheckCrashesAdapter(JobSourceAdapter):
+        name = "FAKE_HEALTH_CRASH_MS"
+        status = AdapterStatus.ENABLED
+        capabilities = frozenset({AdapterCapability.SEARCH})
+
+        def health_check(self):
+            raise RuntimeError("simulated health_check() bug")
+
+        def search(self, query):
+            raise AssertionError("search() must never be called when health_check() itself crashed")
+
+    class _NormalAdapter(JobSourceAdapter):
+        name = "FAKE_HEALTH_OK_MS"
+        status = AdapterStatus.ENABLED
+        capabilities = frozenset({AdapterCapability.SEARCH})
+
+        def health_check(self):
+            from source_adapter import AdapterHealth, BlockReason
+            return AdapterHealth(source=self.name, reachable=True, block_reason=BlockReason.NONE)
+
+        def search(self, query):
+            return [{"source": self.name, "company": "Fake Co", "title": query.role, "location": query.location, "job_url": "https://example.com/healthy"}]
+
+    source_registry.ADAPTERS["FAKE_HEALTH_CRASH_MS"] = _HealthCheckCrashesAdapter
+    source_registry.ADAPTERS["FAKE_HEALTH_OK_MS"] = _NormalAdapter
+
+    try:
+        run_report = []
+        # The crashing source is queried FIRST, deliberately, so this
+        # also proves an earlier source's crash does not discard a
+        # LATER source's genuine results within the same call.
+        queries = [
+            ("FAKE_HEALTH_CRASH_MS", SearchQuery(role="R", location="LocX")),
+            ("FAKE_HEALTH_OK_MS", SearchQuery(role="R", location="LocY")),
+        ]
+        try:
+            jobs = source_registry.discover_from_sources(queries, run_report=run_report)
+        except Exception as error:
+            _fail(failures, f"17: an unexpected health_check() exception escaped discover_from_sources() entirely: {type(error).__name__}: {error}")
+            return
+
+        if [job["job_url"] for job in jobs] != ["https://example.com/healthy"]:
+            _fail(failures, f"17: expected the healthy source's job preserved despite the other source's health_check() crash, got {jobs}")
+
+        crash_state = next((s for s in run_report if s.source == "FAKE_HEALTH_CRASH_MS"), None)
+        if crash_state is None or crash_state.queries_attempted != 0 or not crash_state.unexpected_errors:
+            _fail(failures, f"17: expected the crashed source recorded with zero queries attempted and a non-empty unexpected_errors, got {crash_state}")
+
+        healthy_state = next((s for s in run_report if s.source == "FAKE_HEALTH_OK_MS"), None)
+        if healthy_state is None or healthy_state.queries_succeeded != 1:
+            _fail(failures, f"17: expected the healthy source's own state unaffected, got {healthy_state}")
+
+        if not failures:
+            print("PASS: 17 -> one source's health_check() crash is isolated to that source; the other source's genuine results survive")
+    finally:
+        del source_registry.ADAPTERS["FAKE_HEALTH_CRASH_MS"]
+        del source_registry.ADAPTERS["FAKE_HEALTH_OK_MS"]
+
+
 def main():
     print("MULTI-SOURCE ADAPTER ARCHITECTURE TEST (Phase 4)")
     print("===================================================")
@@ -636,6 +844,9 @@ def main():
     test_cross_source_dedup_bangalore_bengaluru(failures)
     test_source_health_record_no_fabricated_data(failures)
     test_future_extensibility_new_not_enabled_adapter_excluded(failures)
+    test_discover_from_sources_isolates_unexpected_query_exception(failures)
+    test_discover_from_sources_isolates_multiple_unexpected_exceptions(failures)
+    test_discover_from_sources_isolates_health_check_exception(failures)
     test_full_regression_suite_files_unaffected(failures)
 
     if failures:

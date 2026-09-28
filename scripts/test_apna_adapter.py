@@ -330,6 +330,72 @@ check(
 )
 
 
+# ------------------------------------------------- 11. _http_get() error wrapping
+#
+# Reproduces a real 2026-09-28 production incident: a mid-body network
+# error inside response.read() (not urlopen() itself) raised a raw
+# socket/http.client exception that escaped _http_get()'s original
+# `except urllib.error.URLError` entirely, propagated all the way out
+# of discover_from_sources(), and aborted an entire 50-query search
+# run (status FAILED, zero results) instead of being isolated to one
+# query. No live network call -- urllib.request.urlopen is monkeypatched
+# to return a fake response whose .read() raises the exact exception
+# types observed in production.
+
+import http.client
+import urllib.request as _urllib_request
+import apna_adapter
+
+
+class _FakeResponseThatFailsOnRead:
+    status = 200
+
+    def __init__(self, error):
+        self._error = error
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+    def read(self):
+        raise self._error
+
+
+def _check_http_get_wraps_read_error(error, label):
+    original_urlopen = _urllib_request.urlopen
+    _urllib_request.urlopen = lambda request, timeout=None: _FakeResponseThatFailsOnRead(error)
+    try:
+        raised_as_adapter_timeout = False
+        try:
+            apna_adapter._http_get("https://apna.co/jobs?search=true")
+        except AdapterTimeoutError:
+            raised_as_adapter_timeout = True
+        except Exception as unexpected:
+            check(False, f"11. {label}: _http_get() must not let a raw {type(unexpected).__name__} escape uncaught, got: {unexpected!r}")
+            return
+        check(raised_as_adapter_timeout, f"11. {label}: _http_get() wraps it as AdapterTimeoutError instead of letting it escape")
+    finally:
+        _urllib_request.urlopen = original_urlopen
+
+
+_check_http_get_wraps_read_error(ConnectionResetError(54, "Connection reset by peer"), "mid-read ConnectionResetError ([Errno 54])")
+_check_http_get_wraps_read_error(TimeoutError("The read operation timed out"), "mid-read TimeoutError (socket.timeout)")
+_check_http_get_wraps_read_error(http.client.IncompleteRead(b""), "mid-read http.client.IncompleteRead")
+
+# The adapter-level path (health_check/search via the real ApnaFetcher,
+# not an injected fake) must see the same wrapping -- proves the fix is
+# reachable from where discover_from_sources() actually calls in.
+original_urlopen = _urllib_request.urlopen
+_urllib_request.urlopen = lambda request, timeout=None: _FakeResponseThatFailsOnRead(TimeoutError("The read operation timed out"))
+try:
+    real_adapter = ApnaAdapter(rate_limit_seconds=0)
+    health = real_adapter.health_check()
+    check(health.reachable is False, "11. ApnaAdapter.health_check() reports unreachable (not a crash) when response.read() times out")
+finally:
+    _urllib_request.urlopen = original_urlopen
+
 print()
 print(f"{len(failures)} failed")
 if failures:

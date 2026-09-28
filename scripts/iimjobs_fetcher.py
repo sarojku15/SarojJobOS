@@ -38,6 +38,19 @@ class IimjobsFetcher:
                 "IIMJOBS",
                 detail=f"fetch bridge timed out after {FETCH_TIMEOUT_SECONDS}s: {error}",
             ) from error
+        except (OSError, UnicodeDecodeError) as error:
+            # subprocess.run() itself (not the bridge script) can fail
+            # to start/complete -- e.g. FileNotFoundError/PermissionError
+            # if `node` isn't on PATH, or a UnicodeDecodeError decoding
+            # stdout/stderr under text=True if the bridge ever writes
+            # non-UTF-8 bytes. Neither is a TimeoutExpired, so both
+            # previously escaped this function uncaught and could abort
+            # the entire multi-source search batch instead of being
+            # isolated to this one query.
+            raise AdapterTimeoutError(
+                "IIMJOBS",
+                detail=f"fetch bridge process failed to run: {error}",
+            ) from error
 
         if result.returncode != 0:
             raise AdapterTimeoutError(
