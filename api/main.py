@@ -23,7 +23,6 @@ from fastapi.staticfiles import StaticFiles
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = ROOT / "scripts"
 WEB_DIR = ROOT / "web"
-RESUME_DIR = ROOT / "data" / "applications" / "resumes_dev"
 
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
@@ -90,6 +89,46 @@ from resume_extractor import extract_candidate_profile_draft_result
 app = FastAPI(title="SarojJobOS Job Search")
 
 MAX_RESUME_BYTES = 8 * 1024 * 1024  # 8MB
+
+# 2026-09-29 startup/database safety hardening. Root cause this closes:
+# a bare `uvicorn api.main:app --port 8421` (never setting JOBOS_DB_
+# PATH) previously started and served completely normally, silently
+# opening jobos_dev.db on the port this project's entire documented
+# architecture treats as production -- no error, no warning, nothing
+# to notice short of manually checking /api/health's `db` field.
+#
+# The ASGI app itself has no reliable way to know what port uvicorn
+# bound it to at process-startup time (that's an external transport
+# decision, never passed into the app) -- so this can't be a true
+#"refuse to start" check inside this module. What it CAN do, and does
+# here on every single request via the Host header (which genuinely
+# does carry the port the client connected to), is refuse to serve
+# ANY request arriving on port 8421 unless this process is genuinely
+# running in production mode -- functionally equivalent to "fail fast"
+# from a caller's perspective: the very first request gets a clear,
+# actionable error instead of a silent wrong answer.
+_PRODUCTION_PORT = "8421"
+
+
+@app.middleware("http")
+async def _guard_production_port(request, call_next):
+    host_header = request.headers.get("host", "")
+    port = host_header.rsplit(":", 1)[-1] if ":" in host_header else None
+    if port == _PRODUCTION_PORT and not db_mod.IS_PRODUCTION:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": (
+                    f"Refusing to serve requests on port {_PRODUCTION_PORT}: this process is "
+                    "NOT running in production mode (JOBOS_DB_PATH is not set to the real "
+                    "production database). Port 8421 is reserved for production and must be "
+                    "started via `scripts/run_production_api.py`, never a bare "
+                    "`uvicorn api.main:app --port 8421` -- that silently opens jobos_dev.db "
+                    "instead. See docs/CONFIGURATION.md's \"Two API instances\" section."
+                )
+            },
+        )
+    return await call_next(request)
 
 
 @app.on_event("startup")
@@ -158,7 +197,23 @@ def _profile_response(profile, validation=None):
 
 @app.get("/api/health")
 def health():
-    return {"status": "OK", "db": db_mod.DEV_DB.name}
+    """
+    2026-09-29 startup/database safety hardening: reports enough to
+    unambiguously tell dev and production apart at a glance -- never
+    just the bare `db` filename alone, which is exactly what let a
+    misconfigured port 8421 process silently serve jobos_dev.db without
+    anyone noticing (a live incident this hardening pass root-caused).
+    Reports the DB filename (a safe identifier, not the full absolute
+    server filesystem path -- this endpoint has no auth) and whether
+    JOBOS_DB_PATH was explicitly configured for this process, never a
+    secret/credential of any kind.
+    """
+    return {
+        "status": "OK",
+        "db": db_mod.DEV_DB.name,
+        "mode": "production" if db_mod.IS_PRODUCTION else "development",
+        "jobos_db_path_configured": db_mod.JOBOS_DB_PATH_CONFIGURED,
+    }
 
 
 # ---------------------------------------------------------------- candidates
@@ -283,7 +338,10 @@ async def upload_resume(candidate_id: str, file: UploadFile = File(...)):
         if contents[:5] != b"%PDF-":
             raise HTTPException(400, "File does not look like a valid PDF")
 
-        candidate_dir = RESUME_DIR / candidate_id
+        # 2026-09-29: follows the SAME dev/production separation the
+        # database already uses (db_mod.RESUME_DIR) -- never the
+        # hardcoded resumes_dev/ this used to be, regardless of mode.
+        candidate_dir = db_mod.RESUME_DIR / candidate_id
         candidate_dir.mkdir(parents=True, exist_ok=True)
         # Server-generated filename only -- the client's own filename is
         # never used to build a filesystem path (no path traversal

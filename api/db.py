@@ -30,6 +30,31 @@ PRODUCTION_DB = ROOT / "data" / "applications" / "jobos.db"
 _db_path_override = os.environ.get("JOBOS_DB_PATH")
 DEV_DB = Path(_db_path_override).resolve() if _db_path_override else DEFAULT_DEV_DB
 
+# 2026-09-29 startup/database safety hardening -- root-caused during a
+# live investigation: port 8421 (this project's documented production
+# port) was found actually running as a bare `uvicorn api.main:app
+# --port 8421` process, which never sets JOBOS_DB_PATH and therefore
+# silently opened jobos_dev.db instead of the real production DB, with
+# no error, no warning -- just a wrong `db` field in /api/health that
+# nobody was checking. IS_PRODUCTION/JOBOS_DB_PATH_CONFIGURED are the
+# two facts every downstream safeguard below is built from: whether
+# THIS process's env explicitly requested a DB path at all (never
+# re-read from the live environment later -- see this module's own
+# top-of-file note on why JOBOS_DB_PATH is captured once, at import),
+# and whether that path genuinely resolves to the real production file
+# (catches a JOBOS_DB_PATH typo too, not just "was it set").
+JOBOS_DB_PATH_CONFIGURED = bool(_db_path_override)
+IS_PRODUCTION = DEV_DB.resolve() == PRODUCTION_DB.resolve()
+
+# Resume files now follow the SAME dev/production separation the
+# database itself already had -- previously api/main.py's RESUME_DIR
+# was a hardcoded constant with no JOBOS_DB_PATH-equivalent override,
+# so even a correctly-launched production process (real jobos.db) still
+# wrote every uploaded resume into resumes_dev/. Never moves or deletes
+# any existing file at either path -- this only decides where a NEW
+# upload from THIS process goes.
+RESUME_DIR = ROOT / "data" / "applications" / ("resumes" if IS_PRODUCTION else "resumes_dev")
+
 SCRIPTS_DIR = ROOT / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))

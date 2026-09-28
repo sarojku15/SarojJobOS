@@ -164,6 +164,103 @@ result2 = migrate_production_schema.migrate_production_schema(db_path=prod_copy,
 check(result2["new_tables"] == [], f"11. re-running migration is idempotent -- no new tables the second time, got {result2['new_tables']}")
 check(_sha(prod_copy) == sha_after_first, "11. re-running migration produces a byte-identical file (true idempotence, not just 'no error')")
 
+# ---------------------------------------------- 14-19: startup/DB safety hardening
+# (2026-09-29) -- root-caused during a live investigation: a bare
+# `uvicorn api.main:app --port 8421` (never setting JOBOS_DB_PATH) was
+# found actually running and silently serving jobos_dev.db on the port
+# this project's whole documented architecture treats as production.
+# Covers: JOBOS_DB_PATH resolving to the REAL production path (not
+# just an arbitrary alt file, already covered by check 2 above),
+# IS_PRODUCTION/JOBOS_DB_PATH_CONFIGURED, RESUME_DIR following the same
+# separation, /api/health reporting mode unambiguously, and the
+# production-port request guard. Every DB path used here is either the
+# real production path (used only to prove import-time RESOLUTION,
+# never opened/written) or a disposable temp file.
+
+# 14. JOBOS_DB_PATH pointed at the REAL production path resolves DEV_DB
+# to it and correctly flips IS_PRODUCTION -- proves "8421 (via
+# run_production_api.py, which sets exactly this) resolves to
+# jobos.db," without ever actually connecting to/writing the real file.
+os.environ["JOBOS_DB_PATH"] = str(PRODUCTION_DB)
+sys.modules.pop("db", None)
+import db as db_mod_prod
+check(db_mod_prod.DEV_DB == PRODUCTION_DB.resolve(), f"14. JOBOS_DB_PATH=<real production path> resolves DEV_DB to it, got {db_mod_prod.DEV_DB}")
+check(db_mod_prod.IS_PRODUCTION is True, "14. IS_PRODUCTION is True when DEV_DB resolves to the real production DB")
+check(db_mod_prod.JOBOS_DB_PATH_CONFIGURED is True, "14. JOBOS_DB_PATH_CONFIGURED is True when the env var was explicitly set")
+check(db_mod_prod.RESUME_DIR.name == "resumes", f"14. RESUME_DIR follows production mode ('resumes', not 'resumes_dev'), got {db_mod_prod.RESUME_DIR.name}")
+os.environ.pop("JOBOS_DB_PATH", None)
+sys.modules.pop("db", None)
+
+# 15. Unset JOBOS_DB_PATH (the plain `uvicorn ... --port 8420` default,
+# and also what a bare/misconfigured port-8421 launch would leave
+# unset) -> dev DB, IS_PRODUCTION False, resumes_dev -- proves "8420
+# resolves to jobos_dev.db" and that nothing defaults to production.
+import db as db_mod_dev_default
+check(db_mod_dev_default.DEV_DB == db_mod_dev_default.DEFAULT_DEV_DB, "15. unset JOBOS_DB_PATH -> DEV_DB is the dev default")
+check(db_mod_dev_default.IS_PRODUCTION is False, "15. unset JOBOS_DB_PATH -> IS_PRODUCTION is False")
+check(db_mod_dev_default.JOBOS_DB_PATH_CONFIGURED is False, "15. unset JOBOS_DB_PATH -> JOBOS_DB_PATH_CONFIGURED is False")
+check(db_mod_dev_default.RESUME_DIR.name == "resumes_dev", f"15. unset JOBOS_DB_PATH -> RESUME_DIR is 'resumes_dev', got {db_mod_dev_default.RESUME_DIR.name}")
+sys.modules.pop("db", None)
+
+# 16. A JOBOS_DB_PATH pointed at some OTHER (non-production) disposable
+# path is honored for DEV_DB but must NOT be treated as production --
+# proves IS_PRODUCTION is genuinely "resolves to the real prod file,"
+# never just "was JOBOS_DB_PATH set at all."
+other_dir = Path(tempfile.mkdtemp(prefix="jobos_prod_path_test_other_"))
+other_db = other_dir / "some_other.db"
+os.environ["JOBOS_DB_PATH"] = str(other_db)
+import db as db_mod_other
+check(db_mod_other.DEV_DB == other_db.resolve(), "16. JOBOS_DB_PATH pointed at a non-production file is still honored for DEV_DB")
+check(db_mod_other.IS_PRODUCTION is False, "16. a non-production JOBOS_DB_PATH override does NOT flip IS_PRODUCTION")
+check(db_mod_other.RESUME_DIR.name == "resumes_dev", "16. a non-production override keeps RESUME_DIR at 'resumes_dev'")
+os.environ.pop("JOBOS_DB_PATH", None)
+sys.modules.pop("db", None)
+shutil.rmtree(other_dir, ignore_errors=True)
+
+# 17. /api/health reports mode/jobos_db_path_configured unambiguously
+# (never just the bare filename this incident's own root cause showed
+# was insufficient), and never leaks the full absolute server path.
+sys.modules.pop("main", None)
+sys.modules.pop("db", None)
+import db as db_mod_health
+import main as api_main_health
+tmp_health_dir = Path(tempfile.mkdtemp(prefix="jobos_health_test_"))
+tmp_health_db = tmp_health_dir / "health_test.db"
+api_main_health.db_mod.DEV_DB = tmp_health_db
+api_main_health.db_mod.IS_PRODUCTION = False
+api_main_health.db_mod.JOBOS_DB_PATH_CONFIGURED = False
+health_client = TestClient(api_main_health.app)
+health_resp = health_client.get("/api/health")
+check(health_resp.status_code == 200, f"17. /api/health reachable, got {health_resp.status_code}")
+health_body = health_resp.json()
+check(health_body.get("mode") == "development", f"17. /api/health reports mode=development, got {health_body.get('mode')}")
+check(health_body.get("jobos_db_path_configured") is False, "17. /api/health reports jobos_db_path_configured=False when unset")
+check(health_body.get("db") == "health_test.db", "17. /api/health still reports the DB filename (unchanged existing field)")
+check(str(tmp_health_dir) not in str(health_body), "17. /api/health never leaks the full absolute server filesystem path")
+
+# 18. The production-port guard: port 8421 is refused unless this
+# process is genuinely in production mode -- the actual "fail fast"
+# mechanism, since the ASGI app can't know its own bound port any
+# other way. Uses the Host header, exactly what a real client
+# connecting to 127.0.0.1:8421 (or host.docker.internal:8421 from
+# inside the n8n container) sends.
+guard_resp = health_client.get("/api/health", headers={"host": "127.0.0.1:8421"})
+check(guard_resp.status_code == 500, f"18. a non-production process refuses ANY request arriving on port 8421 (fail-fast), got {guard_resp.status_code}")
+check("Refusing to serve" in guard_resp.json().get("detail", ""), "18. the refusal includes a clear, actionable error message")
+check("run_production_api.py" in guard_resp.json().get("detail", ""), "18. the error message names the correct production launcher")
+
+not_8421_resp = health_client.get("/api/health", headers={"host": "127.0.0.1:8420"})
+check(not_8421_resp.status_code == 200, "18b. the SAME non-production process still serves port 8420 normally")
+
+# 19. Once genuinely in production mode, port 8421 is allowed --
+# proves the guard is a real safety check, not an unconditional block.
+api_main_health.db_mod.IS_PRODUCTION = True
+prod_ok_resp = health_client.get("/api/health", headers={"host": "127.0.0.1:8421"})
+check(prod_ok_resp.status_code == 200, f"19. a genuinely-production process serves port 8421 normally, got {prod_ok_resp.status_code}")
+check(prod_ok_resp.json().get("mode") == "production", "19. /api/health correctly reports mode=production once genuinely in that mode")
+
+shutil.rmtree(tmp_health_dir, ignore_errors=True)
+
 shutil.rmtree(tmp_dir, ignore_errors=True)
 shutil.rmtree(prod_copy_dir, ignore_errors=True)
 
