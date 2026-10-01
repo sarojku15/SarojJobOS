@@ -383,35 +383,39 @@ def test_14_no_candidate_specific_hardcoding():
 # 15: real resume extraction still passes
 # --------------------------------------------------------------------
 
-def test_15_real_resume_extraction_still_passes():
+def test_15_synthetic_resume_extraction_still_passes():
     """
-    Re-confirms the real resume PDF still extracts, saves, and loads
-    back correctly after this component's changes -- writing its
-    output artifact only to an isolated temp directory, never into
+    Re-confirms a resume PDF still extracts, saves, and loads back
+    correctly after this component's changes -- writing its output
+    artifact only to an isolated temp directory, never into
     data/applications/jobos.db or any tracked project data/ path.
+    Uses the same wholly synthetic, tracked fixture as
+    test_resume_extractor.py (data/fixtures/resume_extractor/
+    synthetic_sre_resume.pdf) -- no private resume file required, works
+    from a fresh clone.
     """
     failures = []
 
-    pdf_path = ROOT / "resumes" / "SarojKumarNayak_SRE_DevOps_11Yrs.pdf"
+    pdf_path = ROOT / "data" / "fixtures" / "resume_extractor" / "synthetic_sre_resume.pdf"
     if not pdf_path.exists():
-        _fail(failures, f"test 15: expected fixture resume PDF at {pdf_path}, file not found")
+        _fail(failures, f"test 15: expected synthetic fixture PDF at {pdf_path}, file not found")
         return failures
 
-    profile = extract_candidate_profile_draft(str(pdf_path), "cand-real-pdf-store-smoke")
+    profile = extract_candidate_profile_draft(str(pdf_path), "cand-synthetic-pdf-store-smoke")
 
-    path = _temp_path("real_resume_draft.json")
+    path = _temp_path("synthetic_resume_draft.json")
     save_candidate_profile_draft(profile, path)
     reloaded = load_candidate_profile_draft(path)
 
     if reloaded.metadata.profile_status != ProfileStatus.DRAFT:
         _fail(failures, f"test 15: expected DRAFT, got {reloaded.metadata.profile_status}")
-    if reloaded.professional_summary.total_experience_years != 11.0:
-        _fail(failures, f"test 15: expected total_experience_years=11.0 preserved, got {reloaded.professional_summary.total_experience_years}")
+    if reloaded.professional_summary.total_experience_years != 9.0:
+        _fail(failures, f"test 15: expected total_experience_years=9.0 preserved, got {reloaded.professional_summary.total_experience_years}")
     if len(reloaded.employment_history) != 4:
         _fail(failures, f"test 15: expected 4 employment entries preserved, got {len(reloaded.employment_history)}")
 
     if not failures:
-        print(f"PASS: test 15 -> real resume extraction + save/load round trip still works end-to-end (isolated temp path: {path})")
+        print(f"PASS: test 15 -> synthetic resume extraction + save/load round trip still works end-to-end (isolated temp path: {path})")
 
     return failures
 
@@ -432,7 +436,7 @@ def main():
         test_12_draft_cannot_export_to_legacy_by_default,
         test_13_explicit_promote_to_confirmed_remains_required,
         test_14_no_candidate_specific_hardcoding,
-        test_15_real_resume_extraction_still_passes,
+        test_15_synthetic_resume_extraction_still_passes,
     ]
 
     all_failures = []

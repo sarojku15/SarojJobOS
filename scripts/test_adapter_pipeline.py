@@ -8,7 +8,39 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from source_adapter import MockJobSourceAdapter, SearchQuery, AdapterHealth
 from discover_local import normalize_job, deduplicate
-from score_job import score_job, PROFILE
+from score_job import score_job
+
+# A self-contained fixture profile, deliberately NOT score_job.PROFILE
+# (which only exists for the legacy CLI's own entry point and falls
+# back to config/profile.json.example's generic values whenever no
+# local config/profile.json exists -- see score_job.py's own comment).
+# This test asserts a specific score (100/A) against a specific mock
+# job, so it needs a profile with known, fixed values of its own --
+# never depending on whichever config/profile.json an operator's local
+# machine happens to have.
+FIXTURE_PROFILE = {
+    "candidate": {
+        "name": "Test Fixture Candidate",
+        "current_title": "Senior Site Reliability Engineer",
+        "experience_years": 11,
+    },
+    "target_roles": ["Senior Site Reliability Engineer", "Senior SRE"],
+    "target_locations": ["Bengaluru", "Bangalore", "Remote"],
+    "cloud": ["AWS", "Azure"],
+    "kubernetes": ["Kubernetes", "EKS", "AKS", "Docker", "Helm"],
+    "iac_and_automation": ["Terraform", "Ansible"],
+    "cicd_and_devops": ["Jenkins", "GitHub Actions", "ArgoCD"],
+    "observability": ["Prometheus", "Grafana", "Splunk", "Dynatrace"],
+    "sre": ["SLI", "SLO", "SLA", "Error Budgets", "Incident Management"],
+    "programming_and_scripting": ["Python", "Shell"],
+    "operating_systems": ["Linux"],
+    "security_and_governance": [],
+    "tools": ["Git", "Jira"],
+    "certifications": [],
+    "education": [],
+    "resume_variants": {"primary": "SRE-A"},
+    "application_rules": {"minimum_experience_years": 5, "preferred_experience_years": 8},
+}
 
 
 def main():
@@ -75,7 +107,7 @@ def main():
     print()
 
     for job in unique_jobs:
-        scoring = score_job(job, PROFILE)
+        scoring = score_job(job, FIXTURE_PROFILE)
 
         print("JOB")
         print("---")

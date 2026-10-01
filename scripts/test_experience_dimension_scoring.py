@@ -441,7 +441,13 @@ def test_10_existing_fixtures_unchanged_except_experience_fix():
         ("data/test_job_reject.json", "REJECT", "NOT_QUALIFIED"),  # Phase 7.2: score_job.py no longer writes "REJECTED"
     ]
 
-    profile = json.load(open(ROOT / "config" / "profile.json", encoding="utf-8"))
+    # Falls back to the generic, tracked example profile when no local
+    # config/profile.json exists (gitignored, operator-local -- same
+    # fallback score_job.py's own module-level PROFILE uses).
+    _profile_path = ROOT / "config" / "profile.json"
+    if not _profile_path.exists():
+        _profile_path = ROOT / "config" / "profile.json.example"
+    profile = json.load(open(_profile_path, encoding="utf-8"))
 
     for filename, expected_priority, expected_status in fixtures:
         job = json.load(open(ROOT / filename, encoding="utf-8"))
