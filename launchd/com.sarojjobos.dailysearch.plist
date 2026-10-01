@@ -25,17 +25,20 @@
     <string>com.sarojjobos.dailysearch</string>
 
     <!-- Absolute path to the wrapper script (PART B requirement #3).
-         The wrapper itself resolves every further path (Python,
-         production DB, output directory) from its own hardcoded
-         PROJECT_ROOT - launchd provides no working-directory or PATH
-         guarantee, so nothing here relies on either. -->
+         REPLACE /ABSOLUTE/PATH/TO/SarojJobOS below (here and in
+         WorkingDirectory/StandardOutPath/StandardErrorPath) with your
+         own clone's absolute path before installing; launchd plists
+         cannot self-resolve a relative path the way the wrapper script
+         itself now does. The wrapper resolves every further path
+         (Python, production DB, output directory) from its own
+         location, not from this plist, once it starts. -->
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/sarojnayak/SarojJobOS/scripts/run_daily_search.sh</string>
+        <string>/ABSOLUTE/PATH/TO/SarojJobOS/scripts/run_daily_search.sh</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/sarojnayak/SarojJobOS</string>
+    <string>/ABSOLUTE/PATH/TO/SarojJobOS</string>
 
     <!-- Once per day at 08:00 local time. Adjust to taste before
          installing - nothing about this template requires this exact
@@ -56,10 +59,10 @@
          failing to even start), independent of whether the wrapper
          got far enough to write its own log. -->
     <key>StandardOutPath</key>
-    <string>/Users/sarojnayak/SarojJobOS/logs/launchd_dailysearch.out.log</string>
+    <string>/ABSOLUTE/PATH/TO/SarojJobOS/logs/launchd_dailysearch.out.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/sarojnayak/SarojJobOS/logs/launchd_dailysearch.err.log</string>
+    <string>/ABSOLUTE/PATH/TO/SarojJobOS/logs/launchd_dailysearch.err.log</string>
 
     <!-- Belt-and-suspenders: the wrapper script already exports this
          itself before invoking Python, but setting it here too means

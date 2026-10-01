@@ -6,11 +6,13 @@ Tests for scripts/resume_extractor.py.
 Mostly fixture-based against synthetic, hand-written resume TEXT (not
 PDFs) via parse_resume_text() -- fast, no PDF dependency, and proves
 the parser is generic (not tuned to any one candidate's resume). One
-test exercises the real captured resume PDF
-(resumes/SarojKumarNayak_SRE_DevOps_11Yrs.pdf) end-to-end through
-extract_candidate_profile_draft() as an integration smoke test, mirroring
-this project's existing convention of testing against one real captured
-fixture (see test_naukri_detail_parsing.py).
+test (test 14) exercises a synthetic, wholly fictional resume PDF
+(data/fixtures/resume_extractor/synthetic_sre_resume.pdf, produced by
+scripts/generate_synthetic_resume_pdf.py) end-to-end through
+extract_candidate_profile_draft(), to cover the real binary-PDF-to-text
+path (pypdf.PdfReader.extract_text()) that the other 13 tests never
+touch -- tracked in git, no private resume file required, works from a
+fresh clone.
 """
 
 import sys
@@ -364,55 +366,58 @@ def test_13_different_candidate_produces_different_profile():
     return failures
 
 
-def test_14_real_resume_pdf_end_to_end_smoke_test():
+def test_14_synthetic_resume_pdf_end_to_end_smoke_test():
     """
-    Integration smoke test against the one real captured resume in
-    this repo (resumes/SarojKumarNayak_SRE_DevOps_11Yrs.pdf), mirroring
-    this project's established pattern of testing against a real
-    captured fixture (see test_naukri_detail_parsing.py). Asserts a
-    handful of facts that are genuinely, verifiably present in that
-    specific PDF -- not a claim that the parser is tuned to it.
+    Integration smoke test exercising the REAL binary-PDF-to-text path
+    (pypdf.PdfReader -> extract_text(), not parse_resume_text()
+    directly) end-to-end -- the one thing the other 13 fixture-based
+    tests in this file don't cover. Uses a wholly synthetic, tracked
+    fixture (data/fixtures/resume_extractor/synthetic_sre_resume.pdf,
+    produced by scripts/generate_synthetic_resume_pdf.py) instead of
+    any real person's resume, so this test works from a fresh clone
+    with no private file dependency. Every fact asserted below (name,
+    email, employer, experience years) is fictional.
     """
     failures = []
 
-    pdf_path = ROOT / "resumes" / "SarojKumarNayak_SRE_DevOps_11Yrs.pdf"
+    pdf_path = ROOT / "data" / "fixtures" / "resume_extractor" / "synthetic_sre_resume.pdf"
 
     if not pdf_path.exists():
-        _fail(failures, f"test 14: expected fixture resume PDF at {pdf_path}, file not found")
+        _fail(failures, f"test 14: expected synthetic fixture PDF at {pdf_path}, file not found")
         return failures
 
-    profile = extract_candidate_profile_draft(str(pdf_path), "cand-real-pdf-smoke")
+    profile = extract_candidate_profile_draft(str(pdf_path), "cand-synthetic-pdf-smoke")
     result = validate_candidate_profile(profile)
 
     if not result.valid:
-        _fail(failures, f"test 14: expected the real resume PDF to extract into a valid draft, got errors: {[e.message for e in result.error_issues]}")
+        _fail(failures, f"test 14: expected the synthetic resume PDF to extract into a valid draft, got errors: {[e.message for e in result.error_issues]}")
     if profile.metadata.profile_status != ProfileStatus.DRAFT:
         _fail(failures, f"test 14: expected profile_status=DRAFT, got {profile.metadata.profile_status}")
     if profile.metadata.source != Provenance.RESUME_EXTRACTED:
         _fail(failures, f"test 14: expected metadata.source=RESUME_EXTRACTED, got {profile.metadata.source}")
-    if profile.identity.email != "redacted-email@example.com":
-        _fail(failures, f"test 14: expected the real, verifiable email from this PDF, got {profile.identity.email!r}")
-    if profile.professional_summary.total_experience_years != 11.0:
-        _fail(failures, f"test 14: expected total_experience_years=11.0 (explicitly stated in this PDF's summary), got {profile.professional_summary.total_experience_years!r}")
+    if profile.identity.email != "jordan.smith@example.com":
+        _fail(failures, f"test 14: expected the fictional, verifiable email from this fixture PDF, got {profile.identity.email!r}")
+    if profile.professional_summary.total_experience_years != 9.0:
+        _fail(failures, f"test 14: expected total_experience_years=9.0 (explicitly stated in this fixture's summary), got {profile.professional_summary.total_experience_years!r}")
     if len(profile.employment_history) != 4:
-        _fail(failures, f"test 14: expected 4 employment entries in this real resume, got {len(profile.employment_history)}")
+        _fail(failures, f"test 14: expected 4 employment entries in this fixture resume, got {len(profile.employment_history)}")
     if any("KEY PROJECTS" in (e.description or "") for e in profile.employment_history):
-        _fail(failures, "test 14: the unrecognized 'KEY PROJECTS' section leaked into an employment entry's description in the real PDF")
+        _fail(failures, "test 14: the unrecognized 'KEY PROJECTS' section leaked into an employment entry's description in the synthetic PDF")
 
-    # Score-audit regression (found live, 2026-09-25): a STALE candidate
-    # profile in the dev DB had ALL of cloud/containers_orchestration/
-    # infrastructure_iac/cicd/observability empty, with every real tool
-    # (AWS, Kubernetes, Terraform, Jenkins, Prometheus, ...) dumped into
-    # "other" instead -- from an OLDER extraction pre-dating a
-    # categorization fix, never re-run since. score_job.py reads
-    # candidate skills from exactly these 5 categories for 50 of its
-    # 100 points (Cloud/K8s/IaC/CI-CD/Observability), so a candidate
-    # whose profile regresses to this state scores near-zero on all of
-    # them regardless of true fit -- a serious, silent scoring defect
-    # with no test previously catching it (this file's own real-PDF
-    # smoke test never asserted on skill categories). Locks in that a
-    # FRESH extraction of the real resume PDF correctly buckets known,
-    # real tools into their categories, not "other".
+    # Score-audit regression guard (found live, 2026-09-25, against a
+    # real candidate's profile -- a STALE extraction had ALL of
+    # cloud/containers_orchestration/infrastructure_iac/cicd/
+    # observability empty, with every real tool dumped into "other"
+    # instead, from an OLDER extraction pre-dating a categorization
+    # fix, never re-run since. score_job.py reads candidate skills from
+    # exactly these 5 categories for 50 of its 100 points (Cloud/K8s/
+    # IaC/CI-CD/Observability), so a candidate whose profile regresses
+    # to this state scores near-zero on all of them regardless of true
+    # fit -- a serious, silent scoring defect this test now catches via
+    # the binary-PDF extraction path (the other 13 tests only exercise
+    # parse_resume_text() directly, never the PDF->text step itself).
+    # The synthetic fixture's TECHNICAL SKILLS section deliberately
+    # includes one tool from each of these 5 categories.
     expected_in_category = {
         "cloud": {"AWS", "EKS", "AKS"},
         "containers_orchestration": {"Kubernetes", "Docker", "Helm"},
@@ -423,9 +428,9 @@ def test_14_real_resume_pdf_end_to_end_smoke_test():
     for category, expected_names in expected_in_category.items():
         actual_names = {s.name for s in getattr(profile.skills, category, [])}
         if not actual_names:
-            _fail(failures, f"test 14: SAFETY VIOLATION -- skills.{category} is empty for the real resume PDF (score_job.py awards 0 points for this dimension when empty); expected at least {expected_names}")
+            _fail(failures, f"test 14: SAFETY VIOLATION -- skills.{category} is empty for the synthetic resume PDF (score_job.py awards 0 points for this dimension when empty); expected at least {expected_names}")
         elif not (expected_names & actual_names):
-            _fail(failures, f"test 14: SAFETY VIOLATION -- skills.{category} = {actual_names} does not contain any of the expected real tools {expected_names} -- category classification may have regressed")
+            _fail(failures, f"test 14: SAFETY VIOLATION -- skills.{category} = {actual_names} does not contain any of the expected tools {expected_names} -- category classification may have regressed")
 
     other_names = {s.name for s in profile.skills.other}
     misclassified = expected_in_category.get("cloud", set()) & other_names
@@ -434,7 +439,7 @@ def test_14_real_resume_pdf_end_to_end_smoke_test():
 
     if not failures:
         print(
-            f"PASS: test 14 -> real resume PDF extracts into a valid DRAFT/RESUME_EXTRACTED "
+            f"PASS: test 14 -> synthetic resume PDF extracts into a valid DRAFT/RESUME_EXTRACTED "
             f"profile: email={profile.identity.email!r}, "
             f"experience={profile.professional_summary.total_experience_years}, "
             f"{len(profile.employment_history)} employment entries"
@@ -458,7 +463,7 @@ def main():
         test_11_missing_candidate_id_raises,
         test_12_extracted_draft_validates_cleanly,
         test_13_different_candidate_produces_different_profile,
-        test_14_real_resume_pdf_end_to_end_smoke_test,
+        test_14_synthetic_resume_pdf_end_to_end_smoke_test,
     ]
 
     all_failures = []

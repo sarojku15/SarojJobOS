@@ -17,12 +17,12 @@ status transition audit table, migrate_v7_candidate_resume_variant.
 migrate() for the candidate-scoped resume_variant column). No second
 schema definition is written here.
 
-Deliberately does NOT call migrate_v2_schema.migrate() (which seeds
-Saroj's real config/profile.json into candidate_id="saroj") and does
-NOT call migrate_v2_schema._seed_saroj() -- the Phase 9 dev database
-starts empty/generic. Existing Saroj data may optionally be used as a
-manual dev/test candidate (created through the API like any other),
-never assumed or hardcoded here.
+Deliberately never passes seed_legacy_candidate=True to migrate_v2_schema.
+migrate() and never calls migrate_v2_schema._seed_legacy_candidate_from_
+profile_json() directly -- the Phase 9 dev database starts empty/generic,
+for any operator. The legacy single-candidate CLI pipeline's own local
+candidate (if an operator uses it) is an entirely separate, explicit,
+opt-in step -- never assumed or hardcoded here.
 
 Idempotent: safe to run multiple times against an already-initialized
 dev database (every underlying call uses CREATE TABLE IF NOT EXISTS /

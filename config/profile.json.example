@@ -1,0 +1,94 @@
+{
+  "candidate": {
+    "name": "Alex Doe",
+    "current_title": "Senior Site Reliability Engineer",
+    "experience_years": 8,
+    "current_ctc_lpa": 20.0,
+    "target_ctc_lpa": 26.0,
+    "availability": "30 days notice"
+  },
+
+  "target_roles": [
+    "Senior Site Reliability Engineer",
+    "Senior DevOps Engineer",
+    "Platform Engineer"
+  ],
+
+  "target_locations": [
+    "Bangalore",
+    "Remote"
+  ],
+
+  "cloud": [
+    "AWS",
+    "Azure"
+  ],
+
+  "kubernetes": [
+    "Kubernetes",
+    "Docker",
+    "Helm"
+  ],
+
+  "iac_and_automation": [
+    "Terraform",
+    "Ansible"
+  ],
+
+  "cicd_and_devops": [
+    "Jenkins",
+    "GitHub Actions"
+  ],
+
+  "observability": [
+    "Prometheus",
+    "Grafana"
+  ],
+
+  "sre": [
+    "SLI",
+    "SLO",
+    "SLA",
+    "Incident Management"
+  ],
+
+  "programming_and_scripting": [
+    "Python",
+    "Shell"
+  ],
+
+  "operating_systems": [
+    "Linux"
+  ],
+
+  "security_and_governance": [],
+
+  "tools": [
+    "Git",
+    "Jira"
+  ],
+
+  "certifications": [
+    "Example Cloud Certification"
+  ],
+
+  "education": [
+    "B.Tech Computer Science and Engineering - Example University"
+  ],
+
+  "resume_variants": {
+    "primary": "SRE-A"
+  },
+
+  "application_rules": {
+    "minimum_experience_years": 5,
+    "preferred_experience_years": 8,
+    "exclude_junior_roles": true,
+    "exclude_pure_development_roles": true,
+    "exclude_pure_management_roles": true,
+    "exclude_roles_requiring_unverified_mandatory_skills": true,
+    "require_role_alignment": true,
+    "require_location_alignment": true,
+    "human_approval_before_submission": true
+  }
+}

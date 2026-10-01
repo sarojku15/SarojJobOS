@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import json
 import sqlite3
 import sys
 import tempfile
@@ -8,8 +9,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 
+import init_dev_db
 import init_tracker
 import migrate_v2_schema
+
+# A throwaway fixture profile, used only by the seeding tests below --
+# never the real, gitignored config/profile.json (which may not even
+# exist on a fresh clone/CI runner). Deliberately NOT "Saroj Kumar
+# Nayak" or any real name, so these tests can never depend on or leak
+# real personal data.
+_FIXTURE_PROFILE = {"candidate": {"name": "Test Fixture Candidate"}}
 
 
 NEW_TABLES = [
@@ -56,6 +65,12 @@ def _use_isolated_db(with_jobs_table=True):
     migrate_v2_schema.DATA_DIR = tmp_dir
     migrate_v2_schema.DB_PATH = tmp_db_path
 
+    # Point at an isolated fixture profile, never the real (gitignored,
+    # possibly-absent) config/profile.json -- see _FIXTURE_PROFILE.
+    fixture_profile_path = tmp_dir / "fixture_profile.json"
+    fixture_profile_path.write_text(json.dumps(_FIXTURE_PROFILE), encoding="utf-8")
+    migrate_v2_schema.PROFILE_PATH = fixture_profile_path
+
     return tmp_db_path
 
 
@@ -97,7 +112,7 @@ def test_fresh_database_creates_all_tables():
 
 def test_migration_is_idempotent():
     db_path = _use_isolated_db()
-    migrate_v2_schema.migrate()
+    migrate_v2_schema.migrate(seed_legacy_candidate=True)
 
     conn = sqlite3.connect(db_path)
     tables_after_first = _table_names(db_path)
@@ -108,7 +123,7 @@ def test_migration_is_idempotent():
     conn.close()
 
     # Run again.
-    migrate_v2_schema.migrate()
+    migrate_v2_schema.migrate(seed_legacy_candidate=True)
 
     conn = sqlite3.connect(db_path)
     tables_after_second = _table_names(db_path)
@@ -131,60 +146,110 @@ def test_migration_is_idempotent():
     print("PASS: running migration twice is idempotent")
 
 
-def test_saroj_candidate_seeded_once():
+def test_legacy_candidate_seeded_once_when_opted_in():
     _use_isolated_db()
-    migrate_v2_schema.migrate()
-    migrate_v2_schema.migrate()
+    migrate_v2_schema.migrate(seed_legacy_candidate=True)
+    migrate_v2_schema.migrate(seed_legacy_candidate=True)
 
     conn = sqlite3.connect(migrate_v2_schema.DB_PATH)
     rows = conn.execute(
-        "SELECT candidate_id, name, status FROM candidates WHERE candidate_id = 'saroj'"
+        "SELECT candidate_id, name, status FROM candidates WHERE candidate_id = ?",
+        (migrate_v2_schema.LEGACY_CANDIDATE_ID,),
     ).fetchall()
     conn.close()
 
-    assert len(rows) == 1, f"Expected exactly one saroj candidate row, got {len(rows)}"
-    assert rows[0][1], "Saroj's name should be populated from config/profile.json"
+    assert len(rows) == 1, f"Expected exactly one legacy candidate row, got {len(rows)}"
+    assert rows[0][1] == _FIXTURE_PROFILE["candidate"]["name"], (
+        "Legacy candidate's name should come from the fixture profile, never a hardcoded real name"
+    )
     assert rows[0][2] == "ACTIVE"
 
-    print(f"PASS: saroj candidate seeded exactly once (name={rows[0][1]!r})")
+    print(f"PASS: legacy candidate seeded exactly once when opted in (name={rows[0][1]!r})")
 
 
-def test_saroj_profile_v1_seeded_once():
+def test_legacy_candidate_profile_v1_seeded_once_when_opted_in():
     _use_isolated_db()
-    migrate_v2_schema.migrate()
-    migrate_v2_schema.migrate()
+    migrate_v2_schema.migrate(seed_legacy_candidate=True)
+    migrate_v2_schema.migrate(seed_legacy_candidate=True)
 
     conn = sqlite3.connect(migrate_v2_schema.DB_PATH)
     rows = conn.execute(
-        """
-        SELECT version, search_mode FROM candidate_search_profile
-        WHERE candidate_id = 'saroj' AND version = 1
-        """
+        "SELECT version, search_mode FROM candidate_search_profile WHERE candidate_id = ? AND version = 1",
+        (migrate_v2_schema.LEGACY_CANDIDATE_ID,),
     ).fetchall()
     conn.close()
 
     assert len(rows) == 1, f"Expected exactly one v1 profile row, got {len(rows)}"
     assert rows[0][1] == "PROFILE"
 
-    print("PASS: saroj profile version 1 seeded exactly once")
+    print("PASS: legacy candidate profile version 1 seeded exactly once when opted in")
 
 
-def test_profile_confirmed_and_active():
+def test_legacy_candidate_profile_confirmed_and_active_when_opted_in():
     _use_isolated_db()
-    migrate_v2_schema.migrate()
+    migrate_v2_schema.migrate(seed_legacy_candidate=True)
 
     conn = sqlite3.connect(migrate_v2_schema.DB_PATH)
     row = conn.execute(
-        """
-        SELECT confirmed_by_user, is_active FROM candidate_search_profile
-        WHERE candidate_id = 'saroj' AND version = 1
-        """
+        "SELECT confirmed_by_user, is_active FROM candidate_search_profile WHERE candidate_id = ? AND version = 1",
+        (migrate_v2_schema.LEGACY_CANDIDATE_ID,),
     ).fetchone()
     conn.close()
 
     assert row == (1, 1), f"Expected (confirmed_by_user=1, is_active=1), got {row}"
 
-    print("PASS: saroj profile v1 is confirmed_by_user=1 and is_active=1")
+    print("PASS: legacy candidate profile v1 is confirmed_by_user=1 and is_active=1")
+
+
+def test_migrate_default_seeds_no_candidate():
+    """
+    The release-readiness fix: migrate() with its default argument
+    (seed_legacy_candidate=False, as every real caller in this
+    repository -- init_dev_db.py, migrate_production_schema.py -- uses
+    it) must create zero candidates. No one's real name, and no
+    candidate_id, is ever seeded implicitly.
+    """
+    db_path = _use_isolated_db()
+    migrate_v2_schema.migrate()
+
+    conn = sqlite3.connect(db_path)
+    candidate_count = conn.execute("SELECT COUNT(*) FROM candidates").fetchone()[0]
+    rows = conn.execute("SELECT candidate_id, name FROM candidates").fetchall()
+    conn.close()
+
+    assert candidate_count == 0, f"Expected zero candidates by default, got {candidate_count}: {rows}"
+    assert all(r[0] != "saroj" for r in rows), f"'saroj' candidate_id must not appear by default: {rows}"
+    assert all((r[1] or "") != "Saroj Kumar Nayak" for r in rows), (
+        f"Real personal name must never appear by default: {rows}"
+    )
+
+    print("PASS: migrate() with default arguments seeds zero candidates")
+
+
+def test_fresh_dev_db_has_no_candidates_and_no_real_name():
+    """
+    The actual path every normal developer/friend hits
+    (api/db.py -> init_dev_db.init_dev_db()) must produce a completely
+    empty, generic candidates table -- confirming init_dev_db.py's own
+    behavior is unchanged by this release-readiness fix.
+    """
+    tmp_dir = Path(tempfile.mkdtemp(prefix="jobos_test_fresh_dev_db_"))
+    tmp_db_path = tmp_dir / "jobos_dev_test.db"
+
+    init_dev_db.init_dev_db(tmp_db_path)
+
+    conn = sqlite3.connect(tmp_db_path)
+    candidate_count = conn.execute("SELECT COUNT(*) FROM candidates").fetchone()[0]
+    rows = conn.execute("SELECT candidate_id, name FROM candidates").fetchall()
+    conn.close()
+
+    assert candidate_count == 0, f"Expected zero candidates from a fresh dev DB, got {candidate_count}: {rows}"
+    assert all(r[0] != "saroj" for r in rows), f"'saroj' must not appear in a fresh dev DB: {rows}"
+    assert all((r[1] or "") != "Saroj Kumar Nayak" for r in rows), (
+        f"Real personal name must never appear in a fresh dev DB: {rows}"
+    )
+
+    print("PASS: a fresh init_dev_db.py database has zero candidates and no real personal data")
 
 
 def test_existing_jobs_remain_global_and_unaltered():
@@ -272,6 +337,14 @@ def test_two_candidates_share_one_global_job():
     conn.execute(
         """
         INSERT INTO candidates (candidate_id, name, created_at, updated_at, status)
+        VALUES ('candidate-a', 'Test Candidate A', ?, ?, 'ACTIVE')
+        """,
+        (now, now),
+    )
+
+    conn.execute(
+        """
+        INSERT INTO candidates (candidate_id, name, created_at, updated_at, status)
         VALUES ('candidate-b', 'Test Candidate B', ?, ?, 'ACTIVE')
         """,
         (now, now),
@@ -282,7 +355,7 @@ def test_two_candidates_share_one_global_job():
         INSERT INTO candidate_job_matches (
             candidate_id, job_id, fit_score, priority, created_at, updated_at
         )
-        VALUES ('saroj', 'JOB-SHARED', 95, 'A', ?, ?)
+        VALUES ('candidate-a', 'JOB-SHARED', 95, 'A', ?, ?)
         """,
         (now, now),
     )
@@ -337,6 +410,14 @@ def test_candidates_have_different_match_records_and_are_not_confused():
     conn.execute(
         """
         INSERT INTO candidates (candidate_id, name, created_at, updated_at, status)
+        VALUES ('candidate-d', 'Test Candidate D', ?, ?, 'ACTIVE')
+        """,
+        (now, now),
+    )
+
+    conn.execute(
+        """
+        INSERT INTO candidates (candidate_id, name, created_at, updated_at, status)
         VALUES ('candidate-c', 'Test Candidate C', ?, ?, 'ACTIVE')
         """,
         (now, now),
@@ -347,7 +428,7 @@ def test_candidates_have_different_match_records_and_are_not_confused():
         INSERT INTO candidate_job_matches (
             candidate_id, job_id, fit_score, priority, created_at, updated_at
         )
-        VALUES ('saroj', 'JOB-SHARED-2', 95, 'A', ?, ?)
+        VALUES ('candidate-d', 'JOB-SHARED-2', 95, 'A', ?, ?)
         """,
         (now, now),
     )
@@ -364,10 +445,10 @@ def test_candidates_have_different_match_records_and_are_not_confused():
 
     conn.commit()
 
-    saroj_row = conn.execute(
+    candidate_d_row = conn.execute(
         """
         SELECT fit_score, priority FROM candidate_job_matches
-        WHERE candidate_id = 'saroj' AND job_id = 'JOB-SHARED-2'
+        WHERE candidate_id = 'candidate-d' AND job_id = 'JOB-SHARED-2'
         """
     ).fetchone()
 
@@ -380,11 +461,11 @@ def test_candidates_have_different_match_records_and_are_not_confused():
 
     conn.close()
 
-    assert saroj_row == (95, "A"), f"Saroj's match record is wrong: {saroj_row}"
+    assert candidate_d_row == (95, "A"), f"Candidate D's match record is wrong: {candidate_d_row}"
     assert candidate_c_row == (40, "REJECT"), (
         f"Candidate C's match record is wrong: {candidate_c_row}"
     )
-    assert saroj_row != candidate_c_row, "Match records must not be confused between candidates"
+    assert candidate_d_row != candidate_c_row, "Match records must not be confused between candidates"
 
     print(
         "PASS: distinct candidate match records for the same job are "
@@ -442,9 +523,11 @@ def main():
     tests = [
         test_fresh_database_creates_all_tables,
         test_migration_is_idempotent,
-        test_saroj_candidate_seeded_once,
-        test_saroj_profile_v1_seeded_once,
-        test_profile_confirmed_and_active,
+        test_legacy_candidate_seeded_once_when_opted_in,
+        test_legacy_candidate_profile_v1_seeded_once_when_opted_in,
+        test_legacy_candidate_profile_confirmed_and_active_when_opted_in,
+        test_migrate_default_seeds_no_candidate,
+        test_fresh_dev_db_has_no_candidates_and_no_real_name,
         test_existing_jobs_remain_global_and_unaltered,
         test_unique_source_job_id_constraint_preserved,
         test_two_candidates_share_one_global_job,

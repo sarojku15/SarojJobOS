@@ -3,6 +3,7 @@
 import hashlib
 import json
 import sqlite3
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -263,26 +264,48 @@ def _ensure_job_columns(conn):
             conn.execute(f"ALTER TABLE jobs ADD COLUMN {name} {col_type}")
 
 
-def _seed_saroj(conn):
+LEGACY_CANDIDATE_ID = "saroj"
+
+
+def _seed_legacy_candidate_from_profile_json(conn):
     """
-    Seed candidate_id="saroj" and candidate_search_profile version 1,
-    sourced entirely from config/profile.json (never hardcoded).
-    Idempotent: checks for existing rows before inserting, keyed on
-    the deterministic candidate_id for candidates, and on
-    (candidate_id, version) for the profile (profile_id is
+    Seed candidate_id=LEGACY_CANDIDATE_ID and candidate_search_profile
+    version 1, sourced entirely from whatever this process's own
+    PROFILE_PATH points at (config/profile.json by default -- an
+    operator's own local, gitignored file; never a value this script
+    hardcodes or ships). Idempotent: checks for existing rows before
+    inserting, keyed on the deterministic candidate_id for candidates,
+    and on (candidate_id, version) for the profile (profile_id is
     autoincrement, not deterministic, so it cannot rely on a natural
     primary-key collision the way candidates can).
+
+    Only ever called when explicitly opted into (see migrate()'s
+    seed_legacy_candidate parameter and this module's --seed-legacy-
+    candidate CLI flag) -- never part of the normal, generic migration
+    chain any other script in this repository calls. This is the
+    legacy single-candidate CLI pipeline's own bootstrap step, kept
+    for operators who still use it; it has nothing to do with the
+    current multi-candidate web app's candidate creation, which always
+    goes through api/profile_store.py's server-generated candidate_id.
     """
+    if not PROFILE_PATH.exists():
+        raise FileNotFoundError(
+            f"{PROFILE_PATH} does not exist -- the legacy CLI pipeline needs "
+            "your own local profile file there. Copy config/profile.json.example "
+            "to config/profile.json and fill in your own details first "
+            "(this file is gitignored and never committed)."
+        )
+
     with PROFILE_PATH.open("r", encoding="utf-8") as f:
         profile = json.load(f)
 
-    candidate_id = "saroj"
+    candidate_id = LEGACY_CANDIDATE_ID
     name = profile.get("candidate", {}).get("name")
 
     if not name:
         raise ValueError(
-            "config/profile.json is missing candidate.name; "
-            "cannot seed the Saroj candidate without it."
+            f"{PROFILE_PATH} is missing candidate.name; "
+            "cannot seed the legacy candidate without it."
         )
 
     now = _now()
@@ -327,7 +350,16 @@ def _seed_saroj(conn):
         )
 
 
-def migrate():
+def migrate(seed_legacy_candidate=False):
+    """
+    Schema-only by default: creates/extends the multi-candidate tables
+    and jobs columns, nothing else. Pass seed_legacy_candidate=True (or
+    run this file directly with --seed-legacy-candidate) to additionally
+    seed the legacy single-candidate CLI pipeline's own candidate row
+    from your local config/profile.json -- never done implicitly, and
+    never part of any other script's migration chain (init_dev_db.py,
+    migrate_production_schema.py) in this repository.
+    """
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     conn = sqlite3.connect(DB_PATH)
@@ -335,7 +367,8 @@ def migrate():
 
     _create_new_tables(conn)
     _ensure_job_columns(conn)
-    _seed_saroj(conn)
+    if seed_legacy_candidate:
+        _seed_legacy_candidate_from_profile_json(conn)
 
     conn.commit()
     conn.close()
@@ -385,9 +418,12 @@ def _row_counts():
 
 
 def main():
+    seed_legacy_candidate = "--seed-legacy-candidate" in sys.argv[1:]
+
     print("MIGRATE V2 SCHEMA")
     print("=================")
     print(f"Database: {DB_PATH}")
+    print(f"Seed legacy candidate from {PROFILE_PATH}: {seed_legacy_candidate}")
     print()
 
     before = _file_stats(DB_PATH)
@@ -402,7 +438,7 @@ def main():
 
     print()
 
-    migrate()
+    migrate(seed_legacy_candidate=seed_legacy_candidate)
 
     after = _file_stats(DB_PATH)
 

@@ -14,7 +14,7 @@ saved_searches, search_run_sources, status_history,
 resume_variant/profile-traceability columns, candidate_job_search_matches,
 search_type, and the whole v11-v15 automation schema) WITHOUT ever
 calling the one genuinely destructive/data-writing function in this
-chain: migrate_v2_schema._seed_saroj() (which does a real
+chain: migrate_v2_schema._seed_legacy_candidate_from_profile_json() (which does a real
 INSERT INTO candidates for candidate_id="saroj" -- production's real
 candidate already exists; re-running that would either fail on a
 UNIQUE constraint or, worse, silently duplicate/disturb real data).

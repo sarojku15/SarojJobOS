@@ -5,6 +5,14 @@ credentials.json
 token.json
 client_secret*.json
 
+# Legacy single-candidate CLI pipeline's own local profile -- real
+# personal data (name, salary, etc.), never committed. See
+# config/profile.json.example for the tracked generic template; copy
+# it to config/profile.json and fill in your own details if you use
+# the legacy CLI (scripts/jobos.py / the /jobos skill). The current
+# multi-candidate web app never reads this file.
+config/profile.json
+
 # Google / OAuth
 *.pem
 *.key

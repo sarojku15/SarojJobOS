@@ -17,10 +17,22 @@ def load_json(path):
 
 
 # Loaded here only so the CLI entry point (main(), below) can resolve
-# Saroj's profile as the caller -- score_job() and evaluate_hard_reject()
-# never read this global themselves; candidate_profile is always an
-# explicit argument.
-PROFILE = load_json(ROOT / "config" / "profile.json")
+# the legacy single-candidate CLI pipeline's own local operator profile
+# as the caller -- score_job() and evaluate_hard_reject() never read
+# this global themselves; candidate_profile is always an explicit
+# argument. config/profile.json is gitignored (an operator's own local
+# file, never committed -- see config/profile.json.example), and this
+# module is imported by the current multi-candidate pipeline too
+# (scripts/search_worker.py etc.) purely for score_job()/
+# evaluate_hard_reject(), which never touch this global -- so a fresh
+# clone with no local config/profile.json yet must not fail to import
+# this module. Falls back to the generic example so import always
+# succeeds; the legacy CLI's own main() below still requires a real
+# config/profile.json to actually run.
+_PROFILE_PATH = ROOT / "config" / "profile.json"
+if not _PROFILE_PATH.exists():
+    _PROFILE_PATH = ROOT / "config" / "profile.json.example"
+PROFILE = load_json(_PROFILE_PATH)
 
 
 def normalize(text):

@@ -21,6 +21,15 @@ GITIGNORE_PATH = ROOT / ".gitignore"
 
 EXPECTED_WRAPPER_ABS_PATH = str(WRAPPER_PATH.resolve())
 
+# The plist is a project-owned TEMPLATE (never installed/loaded by
+# this repository -- see launchd/README.md): it ships with the
+# documented /ABSOLUTE/PATH/TO/SarojJobOS placeholder, which an
+# operator replaces with their own clone's real absolute path before
+# installing. Both forms are valid here -- this test checks the
+# plist's internal consistency/shape, not that it has already been
+# filled in for any one specific machine.
+PLACEHOLDER_ROOT = "/ABSOLUTE/PATH/TO/SarojJobOS"
+
 
 def _fail(failures, message):
     failures.append(message)
@@ -52,17 +61,20 @@ def main():
         print("PASS: plist is syntactically valid (parsed by plistlib)")
 
     # --- absolute paths are correct ---
+    placeholder_wrapper_path = f"{PLACEHOLDER_ROOT}/scripts/run_daily_search.sh"
     program_args = plist.get("ProgramArguments", [])
     if not program_args or not program_args[0].startswith("/"):
         _fail(failures, f"ProgramArguments[0] must be an absolute path, got {program_args}")
-    elif program_args[0] != EXPECTED_WRAPPER_ABS_PATH:
-        _fail(failures, f"ProgramArguments[0] ({program_args[0]}) does not match the actual wrapper script path ({EXPECTED_WRAPPER_ABS_PATH})")
+    elif program_args[0] not in (EXPECTED_WRAPPER_ABS_PATH, placeholder_wrapper_path):
+        _fail(failures, f"ProgramArguments[0] ({program_args[0]}) must be either the real wrapper script path ({EXPECTED_WRAPPER_ABS_PATH}) or the documented placeholder ({placeholder_wrapper_path})")
     else:
-        print(f"PASS: ProgramArguments[0] is an absolute path matching the real wrapper script: {program_args[0]}")
+        print(f"PASS: ProgramArguments[0] is an absolute path matching the real wrapper script or the documented placeholder: {program_args[0]}")
 
     working_dir = plist.get("WorkingDirectory", "")
     if not working_dir.startswith("/"):
         _fail(failures, f"WorkingDirectory must be absolute, got {working_dir!r}")
+    elif working_dir not in (str(ROOT.resolve()), PLACEHOLDER_ROOT):
+        _fail(failures, f"WorkingDirectory ({working_dir}) must be either the real project root or the documented placeholder ({PLACEHOLDER_ROOT})")
     else:
         print(f"PASS: WorkingDirectory is absolute: {working_dir}")
 
@@ -89,12 +101,12 @@ def main():
     else:
         print("PASS: headless Chromium explicitly forced on, both in the plist and the wrapper script")
 
-    # --- logs point to SarojJobOS/logs ---
+    # --- logs point to the project's own logs/ dir, real path or placeholder ---
     stdout_path = plist.get("StandardOutPath", "")
     stderr_path = plist.get("StandardErrorPath", "")
-    expected_logs_prefix = str((ROOT / "logs").resolve())
-    if not stdout_path.startswith(expected_logs_prefix) or not stderr_path.startswith(expected_logs_prefix):
-        _fail(failures, f"plist StandardOutPath/StandardErrorPath must be under {expected_logs_prefix}, got {stdout_path!r} / {stderr_path!r}")
+    expected_logs_prefixes = (str((ROOT / "logs").resolve()), f"{PLACEHOLDER_ROOT}/logs")
+    if not stdout_path.startswith(expected_logs_prefixes) or not stderr_path.startswith(expected_logs_prefixes):
+        _fail(failures, f"plist StandardOutPath/StandardErrorPath must be under one of {expected_logs_prefixes}, got {stdout_path!r} / {stderr_path!r}")
     elif f'LOG_DIR="{ROOT}/logs"' not in wrapper_text and "LOG_DIR=\"$PROJECT_ROOT/logs\"" not in wrapper_text:
         _fail(failures, "wrapper script does not define LOG_DIR under the project's logs/ directory")
     else:

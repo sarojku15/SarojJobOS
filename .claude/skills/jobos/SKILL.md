@@ -318,7 +318,7 @@ Do not simulate or invent job search results. Do not browse job boards.
 
 Run the full test suite:
 ```bash
-cd /Users/sarojnayak/SarojJobOS && python3 scripts/test_scoring.py && echo "---" && python3 scripts/test_adapter_pipeline.py && echo "---" && python3 scripts/test_query_orchestrator.py
+python3 scripts/test_scoring.py && echo "---" && python3 scripts/test_adapter_pipeline.py && echo "---" && python3 scripts/test_query_orchestrator.py
 ```
 
 Present the output. Report PASS or FAIL clearly.

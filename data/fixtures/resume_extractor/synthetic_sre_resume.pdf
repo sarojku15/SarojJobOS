@@ -1,0 +1,119 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 5 0 R >> >> /MediaBox [0 0 612 792] /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 1508 >>
+stream
+BT
+/F1 10 Tf
+50 760 Td
+12 TL
+(JORDAN SMITH) Tj
+T*
+(Senior Site Reliability Engineer) Tj
+T*
+(jordan.smith@example.com | 555-010-1234) Tj
+T*
+() Tj
+T*
+(PROFESSIONAL SUMMARY) Tj
+T*
+(Site Reliability Engineer with 9 years of experience across cloud) Tj
+T*
+(infrastructure, Kubernetes, and CI/CD automation.) Tj
+T*
+() Tj
+T*
+(TECHNICAL SKILLS) Tj
+T*
+(Cloud Platforms: AWS, EKS, AKS, Azure) Tj
+T*
+(Containers and Orchestration: Kubernetes, Docker, Helm) Tj
+T*
+(Infrastructure as Code: Terraform, Ansible) Tj
+T*
+(CI/CD: Jenkins, ArgoCD) Tj
+T*
+(Observability and Monitoring: Prometheus, Grafana) Tj
+T*
+() Tj
+T*
+(PROFESSIONAL EXPERIENCE) Tj
+T*
+(Senior Site Reliability Engineer Jan 2023 - Present) Tj
+T*
+(Example Analytics Inc) Tj
+T*
+(- Defined SLOs and built observability dashboards.) Tj
+T*
+() Tj
+T*
+(Site Reliability Engineer Feb 2021 - Dec 2022) Tj
+T*
+(Sample Cloud Co) Tj
+T*
+(- Migrated workloads to Kubernetes.) Tj
+T*
+() Tj
+T*
+(DevOps Engineer Mar 2018 - Jan 2021) Tj
+T*
+(Fictional Systems Ltd) Tj
+T*
+(- Built CI/CD pipelines with Jenkins.) Tj
+T*
+() Tj
+T*
+(Site Reliability Engineer Jun 2015 - Feb 2018) Tj
+T*
+(Example Hosting Corp) Tj
+T*
+(- Managed on-call rotations and incident response.) Tj
+T*
+() Tj
+T*
+(KEY PROJECTS) Tj
+T*
+(Disaster Recovery Automation) Tj
+T*
+(- Automated failover, reducing recovery time by 60 percent.) Tj
+T*
+() Tj
+T*
+(CERTIFICATIONS) Tj
+T*
+(- Example Cloud Certification) Tj
+T*
+() Tj
+T*
+(EDUCATION) Tj
+T*
+(Bachelor of Technology - Computer Science) Tj
+T*
+(Example University - 2014) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000001801 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1871
+%%EOF

@@ -11,12 +11,15 @@ clean up, it's an honest description of what's here:
    number of independent candidates. This is what `README.md`'s Quick
    Start describes, and what new users should use.
 2. **The legacy, single-candidate CLI pipeline**: `config/profile.json`
-   (Saroj's own profile), `data/inbox/job_input.txt`,
+   (an operator's own local profile — gitignored, never committed; copy
+   `config/profile.json.example` to `config/profile.json` and fill in
+   your own details before using this pipeline), `data/inbox/job_input.txt`,
    `scripts/process_job_input.py`, `scripts/query_planner.py`,
    `scripts/generate_daily_report.py`, driven by the `/jobos` Claude
    Code slash command. Still functional, still tested, kept for
    backward compatibility — not the recommended entry point for a new
-   user.
+   user, and entirely optional: the current web app never reads this
+   file.
 
 Both share the same underlying scoring/eligibility/dedup/freshness
 logic (`scripts/score_job.py`, `scripts/job_eligibility.py`,

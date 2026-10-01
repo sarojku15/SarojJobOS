@@ -30,8 +30,13 @@ time). That wrapper script:
 ## Installation (manual — run these yourself, when ready)
 
 ```bash
+# 0. First edit com.sarojjobos.dailysearch.plist: replace every
+#    /ABSOLUTE/PATH/TO/SarojJobOS placeholder with your own clone's
+#    absolute path (ProgramArguments, WorkingDirectory,
+#    StandardOutPath, StandardErrorPath).
+
 # 1. Copy the plist into your LaunchAgents directory
-cp /Users/sarojnayak/SarojJobOS/launchd/com.sarojjobos.dailysearch.plist \
+cp /ABSOLUTE/PATH/TO/SarojJobOS/launchd/com.sarojjobos.dailysearch.plist \
    ~/Library/LaunchAgents/com.sarojjobos.dailysearch.plist
 
 # 2. Load it (registers the job with launchd; does NOT run it immediately --
@@ -71,9 +76,10 @@ rm ~/Library/LaunchAgents/com.sarojjobos.dailysearch.plist
   you.
 - Confirm `.venv/bin/python3` exists and has `openpyxl` installed
   (`requirements.txt`) — the wrapper script hardcodes this path.
-- The candidate ID is hardcoded to `saroj` in both the wrapper script
-  and this plist's intent — this project has exactly one real
-  candidate today.
+- The candidate ID defaults to `saroj` (this project's own one real
+  candidate today) — override it for your own clone by setting
+  `JOBOS_DAILY_CANDIDATE_ID` in this plist's `EnvironmentVariables`
+  block, no script edit required.
 - Only `NAUKRI` is `ENABLED` — this daily run will only ever query
   Naukri. Hirist and LinkedIn remain `NOT_ENABLED` and are untouched by
   this automation.

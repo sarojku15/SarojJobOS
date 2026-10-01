@@ -54,7 +54,7 @@ set -euo pipefail
 # Absolute project path (PART B requirement #3) -- launchd provides no
 # working-directory guarantee, so every path here is built from this,
 # never a relative path or an inherited $PWD.
-PROJECT_ROOT="/Users/sarojnayak/SarojJobOS"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 VENV_PYTHON="$PROJECT_ROOT/.venv/bin/python3"
 
@@ -75,7 +75,11 @@ WORKER_SCRIPT="$PROJECT_ROOT/scripts/run_search_worker.py"
 LOG_DIR="$PROJECT_ROOT/logs"
 SCHEDULER_LOG="$LOG_DIR/daily_search_scheduler.log"
 LOCK_DIR="$LOG_DIR/.run_daily_search.lock"
-CANDIDATE_ID="saroj"
+# Defaults to "saroj" -- this project's own one real candidate today --
+# but any operator running their own clone can override it without
+# editing this file, same JOBOS_DAILY_DB_OVERRIDE-style convention as
+# PRODUCTION_DB above.
+CANDIDATE_ID="${JOBOS_DAILY_CANDIDATE_ID:-saroj}"
 
 # Preserve existing headless Chromium behavior explicitly (PART B
 # requirement #9) -- naukri_fetch_bridge.js already defaults to
