@@ -421,9 +421,9 @@ def test_10_existing_fixtures_unchanged_except_experience_fix():
     """
     Re-run the three original scoring fixtures directly through
     score_job() (not via subprocess/CLI) and confirm priority/status are
-    unchanged. data/test_job.json and data/test_job_b.json both use
+    unchanged. data/fixtures/scoring/test_job.json and data/fixtures/scoring/test_job_b.json both use
     "8+ years" (MATCH under both old and new logic -- unaffected).
-    data/test_job_reject.json uses "1-3 years" against an 11-year
+    data/fixtures/scoring/test_job_reject.json uses "1-3 years" against an 11-year
     candidate: under the corrected logic this is now BELOW_PROFILE
     (candidate meaningfully more senior than the role wants), so its
     Experience dimension may no longer award the point it used to --
@@ -436,9 +436,9 @@ def test_10_existing_fixtures_unchanged_except_experience_fix():
     failures = []
 
     fixtures = [
-        ("data/test_job.json", "A", "READY_FOR_APPROVAL"),
-        ("data/test_job_b.json", "B", "READY_FOR_APPROVAL"),
-        ("data/test_job_reject.json", "REJECT", "NOT_QUALIFIED"),  # Phase 7.2: score_job.py no longer writes "REJECTED"
+        ("data/fixtures/scoring/test_job.json", "A", "READY_FOR_APPROVAL"),
+        ("data/fixtures/scoring/test_job_b.json", "B", "READY_FOR_APPROVAL"),
+        ("data/fixtures/scoring/test_job_reject.json", "REJECT", "NOT_QUALIFIED"),  # Phase 7.2: score_job.py no longer writes "REJECTED"
     ]
 
     # Falls back to the generic, tracked example profile when no local

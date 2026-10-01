@@ -1,0 +1,25 @@
+{
+  "job_id": "TEST-REJECT-001",
+  "source": "TEST",
+  "company": "Example Software",
+  "title": "Junior Frontend Developer",
+  "location": "Bengaluru",
+  "work_model": "Onsite",
+  "job_url": "https://example.com/jobs/TEST-REJECT-001",
+  "application_url": "https://example.com/apply/TEST-REJECT-001",
+  "posted_date": "2026-09-19",
+  "discovered_at": "2026-09-19T10:05:00+05:30",
+
+  "experience_required": "1-3 years",
+
+  "mandatory_skills": [
+    "React",
+    "JavaScript"
+  ],
+
+  "preferred_skills": [
+    "Next.js"
+  ],
+
+  "jd_text": "Junior Frontend Developer responsible for building React and JavaScript web applications. Candidates should have 1-3 years of experience. This is primarily a frontend development position."
+}

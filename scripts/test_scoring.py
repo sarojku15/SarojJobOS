@@ -11,17 +11,17 @@ ROOT = Path(__file__).resolve().parents[1]
 
 TESTS = [
     {
-        "file": "data/test_job.json",
+        "file": "data/fixtures/scoring/test_job.json",
         "expected_priority": "A",
         "expected_status": "READY_FOR_APPROVAL"
     },
     {
-        "file": "data/test_job_b.json",
+        "file": "data/fixtures/scoring/test_job_b.json",
         "expected_priority": "B",
         "expected_status": "READY_FOR_APPROVAL"
     },
     {
-        "file": "data/test_job_reject.json",
+        "file": "data/fixtures/scoring/test_job_reject.json",
         "expected_priority": "REJECT",
         "expected_status": "NOT_QUALIFIED"  # Phase 7.2: score_job.py no longer writes "REJECTED" (see data/reports/phase7_2_automation_status_audit.md)
     }

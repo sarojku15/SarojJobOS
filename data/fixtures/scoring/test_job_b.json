@@ -1,0 +1,27 @@
+{
+  "job_id": "TEST-B-001",
+  "source": "TEST",
+  "company": "Example Cloud Company",
+  "title": "Senior DevOps Engineer",
+  "location": "Hyderabad",
+  "work_model": "Hybrid",
+  "job_url": "https://example.com/jobs/TEST-B-001",
+  "application_url": "https://example.com/apply/TEST-B-001",
+  "posted_date": "2026-09-19",
+  "discovered_at": "2026-09-19T10:10:00+05:30",
+
+  "experience_required": "8+ years",
+
+  "mandatory_skills": [
+    "AWS",
+    "Terraform"
+  ],
+
+  "preferred_skills": [
+    "Jenkins",
+    "Docker",
+    "Prometheus"
+  ],
+
+  "jd_text": "Senior DevOps Engineer responsible for AWS cloud infrastructure, Terraform infrastructure as code, Jenkins CI/CD pipelines, Docker containers and production support. The role involves incident management and automation. Kubernetes and advanced observability are not required."
+}

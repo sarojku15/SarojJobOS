@@ -207,7 +207,13 @@ finally:
 # ---------------------------------------------------------------------
 
 env_backup = tmp_dir / ".env.real_backup"
-shutil.copy(REAL_ENV_PATH, env_backup)
+# .env is gitignored and optional (no provider keys required to run
+# JobOS) -- a fresh clone genuinely has none. Back it up only if it
+# exists; "restore" then means removing whatever this section wrote,
+# never fabricating a .env that was never there.
+_real_env_existed = REAL_ENV_PATH.exists()
+if _real_env_existed:
+    shutil.copy(REAL_ENV_PATH, env_backup)
 
 try:
     import source_capabilities as sc
@@ -263,11 +269,17 @@ try:
     you_board_after_remove = next(c for c in resp.json()["enabled"] + resp.json()["unavailable"] if c["source_name"] == "INDEED")
     check(you_board_after_remove["final_status"] == "SEARCH_PROVIDER_NOT_CONFIGURED", f"Remove: /api/sources reflects the removal immediately (got {you_board_after_remove['final_status']})")
 finally:
-    shutil.copy(env_backup, REAL_ENV_PATH)
+    if _real_env_existed:
+        shutil.copy(env_backup, REAL_ENV_PATH)
+    else:
+        REAL_ENV_PATH.unlink(missing_ok=True)
     for junk in [ROOT / "data" / "applications" / "search_provider_settings.json", ROOT / "data" / "applications" / "search_provider_usage.json"]:
         junk.unlink(missing_ok=True)
 
-check(_sha(REAL_ENV_PATH) == _sha(env_backup), "the real project .env is byte-identical after this test (backed up/restored around the one real-API section)")
+if _real_env_existed:
+    check(_sha(REAL_ENV_PATH) == _sha(env_backup), "the real project .env is byte-identical after this test (backed up/restored around the one real-API section)")
+else:
+    check(not REAL_ENV_PATH.exists(), "no real project .env existed before this test, and none was left behind afterward")
 
 
 # ---------------------------------------------------------------------

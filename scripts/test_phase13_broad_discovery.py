@@ -164,6 +164,7 @@ check(wsda.WEB_SEARCH_BACKEND is None, "9. backend is cleared after the test (no
 # ---------------------------------------------------------------------
 
 import source_capabilities as sc
+from search_provider import is_provider_configured, PROVIDER_ENV_KEYS
 
 caps = {c["source_name"]: c for c in sc.list_source_capabilities()}
 
@@ -173,18 +174,20 @@ check(caps["APNA"]["final_status"] == "ENABLED", "14. APNA (real, live-validated
 # AVAILABLE_VIA_SEARCH_PROVIDER / SEARCH_PROVIDER_NOT_CONFIGURED
 # vocabulary once a real search-provider adapter
 # (search_provider_adapter.py) was registered for each board -- see
-# source_capabilities.py's _search_provider_status(). This environment
-# DOES have at least one search-provider *_API_KEY configured in .env
-# (correctly loaded before this point -- see search_provider.py's
-# root-cause .env-loading fix), so every one of the seven genuinely
-# reports AVAILABLE_VIA_SEARCH_PROVIDER, not the Phase 13
-# LIMITED/MANUAL_IMPORT placeholder these assertions originally
-# checked for, and not SEARCH_PROVIDER_NOT_CONFIGURED either (that
-# value is for an environment with zero provider keys at all).
-check(caps["LINKEDIN"]["final_status"] == "AVAILABLE_VIA_SEARCH_PROVIDER", "14. LINKEDIN (Phase 14 search-provider adapter registered, a provider key IS configured) -> AVAILABLE_VIA_SEARCH_PROVIDER")
-check(caps["INSTAHYRE"]["final_status"] == "AVAILABLE_VIA_SEARCH_PROVIDER", "14. INSTAHYRE -> AVAILABLE_VIA_SEARCH_PROVIDER")
-check(caps["WELLFOUND"]["final_status"] == "AVAILABLE_VIA_SEARCH_PROVIDER", "14. WELLFOUND -> AVAILABLE_VIA_SEARCH_PROVIDER")
-check(caps["SHINE"]["final_status"] == "AVAILABLE_VIA_SEARCH_PROVIDER", "14. SHINE -> AVAILABLE_VIA_SEARCH_PROVIDER")
+# source_capabilities.py's _search_provider_status(). Which of the two
+# values is correct depends on whether THIS environment actually has
+# at least one search-provider *_API_KEY configured (.env is optional
+# and gitignored -- a fresh clone genuinely has none) -- asserting
+# the one that's actually true keeps full coverage either way, rather
+# than skipping.
+_any_provider_configured = any(is_provider_configured(name) for name in PROVIDER_ENV_KEYS)
+_expected_restricted_status = "AVAILABLE_VIA_SEARCH_PROVIDER" if _any_provider_configured else "SEARCH_PROVIDER_NOT_CONFIGURED"
+if not _any_provider_configured:
+    print("INFO: 14. no search-provider *_API_KEY configured in this environment -- asserting SEARCH_PROVIDER_NOT_CONFIGURED for the 7 restricted boards instead of AVAILABLE_VIA_SEARCH_PROVIDER")
+check(caps["LINKEDIN"]["final_status"] == _expected_restricted_status, f"14. LINKEDIN -> {_expected_restricted_status}")
+check(caps["INSTAHYRE"]["final_status"] == _expected_restricted_status, f"14. INSTAHYRE -> {_expected_restricted_status}")
+check(caps["WELLFOUND"]["final_status"] == _expected_restricted_status, f"14. WELLFOUND -> {_expected_restricted_status}")
+check(caps["SHINE"]["final_status"] == _expected_restricted_status, f"14. SHINE -> {_expected_restricted_status}")
 check(caps["GREENHOUSE"]["final_status"] == "ATS_FALLBACK", "14. GREENHOUSE (existing ATS provider, zero boards configured) -> ATS_FALLBACK")
 check(caps["WEB_SEARCH"]["final_status"] == "NOT_CONFIGURED", "14. WEB_SEARCH (no backend configured) -> NOT_CONFIGURED")
 check(caps["LINKEDIN"]["manual_import_available"] is True, "14. LINKEDIN is manual_import_available")

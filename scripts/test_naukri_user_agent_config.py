@@ -32,6 +32,17 @@ _UA_EXPR = "process.env.JOBOS_NAUKRI_USER_AGENT || DEFAULT_NAUKRI_USER_AGENT"
 _HEADLESS_EXPR = "process.env.JOBOS_BROWSER_HEADLESS !== '0'"
 
 
+def _playwright_available():
+    """Pure availability probe -- see test_naukri_headless_config.py's
+    identical helper. A fresh clone that hasn't run `npm install &&
+    npx playwright install chromium` yet genuinely won't have this."""
+    result = subprocess.run(
+        ["node", "-e", "require.resolve('playwright'); const {chromium}=require('playwright'); console.log(chromium.executablePath())"],
+        capture_output=True, text=True, timeout=15, cwd=str(ROOT),
+    )
+    return result.returncode == 0 and Path(result.stdout.strip()).exists()
+
+
 def _run_node(js_code, env_overrides):
     env = dict(os.environ)
     env.update(env_overrides)
@@ -188,11 +199,20 @@ def main():
         "})().catch((e) => { console.error(e.message); process.exit(1); });"
     )
 
-    cases = [
-        ("A: JOBOS_NAUKRI_USER_AGENT unset -> validated default used", {}, EXPECTED_DEFAULT_UA, "JOBOS_NAUKRI_USER_AGENT"),
-        ("B: explicit override passed through exactly", {"JOBOS_NAUKRI_USER_AGENT": "TestAgent/9.9 (isolation-test)"}, "TestAgent/9.9 (isolation-test)", None),
-        ("C: empty string -> deterministic fallback to validated default (never an empty UA)", {"JOBOS_NAUKRI_USER_AGENT": ""}, EXPECTED_DEFAULT_UA, None),
-    ]
+    if not _playwright_available():
+        print(
+            "SKIP: A/B/C -> real browser-launch checks -- playwright/Chromium "
+            "not installed in this environment. Run `npm install && npx "
+            "playwright install chromium` (see docs/GETTING_STARTED.md) "
+            "and re-run this test to exercise the real launch path."
+        )
+        cases = []
+    else:
+        cases = [
+            ("A: JOBOS_NAUKRI_USER_AGENT unset -> validated default used", {}, EXPECTED_DEFAULT_UA, "JOBOS_NAUKRI_USER_AGENT"),
+            ("B: explicit override passed through exactly", {"JOBOS_NAUKRI_USER_AGENT": "TestAgent/9.9 (isolation-test)"}, "TestAgent/9.9 (isolation-test)", None),
+            ("C: empty string -> deterministic fallback to validated default (never an empty UA)", {"JOBOS_NAUKRI_USER_AGENT": ""}, EXPECTED_DEFAULT_UA, None),
+        ]
 
     for label, env_overrides, expected_ua, unset_var in cases:
         env_overrides = dict(env_overrides)

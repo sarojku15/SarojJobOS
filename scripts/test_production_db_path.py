@@ -143,7 +143,37 @@ import migrate_production_schema
 
 prod_copy_dir = Path(tempfile.mkdtemp(prefix="jobos_prod_migration_test_"))
 prod_copy = prod_copy_dir / "jobos_copy.db"
-shutil.copy2(PRODUCTION_DB, prod_copy)
+
+if PRODUCTION_DB.exists():
+    # The real production DB exists on this machine -- exercise the
+    # migration against a disposable BYTE COPY of its actual shape,
+    # never the file itself.
+    shutil.copy2(PRODUCTION_DB, prod_copy)
+else:
+    # data/applications/jobos.db is gitignored and genuinely absent on
+    # a fresh clone -- never create or touch the real production path.
+    # Build a synthetic v2-shaped DB instead (exactly the starting
+    # state migrate_production_schema.py's own module docstring
+    # describes: "seeded long ago and never advanced past the v2
+    # schema -- missing saved_searches, search_run_sources, ...").
+    # This exercises the identical migration/idempotency/integrity
+    # logic below without requiring the real file to exist. Never
+    # calls _seed_legacy_candidate_from_profile_json() -- same
+    # convention as every other script that builds this baseline.
+    import init_tracker
+    import migrate_v2_schema as _migrate_v2
+    _orig_data_dir, _orig_db_path = init_tracker.DATA_DIR, init_tracker.DB_PATH
+    init_tracker.DATA_DIR = prod_copy_dir
+    init_tracker.DB_PATH = prod_copy
+    init_tracker.main()
+    init_tracker.DATA_DIR, init_tracker.DB_PATH = _orig_data_dir, _orig_db_path
+
+    _synthetic_conn = sqlite3.connect(prod_copy)
+    _migrate_v2._create_new_tables(_synthetic_conn)
+    _migrate_v2._ensure_job_columns(_synthetic_conn)
+    _synthetic_conn.commit()
+    _synthetic_conn.close()
+    print("INFO: 11/12/13 -> data/applications/jobos.db not present on this machine; using a synthetic v2-shaped DB to exercise the same migration/idempotency/integrity checks")
 
 pre_tables = {r[0] for r in sqlite3.connect(prod_copy).execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
 pre_counts = {t: sqlite3.connect(prod_copy).execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in pre_tables}

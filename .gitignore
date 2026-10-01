@@ -71,5 +71,7 @@ resumes/
 data/applications/
 data/private/
 
-# Local test job data
+# Local, ad-hoc test job data a developer drops directly under data/
+# -- never the tracked, generic fixtures used by the test suite itself
+# (those live in data/fixtures/scoring/, not here).
 data/test_job*.json

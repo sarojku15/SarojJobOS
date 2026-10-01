@@ -1,0 +1,29 @@
+{
+  "job_id": "TEST-001",
+  "source": "TEST",
+  "company": "Example Technology",
+  "title": "Senior Site Reliability Engineer",
+  "location": "Bengaluru",
+  "work_model": "Hybrid",
+  "job_url": "https://example.com/jobs/TEST-001",
+  "application_url": "https://example.com/apply/TEST-001",
+  "posted_date": "2026-09-19",
+  "discovered_at": "2026-09-19T10:00:00+05:30",
+
+  "experience_required": "8+ years",
+
+  "mandatory_skills": [
+    "Kubernetes",
+    "Terraform"
+  ],
+
+  "preferred_skills": [
+    "Azure",
+    "Prometheus",
+    "Grafana",
+    "Jenkins",
+    "Python"
+  ],
+
+  "jd_text": "Senior Site Reliability Engineer responsible for production reliability, SLI and SLO management, incident response, root cause analysis, observability, Kubernetes, AKS, Azure, Terraform, Jenkins CI/CD, Prometheus, Grafana, Python automation, cloud infrastructure and platform reliability."
+}

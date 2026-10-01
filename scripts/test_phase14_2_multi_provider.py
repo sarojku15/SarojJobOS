@@ -434,7 +434,10 @@ import shutil as _shutil
 
 real_env_path = ROOT / ".env"
 env_backup = tmp_dir / ".env.real_backup"
-_shutil.copy(real_env_path, env_backup)
+# .env is gitignored and optional -- a fresh clone genuinely has none.
+_real_env_existed = real_env_path.exists()
+if _real_env_existed:
+    _shutil.copy(real_env_path, env_backup)
 
 try:
     from fastapi.testclient import TestClient
@@ -483,11 +486,17 @@ try:
     resp = client.post("/api/settings/search-providers/order", json={"order": ["not_a_real_provider"]})
     check(resp.status_code == 400, "21. an unknown provider name in an order update returns a clean 400")
 finally:
-    _shutil.copy(env_backup, real_env_path)
+    if _real_env_existed:
+        _shutil.copy(env_backup, real_env_path)
+    else:
+        real_env_path.unlink(missing_ok=True)
     for junk in [ROOT / "data" / "applications" / "search_provider_settings.json", ROOT / "data" / "applications" / "search_provider_usage.json"]:
         junk.unlink(missing_ok=True)
 
-check(_sha(real_env_path) == _sha(env_backup), "21. the real project .env is restored byte-identical after this test")
+if _real_env_existed:
+    check(_sha(real_env_path) == _sha(env_backup), "21. the real project .env is restored byte-identical after this test")
+else:
+    check(not real_env_path.exists(), "21. no real project .env existed before this test, and none was left behind afterward")
 
 
 # ---------------------------------------------------------------------

@@ -26,6 +26,19 @@ BRIDGE_PATH = ROOT / "scripts" / "naukri_fetch_bridge.js"
 _HEADLESS_EXPR = "process.env.JOBOS_BROWSER_HEADLESS !== '0'"
 
 
+def _playwright_available():
+    """Pure availability probe -- does not launch a browser, just
+    checks whether the playwright Node module and its Chromium
+    binary are installed (npm install && npx playwright install
+    chromium, per docs/GETTING_STARTED.md). A fresh clone that hasn't
+    run that setup step yet genuinely won't have it."""
+    result = subprocess.run(
+        ["node", "-e", "require.resolve('playwright'); const {chromium}=require('playwright'); console.log(chromium.executablePath())"],
+        capture_output=True, text=True, timeout=15, cwd=str(ROOT),
+    )
+    return result.returncode == 0 and Path(result.stdout.strip()).exists()
+
+
 def _run_node(js_code, env_overrides):
     import os
     env = dict(os.environ)
@@ -93,10 +106,21 @@ def main():
         "})().catch((e) => { console.error(e.message); process.exit(1); });"
     )
 
-    for label, env_overrides, expected_headless in [
-        ("default (JOBOS_BROWSER_HEADLESS unset)", {}, True),
-        ("JOBOS_BROWSER_HEADLESS=1", {"JOBOS_BROWSER_HEADLESS": "1"}, True),
-    ]:
+    if not _playwright_available():
+        print(
+            "SKIP: B/D -> real browser-launch checks -- playwright/Chromium "
+            "not installed in this environment. Run `npm install && npx "
+            "playwright install chromium` (see docs/GETTING_STARTED.md) "
+            "and re-run this test to exercise the real launch path."
+        )
+        launch_targets = []
+    else:
+        launch_targets = [
+            ("default (JOBOS_BROWSER_HEADLESS unset)", {}, True),
+            ("JOBOS_BROWSER_HEADLESS=1", {"JOBOS_BROWSER_HEADLESS": "1"}, True),
+        ]
+
+    for label, env_overrides, expected_headless in launch_targets:
         import os
         env_overrides = dict(env_overrides)
         if "JOBOS_BROWSER_HEADLESS" not in env_overrides:

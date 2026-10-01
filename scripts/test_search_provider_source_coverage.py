@@ -99,6 +99,27 @@ def _run_probe(env_overrides):
 def test_a_provider_configured_includes_all_7_restricted_boards():
     failures = []
 
+    # This test specifically proves a REAL provider key on disk gets
+    # picked up correctly by a fresh process -- it cannot fabricate
+    # that condition without reintroducing the exact ambient-os.environ
+    # contamination risk this file's own docstring explains. .env is
+    # optional and gitignored (no provider key is required to run
+    # JobOS), so a fresh clone genuinely may not have one configured;
+    # skip cleanly rather than fail in that case.
+    sys.path.insert(0, str(SCRIPTS_DIR))
+    import search_provider as _search_provider
+    _any_configured = any(
+        _search_provider.is_provider_configured(name) for name in _search_provider.PROVIDER_ENV_KEYS
+    )
+    if not _any_configured:
+        print(
+            "SKIP: test A -> no search-provider *_API_KEY configured in "
+            "config/jobos.env.example-derived .env on this machine; this "
+            "is an optional integration, not required to run JobOS -- "
+            "see docs/CONFIGURATION.md to configure one and re-run this test"
+        )
+        return failures
+
     # No env override needed beyond PATH/HOME -- the real project .env
     # on disk already has at least one provider key configured, and
     # THAT is exactly what this test proves gets picked up correctly

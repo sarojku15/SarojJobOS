@@ -114,9 +114,9 @@ def main():
     _use_isolated_db()
 
     test_files = [
-        "data/test_job.json",
-        "data/test_job_b.json",
-        "data/test_job_reject.json"
+        "data/fixtures/scoring/test_job.json",
+        "data/fixtures/scoring/test_job_b.json",
+        "data/fixtures/scoring/test_job_reject.json"
     ]
 
     from score_job import score_job, PROFILE
