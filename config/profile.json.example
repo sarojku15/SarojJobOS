@@ -2,7 +2,7 @@
   "candidate": {
     "name": "Alex Doe",
     "current_title": "Senior Site Reliability Engineer",
-    "experience_years": 8,
+    "experience_years": 11,
     "current_ctc_lpa": 20.0,
     "target_ctc_lpa": 26.0,
     "availability": "30 days notice"
@@ -16,16 +16,22 @@
 
   "target_locations": [
     "Bangalore",
+    "Bengaluru",
+    "Hyderabad",
     "Remote"
   ],
 
   "cloud": [
     "AWS",
-    "Azure"
+    "Azure",
+    "EKS",
+    "AKS"
   ],
 
   "kubernetes": [
     "Kubernetes",
+    "EKS",
+    "AKS",
     "Docker",
     "Helm"
   ],
@@ -37,7 +43,8 @@
 
   "cicd_and_devops": [
     "Jenkins",
-    "GitHub Actions"
+    "GitHub Actions",
+    "ArgoCD"
   ],
 
   "observability": [
