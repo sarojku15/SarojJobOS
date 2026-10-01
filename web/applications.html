@@ -1,0 +1,201 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Job Search OS — My Applications</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<header>
+  <span class="brand">Job Search OS</span>
+  <a href="/">Home</a>
+  <a href="/profile">Profile</a>
+  <a href="/searches">Searches</a>
+  <a href="/dashboard">Dashboard</a>
+  <a href="/applications" class="active">Applications</a>
+</header>
+<main>
+  <h1>My Applications</h1>
+  <div id="msg"></div>
+  <div id="summary-cards" class="stat-card-row"></div>
+  <div class="card">
+    <div class="filter-bar">
+      <select id="f-status">
+        <option value="">All statuses</option>
+      </select>
+      <input id="f-company" type="text" placeholder="Company" style="width:150px" />
+      <select id="f-source">
+        <option value="">All sources</option>
+      </select>
+      <select id="f-followup">
+        <option value="">All follow-ups</option>
+        <option value="overdue">Overdue</option>
+        <option value="due_today">Due today</option>
+        <option value="upcoming">Upcoming</option>
+        <option value="none">No follow-up set</option>
+      </select>
+      <button class="small secondary" id="filter-apply-btn" type="button">Apply filters</button>
+      <button class="small secondary" id="filter-clear-btn" type="button">Clear</button>
+    </div>
+    <div id="list"><div class="loading-state">Loading...</div></div>
+  </div>
+</main>
+<script src="/static/app.js"></script>
+<script>
+let candidateId = null;
+let allApplications = [];
+
+// A candidate-wide status filter list, distinct from results.html's
+// JOB_STATUS_OPTIONS (that one is "what a human can manually pick
+// when updating status"; this one is "what can legitimately appear in
+// this list" -- includes NOT_QUALIFIED/REJECTED for completeness of
+// filtering even though they're excluded from the default unfiltered
+// view, see api/applications_store.py's _DEFAULT_EXCLUDED_STATUSES).
+const ALL_STATUSES = [
+  "FOUND", "NOT_QUALIFIED", "SCREENING", "SHORTLISTED", "READY_FOR_APPROVAL", "APPROVED",
+  "APPLICATION_STARTED", "APPLIED", "RECRUITER_CONTACTED", "SCREENING_CALL",
+  "INTERVIEW_1", "INTERVIEW_2", "FINAL_ROUND", "OFFER",
+  "EMPLOYER_REJECTED", "GHOSTED", "WITHDRAWN", "REJECTED",
+];
+
+function populateFilterOptions() {
+  const statusSel = document.getElementById("f-status");
+  ALL_STATUSES.forEach((s) => statusSel.appendChild(el(`<option value="${s}">${s}</option>`)));
+
+  const sources = [...new Set(allApplications.map((a) => a.source).filter(Boolean))].sort();
+  const sourceSel = document.getElementById("f-source");
+  sources.forEach((s) => sourceSel.appendChild(el(`<option value="${s}">${s}</option>`)));
+}
+
+async function load() {
+  const msg = document.getElementById("msg");
+  candidateId = await requireActiveCandidateOrRedirect();
+  if (!candidateId) return;
+  await fetchAndRender();
+}
+
+async function fetchAndRender() {
+  const msg = document.getElementById("msg");
+  const list = document.getElementById("list");
+  const params = new URLSearchParams();
+  const status = document.getElementById("f-status").value;
+  const company = document.getElementById("f-company").value.trim();
+  const source = document.getElementById("f-source").value;
+  const followUp = document.getElementById("f-followup").value;
+  if (status) params.set("status", status);
+  if (company) params.set("company", company);
+  if (source) params.set("source", source);
+  if (followUp) params.set("follow_up_state", followUp);
+
+  try {
+    const data = await api(`/api/candidates/${candidateId}/applications?${params.toString()}`);
+    allApplications = data.applications || [];
+    if (!document.getElementById("f-source").options.length || document.getElementById("f-source").options.length === 1) {
+      populateFilterOptions();
+    }
+    renderSummary(data.summary);
+    renderList(allApplications);
+  } catch (err) {
+    showError(msg, err);
+  }
+}
+
+function renderSummary(summary) {
+  const container = document.getElementById("summary-cards");
+  const cards = [
+    ["Total Applications", summary.total_applications],
+    ["Applied", summary.applied],
+    ["Follow-ups Due", summary.follow_ups_due],
+    ["Overdue", summary.overdue],
+    ["Interviews", summary.interviews],
+    ["Awaiting Response", summary.awaiting_response],
+    ["Rejected", summary.rejected],
+    ["Offers", summary.offers],
+  ];
+  container.innerHTML = cards
+    .map(([label, value]) => `<div class="stat-card"><div class="stat-value">${value}</div><div class="stat-label">${escapeHtml(label)}</div></div>`)
+    .join("");
+}
+
+function followUpBadge(app) {
+  if (!app.follow_up_date) return "";
+  if (app.is_overdue) return badgeHtml("OVERDUE", "", `Overdue — was due ${app.follow_up_date}`);
+  if (app.is_due_today) return badgeHtml("DUE_TODAY", "", `Due today — ${app.follow_up_date}`);
+  return badgeHtml("UPCOMING", "", `Follow-up: ${app.follow_up_date}`);
+}
+
+function renderList(applications) {
+  const list = document.getElementById("list");
+  if (!applications.length) {
+    showEmpty(list, "No applications match these filters yet. Approve and mark a job as Applied to see it here.");
+    return;
+  }
+
+  list.innerHTML = applications
+    .map(
+      (a, idx) => `
+    <div class="application-card" data-idx="${idx}">
+      <div class="app-top">
+        <div>
+          <b>${escapeHtml(a.title || "")}</b>
+          <div class="app-meta">${escapeHtml(a.company || "")} &middot; ${escapeHtml(a.location || "")} &middot; ${escapeHtml(a.source || "")}${a.fit_score != null ? ` &middot; Score ${a.fit_score}` : ""}</div>
+        </div>
+        <div>${badgeHtml(a.candidate_status)} ${followUpBadge(a)}</div>
+      </div>
+      <div class="app-meta">
+        ${a.applied_at ? `Applied ${escapeHtml(new Date(a.applied_at).toLocaleDateString())}${a.applied_resume_variant ? ` &middot; Resume: ${escapeHtml(a.applied_resume_variant)}` : ""}` : `<span class="hint">Not yet applied</span>`}
+      </div>
+      ${a.notes ? `<div class="app-meta">Note: ${escapeHtml(a.notes)}</div>` : ""}
+      <div class="app-actions">
+        ${a.job_url ? `<a class="job-link" target="_blank" rel="noopener" href="${a.job_url}">Open Job</a>` : ""}
+        <button class="small secondary" onclick="window.location.href='/jobs/${a.job_id}'">Details / History &rarr;</button>
+        ${a.follow_up_date
+          ? `<button class="small" data-action="followup-now" data-idx="${idx}">Follow Up Now</button>
+             <button class="small secondary" data-action="reschedule" data-idx="${idx}">Reschedule</button>`
+          : `<button class="small secondary" data-action="schedule" data-idx="${idx}">Set Follow-up</button>`}
+      </div>
+      <div class="hint" id="app-msg-${idx}"></div>
+    </div>
+  `
+    )
+    .join("");
+
+  list.querySelectorAll("[data-action]").forEach((btn) => {
+    btn.addEventListener("click", () => handleFollowUpAction(applications[Number(btn.dataset.idx)], btn.dataset.action, Number(btn.dataset.idx)));
+  });
+}
+
+async function handleFollowUpAction(app, action, idx) {
+  const msgEl = document.getElementById(`app-msg-${idx}`);
+  try {
+    if (action === "followup-now") {
+      await api(`/api/candidates/${candidateId}/jobs/${app.job_id}/follow-up/complete`, { method: "POST", body: {} });
+      showSuccess(msgEl, "Follow-up marked complete.");
+    } else if (action === "reschedule" || action === "schedule") {
+      const dueDate = window.prompt("New follow-up date (YYYY-MM-DD):", app.follow_up_date || "");
+      if (!dueDate) return;
+      await api(`/api/candidates/${candidateId}/jobs/${app.job_id}/follow-up/schedule`, {
+        method: "POST",
+        body: { due_date: dueDate },
+      });
+      showSuccess(msgEl, `Follow-up scheduled for ${dueDate}.`);
+    }
+    await fetchAndRender();
+  } catch (err) {
+    showError(msgEl, err);
+  }
+}
+
+document.getElementById("filter-apply-btn").addEventListener("click", fetchAndRender);
+document.getElementById("filter-clear-btn").addEventListener("click", () => {
+  document.getElementById("f-status").value = "";
+  document.getElementById("f-company").value = "";
+  document.getElementById("f-source").value = "";
+  document.getElementById("f-followup").value = "";
+  fetchAndRender();
+});
+
+load();
+</script>
+</body>
+</html>

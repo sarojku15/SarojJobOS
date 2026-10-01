@@ -66,7 +66,7 @@
       "position": [400, 80],
       "parameters": {
         "method": "GET",
-        "url": "={{ $json.jobos_base_url }}/api/candidates/{{ $json.candidate_id }}/follow-ups",
+        "url": "={{ $json.jobos_base_url }}/api/candidates/{{ $json.candidate_id }}/follow-ups?due_only=true",
         "options": {}
       }
     },
@@ -77,7 +77,7 @@
       "typeVersion": 2,
       "position": [620, 80],
       "parameters": {
-        "jsCode": "// Read-only date comparison ('is this reminder date today or in the\n// past?') -- not a JobOS business rule, this is the one piece of\n// logic the master task explicitly delegated to this workflow rather\n// than to a new JobOS API concept.\nconst today = new Date().toISOString().slice(0, 10);\nconst body = $input.first().json;\nconst due = (body.follow_ups || []).filter((f) => f.follow_up_date <= today);\nreturn due.map((f) => ({ json: { ...f, is_overdue: f.follow_up_date < today } }));\n"
+        "jsCode": "// 2026-09-28: no longer computes 'is this due' itself -- the\n// ?due_only=true query param already asked JobOS to filter to due/\n// overdue items server-side, and every row already carries the ONE\n// canonical is_overdue/is_due_today/is_due/is_upcoming state (see\n// scripts/application_follow_ups.py's compute_due_state()). This node\n// now only reshapes the {follow_ups: [...]} response body into one\n// n8n item per follow-up -- it never redefines due-ness locally, so\n// it can never silently disagree with the JobOS dashboard again.\nconst body = $input.first().json;\nreturn (body.follow_ups || []).map((f) => ({ json: f }));\n"
       }
     },
     {

@@ -172,6 +172,44 @@ for helper in ["resolveActiveCandidate", "requireActiveCandidateOrRedirect", "cl
         redefined = len(re.findall(rf"^(?:async\s+)?function\s+{helper}\b", text, re.MULTILINE))
         check(redefined == 0, f"{html_path.name}: does not redefine {helper}() (it must use app.js's single implementation)")
 
+# ---------------------------------------------------------------------
+# Application Tracker (2026-09-28) -- specific checks the master task
+# requested beyond the generic per-file checks every HTML_FILES entry
+# already gets above (which applications.html already passes: no
+# duplicate skeleton tags, no dangling DOM-id references, etc).
+# ---------------------------------------------------------------------
+
+APPLICATIONS_HTML = WEB_DIR / "applications.html"
+check(APPLICATIONS_HTML.exists(), "My Applications page exists at web/applications.html")
+applications_text = APPLICATIONS_HTML.read_text(encoding="utf-8")
+
+check('href="/applications"' in applications_text, "applications.html: nav links to itself (marked active)")
+check("/api/candidates/${candidateId}/applications" in applications_text, "applications.html: fetches real application data from the API, not a hardcoded fixture")
+check("summary-cards" in applications_text and "stat-value" in applications_text, "applications.html: renders summary cards (Total/Applied/Follow-ups Due/Overdue/etc.)")
+check('badgeHtml(a.candidate_status)' in applications_text, "applications.html: renders a real status badge per application")
+check("followup-now" in applications_text and "/follow-up/complete" in applications_text, "applications.html: 'Follow Up Now' action wired to the real complete endpoint")
+check("reschedule" in applications_text and "/follow-up/schedule" in applications_text, "applications.html: 'Reschedule'/'Set Follow-up' action wired to the real schedule endpoint")
+check("Details / History" in applications_text, "applications.html: links through to the per-job history/detail page")
+check('id="f-status"' in applications_text and 'id="f-company"' in applications_text and 'id="f-source"' in applications_text and 'id="f-followup"' in applications_text, "applications.html: has status/company/source/follow-up filters")
+check(re.search(r'href="[^"]+"', applications_text), "applications.html: has no broken/empty href attributes")
+
+# Mark as Applied must exist on the results.html job-detail modal too
+# (not only in My Applications) -- the audit's own recommendation was
+# a DEDICATED action at the point where a candidate is already looking
+# at the job, not only on a separate page.
+RESULTS_HTML = (WEB_DIR / "results.html").read_text(encoding="utf-8")
+check("mark-applied-btn" in RESULTS_HTML and "/mark-applied" in RESULTS_HTML, "results.html: has a dedicated Mark as Applied action, not just the generic status dropdown")
+check("EMPLOYER_REJECTED" in RESULTS_HTML and "GHOSTED" in RESULTS_HTML and "SCREENING" in RESULTS_HTML, "results.html: status dropdown includes the previously-missing legitimate lifecycle states")
+check('"REJECTED"' not in re.sub(r"EMPLOYER_REJECTED", "", RESULTS_HTML), "results.html: status dropdown no longer offers the legacy REJECTED value")
+
+# No hardcoded production candidate IDs / secrets in any tracker file.
+_REAL_CANDIDATE_ID_PATTERN = re.compile(r"""['"](saroj|cand_[0-9a-f]{8,})['"]""")
+_SECRET_SHAPED_PATTERN = re.compile(r"(api[_-]?key|password|secret|token)\s*[:=]\s*['\"][A-Za-z0-9_\-]{12,}['\"]", re.IGNORECASE)
+for tracker_file in (APPLICATIONS_HTML, WEB_DIR / "results.html", WEB_DIR / "dashboard.html", WEB_DIR / "job_workspace.html"):
+    text = tracker_file.read_text(encoding="utf-8")
+    check(not _REAL_CANDIDATE_ID_PATTERN.search(text), f"{tracker_file.name}: no hardcoded production-looking candidate_id")
+    check(not _SECRET_SHAPED_PATTERN.search(text), f"{tracker_file.name}: no accidental secret-shaped string")
+
 print()
 print(f"{passed} passed, {failed} failed")
 if failed:

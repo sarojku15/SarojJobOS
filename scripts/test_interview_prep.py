@@ -158,6 +158,48 @@ check(resp.status_code == 200, f"outcome: PATCH outcome succeeds, got {resp.stat
 resp = client.get(f"/api/candidates/{candidate_a}/interview-prep/{prep2['interview_prep_id']}")
 check(resp.json()["outcome_status"] == "SCHEDULED", "outcome: outcome_status persisted correctly")
 
+# --- status-consistency bridge (2026-09-28): REJECTED/NO_RESPONSE
+# outcome_status auto-bridges to the main candidate_status lifecycle
+# (EMPLOYER_REJECTED/GHOSTED), but only while still "in flight". ---
+conn = db_mod.get_conn()
+now = "2026-09-28T00:00:00+00:00"
+conn.execute(
+    "INSERT INTO candidate_job_matches (candidate_id, job_id, candidate_status, created_at, updated_at) VALUES (?, 'job-prep-1', 'INTERVIEW_1', ?, ?)",
+    (candidate_a, now, now),
+)
+conn.commit()
+conn.close()
+
+resp = client.patch(f"/api/candidates/{candidate_a}/interview-prep/{prep2['interview_prep_id']}/outcome", json={"outcome_status": "REJECTED", "outcome_notes": "Didn't move forward"})
+check(resp.status_code == 200, f"bridge: PATCH outcome=REJECTED succeeds, got {resp.status_code}")
+resp = client.get(f"/api/candidates/{candidate_a}/jobs/job-prep-1/status-history")
+check(resp.json()["current_status"] == "EMPLOYER_REJECTED", f"bridge: outcome_status=REJECTED while INTERVIEW_1 auto-transitions candidate_status to EMPLOYER_REJECTED, got {resp.json()['current_status']}")
+check(
+    any(h["from_status"] == "INTERVIEW_1" and h["to_status"] == "EMPLOYER_REJECTED" for h in resp.json()["history"]),
+    "bridge: the auto-transition is recorded in candidate_job_status_history exactly like any other transition",
+)
+
+# SCHEDULED/COMPLETED/PASSED are deliberately never auto-bridged (ambiguous).
+conn = db_mod.get_conn()
+conn.execute("UPDATE candidate_job_matches SET candidate_status = 'INTERVIEW_2' WHERE candidate_id = ? AND job_id = 'job-prep-1'", (candidate_a,))
+conn.commit()
+conn.close()
+resp = client.patch(f"/api/candidates/{candidate_a}/interview-prep/{prep2['interview_prep_id']}/outcome", json={"outcome_status": "PASSED"})
+check(resp.status_code == 200, f"bridge: PATCH outcome=PASSED succeeds, got {resp.status_code}")
+resp = client.get(f"/api/candidates/{candidate_a}/jobs/job-prep-1/status-history")
+check(resp.json()["current_status"] == "INTERVIEW_2", f"bridge: outcome_status=PASSED is ambiguous, never auto-bridged -- candidate_status stays INTERVIEW_2, got {resp.json()['current_status']}")
+
+# Already-advanced statuses are never silently overwritten by a
+# late-arriving/stale interview-outcome update.
+conn = db_mod.get_conn()
+conn.execute("UPDATE candidate_job_matches SET candidate_status = 'OFFER' WHERE candidate_id = ? AND job_id = 'job-prep-1'", (candidate_a,))
+conn.commit()
+conn.close()
+resp = client.patch(f"/api/candidates/{candidate_a}/interview-prep/{prep2['interview_prep_id']}/outcome", json={"outcome_status": "NO_RESPONSE"})
+check(resp.status_code == 200, f"bridge: PATCH outcome=NO_RESPONSE succeeds, got {resp.status_code}")
+resp = client.get(f"/api/candidates/{candidate_a}/jobs/job-prep-1/status-history")
+check(resp.json()["current_status"] == "OFFER", f"bridge: an already-OFFER candidate_status is never overwritten by a later NO_RESPONSE outcome, got {resp.json()['current_status']}")
+
 # --- I: candidate isolation ---
 resp = client.get(f"/api/candidates/{candidate_b}/interview-prep/{prep2['interview_prep_id']}")
 check(resp.status_code == 404, f"I: candidate B cannot read candidate A's interview prep by ID, got {resp.status_code}")

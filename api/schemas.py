@@ -212,3 +212,37 @@ class FollowUpDateIn(BaseModel):
     # (e.g. "2026-10-05") -- never a datetime, this is a reminder date,
     # not a timestamp.
     follow_up_date: Optional[str] = None
+
+
+class MarkAppliedIn(BaseModel):
+    """The dedicated "Mark as Applied" action (2026-09-28 application-
+    tracker implementation). Every field is optional so the endpoint
+    still works as a minimal "just record APPLIED" call, but the
+    frontend is expected to prompt for resume_id/resume_variant at the
+    moment of applying rather than silently omitting them -- see
+    api/main.py's mark_job_applied() docstring."""
+    resume_id: Optional[str] = Field(None, max_length=200)
+    resume_variant: Optional[str] = Field(None, max_length=200)
+    # None = default to the server's own current time (see
+    # application_lifecycle.mark_applied()). A caller-supplied value is
+    # honored ONLY the first time applied_at is actually set -- never
+    # used to move an already-recorded applied_at.
+    applied_at: Optional[str] = None
+    notes: Optional[str] = Field(None, max_length=5000)
+    # Optional convenience: schedule a follow-up in the same call as
+    # marking applied, reusing the exact same follow-up mechanism a
+    # separate PUT .../follow-up-schedule call would use.
+    follow_up_date: Optional[str] = None
+
+
+class ApplicationNotesIn(BaseModel):
+    notes: Optional[str] = Field(None, max_length=5000)
+
+
+class FollowUpScheduleIn(BaseModel):
+    due_date: str = Field(..., min_length=1, max_length=20)
+    notes: Optional[str] = Field(None, max_length=2000)
+
+
+class FollowUpCompleteIn(BaseModel):
+    notes: Optional[str] = Field(None, max_length=2000)

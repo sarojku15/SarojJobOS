@@ -12,6 +12,7 @@
   <a href="/profile">Profile</a>
   <a href="/searches" class="active">Searches</a>
   <a href="/dashboard">Dashboard</a>
+  <a href="/applications">Applications</a>
 </header>
 <main class="wide">
   <div id="msg"></div>
@@ -278,13 +279,22 @@ function openDetail(idx) {
       <dt>Matched skills</dt><dd class="skill-tag-list">${skillTags(r.matched_skills)}</dd>
       <dt>Missing skills</dt><dd class="skill-tag-list">${skillTags(r.missing_skills, "missing")}</dd>
       <dt>Resume/Profile used</dt><dd>${escapeHtml(r.resume_variant || "Not available")}</dd>
+      ${r.applied_at ? `
+      <dt>Applied</dt><dd>${escapeHtml(new Date(r.applied_at).toLocaleString())}${r.applied_resume_variant ? ` &middot; Resume: ${escapeHtml(r.applied_resume_variant)}` : ""}</dd>
+      ` : ""}
       <dt>Follow-up date</dt><dd>${r.follow_up_date ? escapeHtml(r.follow_up_date) : `<span class="hint">Not set</span>`}</dd>
+      <dt>Notes</dt><dd>
+        <textarea id="notes-input" rows="2" style="width:100%;box-sizing:border-box">${escapeHtml(r.notes || "")}</textarea>
+        <button class="small secondary" id="notes-save-btn" type="button">Save Note</button>
+        <div id="notes-msg" class="hint"></div>
+      </dd>
       <dt>Application status</dt><dd>
         ${badgeHtml(r.status)}
         <select id="status-select" style="margin-left:8px">
           ${JOB_STATUS_OPTIONS.map((s) => `<option value="${s}" ${s === r.status ? "selected" : ""}>${s}</option>`).join("")}
         </select>
         <button class="small secondary" id="status-update-btn" type="button">Update</button>
+        ${!r.applied_at ? `<button class="small" id="mark-applied-btn" type="button" style="margin-left:8px">Mark as Applied</button>` : ""}
         <div id="status-msg" class="hint"></div>
       </dd>
       ${r.duplicate_candidates && r.duplicate_candidates.length ? `
@@ -303,17 +313,77 @@ function openDetail(idx) {
   document.getElementById("modal-close").addEventListener("click", closeDetail);
   backdrop.addEventListener("click", (e) => { if (e.target === backdrop) closeDetail(); }, { once: true });
   document.getElementById("status-update-btn").addEventListener("click", () => updateJobStatus(r, idx));
+  document.getElementById("notes-save-btn").addEventListener("click", () => saveJobNotes(r, idx));
+  const markAppliedBtn = document.getElementById("mark-applied-btn");
+  if (markAppliedBtn) markAppliedBtn.addEventListener("click", () => markJobApplied(r, idx));
+}
+
+// "Mark as Applied" -- the dedicated action (distinct from the
+// generic status dropdown above, which still works too): confirms
+// the resume actually used, since results_store.py's resume_variant
+// is only ever the match/scoring-time value and can go stale by the
+// time the candidate actually applies (2026-09-28 audit finding).
+// Never fabricates a resume choice -- the candidate can leave it blank
+// and Mark as Applied still succeeds, it just won't record one.
+async function markJobApplied(r, idx) {
+  const candidateId = await resolveActiveCandidate();
+  const msg = document.getElementById("status-msg");
+  const suggested = r.resume_variant || "";
+  const resumeVariant = window.prompt(
+    "Which resume was actually used for this application? (Leave blank to skip.)",
+    suggested
+  );
+  if (resumeVariant === null) return; // user cancelled
+  try {
+    const updated = await api(`/api/candidates/${candidateId}/jobs/${r.job_id}/mark-applied`, {
+      method: "POST",
+      body: { resume_variant: resumeVariant || null },
+    });
+    r.status = updated.candidate_status;
+    r.applied_at = updated.applied_at;
+    r.applied_resume_variant = updated.applied_resume_variant;
+    showSuccess(msg, `Marked as Applied (${updated.applied_at ? new Date(updated.applied_at).toLocaleString() : ""}).`);
+    renderResults();
+  } catch (err) {
+    showError(msg, err);
+  }
+}
+
+async function saveJobNotes(r, idx) {
+  const candidateId = await resolveActiveCandidate();
+  const msg = document.getElementById("notes-msg");
+  const notes = document.getElementById("notes-input").value;
+  try {
+    const updated = await api(`/api/candidates/${candidateId}/jobs/${r.job_id}/notes`, {
+      method: "PATCH",
+      body: { notes: notes || null },
+    });
+    r.notes = updated.notes;
+    showSuccess(msg, "Note saved.");
+  } catch (err) {
+    showError(msg, err);
+  }
 }
 
 // A practical subset of config/application_schema.json's full
 // lifecycle -- the backend (application_lifecycle.py) is the sole
 // authority on what's actually valid (including the APPROVED-before-
 // APPLIED gate); this is just what's useful to pick from a job card.
+//
+// 2026-09-28 audit fix: NOT_QUALIFIED is deliberately excluded (it's
+// an auto-computed score-bucket outcome from scripts/score_job.py,
+// never something a human manually sets). REJECTED is deliberately
+// excluded too -- config/application_schema.json's own _status_notes
+// documents it as a LEGACY value ("no code writes this value
+// anymore"); EMPLOYER_REJECTED is its real, current replacement, and
+// is now offered here. SCREENING and GHOSTED were previously missing
+// entirely despite already being real, reachable states used by
+// scripts/generate_run_report.py's own reporting logic.
 const JOB_STATUS_OPTIONS = [
-  "FOUND", "SHORTLISTED", "READY_FOR_APPROVAL", "APPROVED",
+  "FOUND", "SCREENING", "SHORTLISTED", "READY_FOR_APPROVAL", "APPROVED",
   "APPLICATION_STARTED", "APPLIED", "RECRUITER_CONTACTED", "SCREENING_CALL",
   "INTERVIEW_1", "INTERVIEW_2", "FINAL_ROUND", "OFFER",
-  "REJECTED", "WITHDRAWN",
+  "EMPLOYER_REJECTED", "GHOSTED", "WITHDRAWN",
 ];
 
 async function updateJobStatus(r, idx) {

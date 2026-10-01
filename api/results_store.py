@@ -170,6 +170,9 @@ def _row_to_result_dict(row):
         "missing_skills": list(explanation.get("gaps") or []),
         "resume_variant": row.resume_variant,
         "follow_up_date": row.follow_up_date,
+        "applied_at": row.applied_at,
+        "applied_resume_variant": row.applied_resume_variant,
+        "notes": row.notes,
         "first_discovered": row.first_discovered,
         "last_seen": row.last_seen,
         "duplicate_suppressed": row.duplicate_suppressed,
@@ -279,7 +282,8 @@ def _load_persisted_results(conn, candidate_id, job_ids, saved_search_id=None):
                j.status, j.resume_variant, j.created_at, j.last_updated,
                cjm.fit_score, cjm.priority, cjm.candidate_status,
                cjm.matched_skills_json, cjm.missing_skills_json, cjm.skill_match_json,
-               cjm.resume_variant AS candidate_resume_variant
+               cjm.resume_variant AS candidate_resume_variant,
+               cjm.follow_up_date, cjm.applied_at, cjm.applied_resume_variant, cjm.notes
         FROM candidate_job_matches cjm
         JOIN jobs j ON j.job_id = cjm.job_id
         WHERE cjm.candidate_id = ? AND cjm.job_id IN ({placeholders})
@@ -345,6 +349,10 @@ def _load_persisted_results(conn, candidate_id, job_ids, saved_search_id=None):
                 # present -- falls back to the candidate-wide snapshot,
                 # then the legacy global column, never fabricated.
                 "resume_variant": resume_variant,
+                "follow_up_date": row["follow_up_date"],
+                "applied_at": row["applied_at"],
+                "applied_resume_variant": row["applied_resume_variant"],
+                "notes": row["notes"],
                 "first_discovered": row["created_at"],
                 "last_seen": row["last_updated"] or row["created_at"],
                 "duplicate_suppressed": False,

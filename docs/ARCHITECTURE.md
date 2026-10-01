@@ -98,7 +98,10 @@ and the tracking states in full detail.
 | Eligibility | `scripts/job_eligibility.py`, `experience_eligibility.py`, `location_taxonomy.py` |
 | Scoring | `scripts/score_job.py`, `scripts/score_explanation.py` |
 | Dedup/freshness | `scripts/cross_source_dedup.py`, `scripts/canonical_job.py`, `scripts/freshness.py` |
-| Application lifecycle | `scripts/application_lifecycle.py` |
+| Application lifecycle | `scripts/application_lifecycle.py` (status transitions, `applied_at`/applied-resume/notes, "Mark as Applied") |
+| My Applications | `api/applications_store.py` (candidate-wide, cross-search list) |
+| Follow-ups | `scripts/application_follow_ups.py` (real PENDING/COMPLETED/CANCELLED history, the one canonical is_overdue/is_due_today/is_due/is_upcoming definition) |
+| Notifications (seam only, no real send) | `scripts/notification_events.py` (NOT_REQUESTED/QUEUED/SENT/FAILED, deduplicated per follow-up per day) |
 | Resume tailoring | `scripts/resume_tailoring.py` (deterministic reorder/emphasis of the candidate's own profile content, never AI rewriting) |
 | Company research | `scripts/company_research.py` (reuses `search_provider_manager.py` — no second search implementation) |
 | Interview preparation | `scripts/interview_prep.py` (deterministic, evidence-based; reuses `score_job.py` for matched/missing skills) |
@@ -188,5 +191,8 @@ See [CONFIGURATION.md](CONFIGURATION.md) for setup and
   reset.
 - Both share the same schema, built additively via
   `scripts/migrate_v*.py` files, chained in `scripts/init_dev_db.py`
-  (currently v1-v15 — v11 tailored resumes, v12 company research, v13
-  interview prep, v14 search schedules, v15 `follow_up_date`).
+  (currently v1-v16 — v11 tailored resumes, v12 company research, v13
+  interview prep, v14 search schedules, v15 `follow_up_date`, v16
+  application tracking: `candidate_job_matches.applied_at`/
+  `applied_resume_id`/`applied_resume_variant`/`notes`, plus the new
+  `application_follow_ups` and `notification_events` tables).

@@ -77,13 +77,111 @@ FOUND ──▶ (scored) ──▶ SHORTLISTED ──▶ READY_FOR_APPROVAL ─�
 
 - **UI**: from a result's detail view, the status dropdown (Shortlist →
   Approve → Applied, etc.) — the approval gate above is enforced
-  server-side regardless of what the UI lets you click.
+  server-side regardless of what the UI lets you click. The dropdown
+  now offers `SCREENING`, `EMPLOYER_REJECTED`, and `GHOSTED` (real,
+  reachable states this project's own reporting layer already
+  understood, but the UI never offered before), and no longer offers
+  the legacy `REJECTED` value (see the notes above).
 - **API**: `PATCH /api/candidates/{candidate_id}/jobs/{job_id}/status`
   with `{"status": "SHORTLISTED"}` (or any other value from the list
   above), scoped to your own `candidate_id` like every other route.
 - **History**: `GET /api/candidates/{candidate_id}/jobs/{job_id}/status-history`
   returns the full, timestamped transition history for a job — never
   overwritten, only appended to.
+
+## Application truth: Mark as Applied
+
+Applying is always something *you* do yourself, outside JobOS, on the
+employer's own site. JobOS never submits anything — "Mark as Applied"
+only ever *records* that you already did.
+
+There are two ways to record it:
+
+- The generic status dropdown, `{"status": "APPLIED"}` — still fully
+  supported, still gated by APPROVED above.
+- **The dedicated "Mark as Applied" action**
+  (`POST /api/candidates/{candidate_id}/jobs/{job_id}/mark-applied`,
+  a button on the results page and on
+  [My Applications](#my-applications)) — the same gate, the same
+  status-history row, plus three application-time facts a plain
+  status change doesn't ask for:
+  - **`applied_at`** — set automatically, in UTC, the *first* time a
+    job genuinely reaches `APPLIED`. Never overwritten by any later
+    status change, and never fabricated — if you never mark a job
+    Applied, `applied_at` stays `null` forever, however far its status
+    otherwise moves.
+  - **The resume actually used** (`applied_resume_id`/
+    `applied_resume_variant`) — deliberately separate from the
+    existing match-time `resume_id`/`resume_variant` (what JobOS
+    scored the job against, which can go stale by the time you
+    actually apply). The UI suggests your match-time resume as a
+    default but always asks you to confirm — never fabricated if you
+    leave it blank.
+  - **Notes** (`applied_resume_variant`'s neighbor, `notes`) —
+    free-text, yours, attached to this one application. Also editable
+    any time via `PATCH .../notes`, independent of Mark as Applied.
+
+Calling Mark as Applied again on an already-`APPLIED` job is not an
+error — it lets you correct the resume/notes you recorded, but never
+moves `applied_at`.
+
+## My Applications
+
+`GET /api/candidates/{candidate_id}/applications` (the `/applications`
+page) is the one place to see every job you've ever shortlisted,
+approved, or applied to, **across every saved search** — not scoped to
+one search's own results page. Supports `?status=`, `?company=`,
+`?source=`, `?follow_up_state=` (`overdue`/`due_today`/`upcoming`/
+`none`), and `?date_from=`/`?date_to=`. By default, jobs still sitting
+at `FOUND`/`NOT_QUALIFIED` (never acted on) are excluded — ask for them
+explicitly with `?status=FOUND` if you want to see everything.
+
+## Follow-ups: one canonical "due," real history
+
+A follow-up date used to be a single value you could set or clear —
+clearing it looked identical to "never scheduled one." Now every
+follow-up you schedule is its own record
+(`POST .../follow-up/schedule`), and it moves through real,
+never-deleted states:
+
+- **PENDING** — active, waiting for its due date.
+- **COMPLETED** — `POST .../follow-up/complete` ("Follow Up Now"):
+  records a real completion timestamp, keeps the row.
+- **CANCELLED** — `POST .../follow-up/cancel`, or clearing the date
+  via the older `PATCH .../follow-up` endpoint (still fully supported,
+  now upgraded to keep history too): "I decided not to," a distinct
+  fact from "I did follow up."
+
+`GET .../follow-up-history` returns every instance for a job, oldest
+first — never fabricated, never pruned.
+
+Due-ness itself has exactly one definition now, computed server-side
+(never independently recomputed by the dashboard or by n8n again):
+
+| Field | Meaning |
+|---|---|
+| `is_overdue` | `follow_up_date < today` |
+| `is_due_today` | `follow_up_date == today` |
+| `is_due` | overdue or due today |
+| `is_upcoming` | `follow_up_date > today` |
+
+`GET /api/candidates/{candidate_id}/follow-ups` returns every row with
+these four fields already computed; pass `?due_only=true` to get just
+the due ones (what the n8n Follow-Up Reminder workflow now uses,
+instead of computing its own date comparison).
+
+## Notifications (optional, never fabricated)
+
+JobOS never claims a notification was sent unless a real provider
+confirms delivery. Today, no provider is wired in at all — the n8n
+Follow-Up Reminder workflow only logs due follow-ups to its own
+Executions tab by default (see its Setup Notes). The backend
+(`scripts/notification_events.py`) already tracks a honest
+`NOT_REQUESTED`/`QUEUED`/`SENT`/`FAILED` status per follow-up per day,
+deduplicated so re-running the same check twice never double-requests
+— ready for a real Slack/Email/Telegram node to be added later without
+any JobOS-side redesign. Until then, expect "Notification not
+configured," never a silent claim of delivery.
 
 ## What JobOS will never do
 

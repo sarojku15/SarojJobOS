@@ -50,6 +50,45 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from candidate_profile import serialize_candidate_profile, to_legacy_matching_profile
 from job_eligibility import assess_job_eligibility
 from score_job import score_job, normalize
+import application_lifecycle
+
+# 2026-09-28 application-tracker implementation, Phase "status
+# consistency": interview_preparations.outcome_status has always used
+# its OWN vocabulary (SCHEDULED/COMPLETED/PASSED/REJECTED/NO_RESPONSE
+# -- see web/job_workspace.html's outcome-status-select), separate from
+# candidate_job_matches.candidate_status's 18-state lifecycle
+# (config/application_schema.json). Recording an outcome here
+# previously never touched the main status at all -- the two could
+# silently diverge (e.g. outcome=REJECTED while candidate_status still
+# read INTERVIEW_1). Only the two UNAMBIGUOUS terminal outcomes are
+# bridged: REJECTED and NO_RESPONSE map cleanly onto real lifecycle
+# terminal states (EMPLOYER_REJECTED, GHOSTED -- both already
+# documented in config/application_schema.json's own _status_notes and
+# docs/APPLICATION_LIFECYCLE.md's typical-flow diagram). SCHEDULED/
+# COMPLETED/PASSED are deliberately NOT auto-bridged: none of them
+# unambiguously implies a specific point in the 18-state lifecycle
+# (passing one round could mean "advance to the next round" or
+# "received an offer" -- this module has no way to know which), so
+# auto-transitioning on those would be inventing a transition rather
+# than recording an observed fact.
+_OUTCOME_TO_LIFECYCLE_STATUS = {
+    "REJECTED": "EMPLOYER_REJECTED",
+    "NO_RESPONSE": "GHOSTED",
+}
+
+# The bridge only fires when the main status is still genuinely
+# "in flight" -- never overwrites a status that has already moved past
+# this point (e.g. already OFFER, already WITHDRAWN, or already a
+# terminal outcome from a PRIOR, more specific action) with a stale/
+# late-arriving interview-outcome update. transition_candidate_job_
+# status() itself has no general forward-only guard (see its own
+# docstring), so this module supplies its own narrow one, scoped only
+# to this specific bridge.
+_LIFECYCLE_STATUSES_BRIDGE_MAY_OVERWRITE = frozenset({
+    "APPROVED", "APPLICATION_STARTED", "APPLIED",
+    "RECRUITER_CONTACTED", "SCREENING_CALL",
+    "INTERVIEW_1", "INTERVIEW_2", "FINAL_ROUND",
+})
 
 
 CATEGORY_QUESTIONS = {
@@ -399,13 +438,38 @@ def update_question_answer(conn, candidate_id, question_id, candidate_answer=Non
 
 def update_outcome(conn, candidate_id, interview_prep_id, outcome_status=None, outcome_notes=None):
     row = conn.execute(
-        "SELECT interview_prep_id FROM interview_preparations WHERE interview_prep_id = ? AND candidate_id = ?",
+        "SELECT interview_prep_id, job_id FROM interview_preparations WHERE interview_prep_id = ? AND candidate_id = ?",
         (interview_prep_id, candidate_id),
     ).fetchone()
     if row is None:
         raise ValueError(f"Unknown interview prep {interview_prep_id!r} for this candidate")
+    job_id = row[1]
+
     conn.execute(
         "UPDATE interview_preparations SET outcome_status = ?, outcome_notes = ?, updated_at = ? WHERE interview_prep_id = ?",
         (outcome_status, outcome_notes, _now(), interview_prep_id),
     )
     conn.commit()
+
+    _bridge_outcome_to_lifecycle_status(conn, candidate_id, job_id, outcome_status)
+
+
+def _bridge_outcome_to_lifecycle_status(conn, candidate_id, job_id, outcome_status):
+    """See this module's own top-of-file note on _OUTCOME_TO_LIFECYCLE_
+    STATUS/_LIFECYCLE_STATUSES_BRIDGE_MAY_OVERWRITE for the full
+    rationale. A failure here (e.g. no candidate_job_matches row for
+    this job -- an interview prep can theoretically exist without one,
+    since it's keyed off job_id/candidate_id, not the match row
+    directly) must never fail the outcome save itself -- the outcome
+    was already committed above; this is best-effort consistency, not
+    a gate."""
+    mapped_status = _OUTCOME_TO_LIFECYCLE_STATUS.get(outcome_status)
+    if mapped_status is None:
+        return
+    try:
+        current = application_lifecycle.get_candidate_job_status(conn, candidate_id, job_id)
+    except application_lifecycle.ApplicationLifecycleError:
+        return
+    if current["candidate_status"] not in _LIFECYCLE_STATUSES_BRIDGE_MAY_OVERWRITE:
+        return
+    application_lifecycle.transition_candidate_job_status(conn, candidate_id, job_id, mapped_status)

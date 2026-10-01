@@ -12,6 +12,7 @@
   <a href="/profile">Profile</a>
   <a href="/searches">Searches</a>
   <a href="/dashboard" class="active">Dashboard</a>
+  <a href="/applications">Applications</a>
 </header>
 <main>
   <h1>Dashboard</h1>
@@ -151,20 +152,28 @@ async function loadFollowUps() {
       showEmpty(container, "No follow-up dates set. Set one from a job's workspace page.");
       return;
     }
-    const today = new Date().toISOString().slice(0, 10);
+    // 2026-09-28: is_overdue/is_due_today/is_upcoming now come directly
+    // from the API (scripts/application_follow_ups.py's compute_due_
+    // state()) -- the ONE canonical due-state definition every
+    // consumer (this widget, the n8n Follow-Up Reminder workflow)
+    // shares, instead of each independently recomputing "is this due"
+    // (the read-only audit's own finding: this widget used to treat
+    // only follow_up_date < today as overdue with no "due today"
+    // distinction at all, while n8n used <=, silently disagreeing).
     container.innerHTML = rows
       .slice(0, 10)
       .map((r) => {
-        const overdue = r.follow_up_date < today;
+        const badge = r.is_overdue ? badgeHtml("OVERDUE") : r.is_due_today ? badgeHtml("DUE_TODAY", "", "Due today") : badgeHtml("UPCOMING", "", "Upcoming");
         return `
           <div class="search-list-item">
             <div>
               <b>${escapeHtml(r.title || "")}</b>
               <div class="meta">${escapeHtml(r.company || "")}</div>
-              <div class="meta">${overdue ? badgeHtml("OVERDUE") : badgeHtml("SCHEDULED", "", "Upcoming")} ${escapeHtml(r.follow_up_date)}</div>
+              <div class="meta">${badge} ${escapeHtml(r.follow_up_date)}</div>
             </div>
             <div class="button-row" style="margin-top:0">
               ${r.job_url ? `<a class="job-link" target="_blank" rel="noopener" href="${r.job_url}">View Job</a>` : ""}
+              <button class="small secondary" onclick="window.location.href='/applications'">Manage &rarr;</button>
             </div>
           </div>
         `;

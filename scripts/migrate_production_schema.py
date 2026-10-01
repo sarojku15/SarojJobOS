@@ -79,6 +79,7 @@ import migrate_v12_company_research
 import migrate_v13_interview_prep
 import migrate_v14_search_schedules
 import migrate_v15_follow_up_date
+import migrate_v16_application_tracking
 
 
 class ProductionMigrationError(RuntimeError):
@@ -168,7 +169,7 @@ def migrate_production_schema(db_path=PRODUCTION_DB, backup_dir=BACKUP_DIR):
         migrate_v6_status_history, migrate_v7_candidate_resume_variant, migrate_v8_resume_profile_traceability,
         migrate_v9_candidate_job_search_matches, migrate_v10_search_type, migrate_v11_tailored_resumes,
         migrate_v12_company_research, migrate_v13_interview_prep, migrate_v14_search_schedules,
-        migrate_v15_follow_up_date,
+        migrate_v15_follow_up_date, migrate_v16_application_tracking,
     ):
         mod.migrate(db_path)
 

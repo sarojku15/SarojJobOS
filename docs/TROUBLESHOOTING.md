@@ -51,6 +51,30 @@ shouldn't — both read from the same canonical, run-scoped functions
 a mismatch, that's a regression worth reporting with the specific
 `search_id`/`run_id`.
 
+**A job I shortlisted doesn't show up on `/applications`.** By design
+— My Applications hides jobs still at `FOUND`/`NOT_QUALIFIED` (never
+acted on yet) by default. Use `?status=FOUND` (or the status filter on
+the page) to see everything, including untouched matches.
+
+**"Mark as Applied" is disabled/rejected (400).** The job must already
+be `APPROVED` — this is the same non-negotiable gate the status
+dropdown enforces, see
+[APPLICATION_LIFECYCLE.md](APPLICATION_LIFECYCLE.md). Approve it first.
+
+**My follow-up dashboard widget and the n8n workflow used to disagree
+on "overdue."** Fixed — both now read the same server-computed
+`is_overdue`/`is_due_today` fields from
+`GET /api/candidates/{id}/follow-ups`; neither recomputes it locally
+anymore. If you still see a mismatch, check the n8n workflow was
+re-imported after this update (the URL now includes `?due_only=true`).
+
+**Follow-up reminders only show up in n8n's own Executions log, never
+as a real notification.** Expected — no notification provider is wired
+in by default (see `scripts/notification_events.py`'s own honest
+`NOT_REQUESTED` status, surfaced as "Notification not configured").
+Add a Slack/Email/Telegram node after "Log Due Follow-Ups" in the n8n
+workflow yourself to get real delivery.
+
 ## Resume tailoring / company research / interview prep
 
 **Tailoring a resume returns 404 "not eligible."** This candidate

@@ -92,13 +92,38 @@ Use the status dropdown on a result's detail view (or
 set Approved first. Nothing here ever auto-applies — see
 [APPLICATION_LIFECYCLE.md](APPLICATION_LIFECYCLE.md).
 
+Once you've actually applied on the employer's own site, come back and
+click **Mark as Applied** (on the result's detail view, or from
+[My Applications](#i-want-to-see-everything-ive-applied-to-in-one-place))
+instead of just picking "Applied" from the dropdown — it also records
+*when* you applied and lets you confirm which resume you actually used
+(your match-time resume is suggested as a default, but you always
+confirm it). Add a note any time from the same place.
+
+## "I want to see everything I've applied to in one place."
+
+`/applications` ("My Applications") lists every job you've ever
+shortlisted, approved, or applied to, **across all your saved
+searches** — not just one search's results page. Filter by status,
+company, source, or follow-up state; summary cards up top show your
+totals (applied, follow-ups due, interviews, offers, etc.). Each card
+shows the real applied date/resume when set, and lets you follow up,
+reschedule, or open the job's full history from there.
+
 ## "I want to see pending follow-ups."
 
 `/dashboard` shows your candidate-scoped pipeline, recent activity, and
-a "Follow-ups" card listing every job with a follow-up date set,
-soonest/most-overdue first. Set, update, or clear a job's follow-up
-date from its workspace page — it's a personal reminder date only and
-never changes the job's application status.
+a "Follow-ups" card listing every job with an active follow-up date,
+soonest/most-overdue first, each clearly marked **Overdue**, **Due
+today**, or **Upcoming** (one definition, computed by the server —
+the dashboard and the n8n reminder workflow can never disagree on this
+again). For the full set of actions — **Follow Up Now** (marks it
+done, keeps the history), **Reschedule**, or **Cancel** — use
+[My Applications](#i-want-to-see-everything-ive-applied-to-in-one-place)
+or a job's own workspace page. Nothing here ever sends you a real
+notification unless you've separately wired a Slack/Email/Telegram
+node into the n8n workflow yourself — until then it only logs to n8n's
+own Executions tab.
 
 ## "I want to use Claude."
 

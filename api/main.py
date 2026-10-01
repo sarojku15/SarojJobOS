@@ -63,16 +63,22 @@ import resume_tailoring
 import company_research
 import interview_prep
 import scheduler
+import applications_store
+import application_follow_ups as follow_ups_mod
 from schemas import (
+    ApplicationNotesIn,
     CandidateCreate,
     CandidatePatch,
     CompanyResearchIn,
+    FollowUpCompleteIn,
     FollowUpDateIn,
+    FollowUpScheduleIn,
     InterviewAnswerIn,
     InterviewOutcomeIn,
     InterviewPrepIn,
     JobStatusUpdate,
     ManualJobImportIn,
+    MarkAppliedIn,
     ProfileUpdate,
     SavedSearchCreate,
     SavedSearchUpdate,
@@ -775,6 +781,83 @@ def update_job_status(candidate_id: str, job_id: str, update: JobStatusUpdate):
         conn.close()
 
 
+@app.post("/api/candidates/{candidate_id}/jobs/{job_id}/mark-applied")
+def mark_job_applied(candidate_id: str, job_id: str, payload: MarkAppliedIn):
+    """
+    The dedicated "Mark as Applied" action (2026-09-28 application-
+    tracker implementation) -- distinct from the generic status
+    dropdown (PATCH .../status with {"status": "APPLIED"}, still fully
+    supported below), for the one moment worth its own explicit
+    confirmation: which resume was actually used.
+
+    Still goes through application_lifecycle.transition_candidate_job_
+    status() underneath -- the SAME APPROVED-before-APPLIED gate, the
+    SAME status-history row, the SAME applied_at-set-once semantics.
+    This endpoint never bypasses that gate; a non-APPROVED job is
+    rejected here exactly like it is via the generic status endpoint.
+
+    resume_id/resume_variant/notes/applied_at are all optional -- never
+    fabricated if the caller omits them. The frontend is expected to
+    prompt the user to confirm the resume actually used (defaulting to
+    whatever resume_variant this match already carries from scoring
+    time) rather than silently sending nothing, but the backend does
+    not itself require it: an API caller with no resume context yet
+    can still record APPLIED.
+
+    Optionally schedules a follow-up in the same call (follow_up_date)
+    -- purely a convenience composing the same follow-up mechanism a
+    separate POST .../follow-up/schedule call would use; never required.
+    """
+    conn = db_mod.get_conn()
+    try:
+        try:
+            profile_store.get_candidate(conn, candidate_id)
+        except profile_store.ProfileStoreError as error:
+            raise HTTPException(404, str(error))
+
+        try:
+            result = application_lifecycle.mark_applied(
+                conn, candidate_id, job_id,
+                resume_id=payload.resume_id, resume_variant=payload.resume_variant,
+                applied_at_override=payload.applied_at, notes=payload.notes,
+            )
+        except application_lifecycle.ApplicationLifecycleError as error:
+            message = str(error)
+            status_code = 404 if message.startswith("No match record") else 400
+            raise HTTPException(status_code, message)
+
+        if payload.follow_up_date:
+            follow_ups_mod.create_follow_up(conn, candidate_id, job_id, payload.follow_up_date)
+            result = application_lifecycle.get_candidate_job_status(conn, candidate_id, job_id)
+
+        return result
+    finally:
+        conn.close()
+
+
+@app.patch("/api/candidates/{candidate_id}/jobs/{job_id}/notes")
+def update_job_notes(candidate_id: str, job_id: str, payload: ApplicationNotesIn):
+    """
+    Application-scoped notes (migrate_v16_application_tracking.py) --
+    candidate-owned, job/application-specific. Distinct from
+    interview_preparations.outcome_notes (a separate, interview-scoped
+    fact -- see scripts/interview_prep.py). None/omitted clears the
+    note, same convention as the existing follow-up date endpoint.
+    """
+    conn = db_mod.get_conn()
+    try:
+        try:
+            profile_store.get_candidate(conn, candidate_id)
+        except profile_store.ProfileStoreError as error:
+            raise HTTPException(404, str(error))
+        try:
+            return application_lifecycle.update_application_notes(conn, candidate_id, job_id, payload.notes)
+        except application_lifecycle.ApplicationLifecycleError as error:
+            raise HTTPException(404, str(error))
+    finally:
+        conn.close()
+
+
 @app.patch("/api/candidates/{candidate_id}/jobs/{job_id}/follow-up")
 def update_job_follow_up_date(candidate_id: str, job_id: str, payload: FollowUpDateIn):
     """
@@ -785,20 +868,28 @@ def update_job_follow_up_date(candidate_id: str, job_id: str, payload: FollowUpD
     -- never the shared, global `jobs` table, which would leak one
     candidate's own follow-up reminder onto every other candidate who
     also matched the same job.
+
+    2026-09-28: now backed by application_follow_ups.py underneath
+    (create_follow_up()/cancel_follow_up()) instead of a raw UPDATE --
+    same request/response shape as always (still just {follow_up_date}
+    in, {candidate_id, job_id, follow_up_date} out), but a set now also
+    creates a real, history-preserving PENDING row, and a clear (None)
+    now cancels the current PENDING row instead of silently losing it.
+    Existing callers (job_workspace.html's Save/Clear buttons) are
+    completely unaffected.
     """
     conn = db_mod.get_conn()
     try:
-        row = conn.execute(
-            "SELECT 1 FROM candidate_job_matches WHERE candidate_id = ? AND job_id = ?",
-            (candidate_id, job_id),
-        ).fetchone()
-        if row is None:
-            raise HTTPException(404, f"No match record for candidate {candidate_id!r} and job {job_id!r}.")
-        conn.execute(
-            "UPDATE candidate_job_matches SET follow_up_date = ? WHERE candidate_id = ? AND job_id = ?",
-            (payload.follow_up_date, candidate_id, job_id),
-        )
-        conn.commit()
+        try:
+            follow_ups_mod._verify_match_exists(conn, candidate_id, job_id)
+        except follow_ups_mod.FollowUpError as error:
+            raise HTTPException(404, str(error))
+
+        if payload.follow_up_date:
+            follow_ups_mod.create_follow_up(conn, candidate_id, job_id, payload.follow_up_date)
+        else:
+            follow_ups_mod.cancel_follow_up(conn, candidate_id, job_id)
+
         return {"candidate_id": candidate_id, "job_id": job_id, "follow_up_date": payload.follow_up_date}
     finally:
         conn.close()
@@ -900,6 +991,47 @@ def download_search_report(search_id: str, candidate_id: str):
     )
 
 
+@app.get("/api/candidates/{candidate_id}/applications")
+def list_applications(
+    candidate_id: str,
+    status: str = None,
+    company: str = None,
+    source: str = None,
+    follow_up_state: str = None,
+    date_from: str = None,
+    date_to: str = None,
+):
+    """
+    "My Applications" (2026-09-28 application-tracker implementation):
+    every candidate_job_matches row for THIS candidate, across ALL
+    saved searches/search runs -- never limited to one search, unlike
+    GET /api/searches/{id}/results. See api/applications_store.py's
+    module docstring for the deliberate "minimum needed" scope (no
+    re-scoring, no freshness/dedup recompute -- that stays results_
+    store.py's job for a single search's live view).
+
+    follow_up_state: "overdue" / "due_today" / "due" / "upcoming" /
+    "none". Every filter is optional and server-side (the read-only
+    audit's own recommendation, over client-side-only filtering).
+    """
+    conn = db_mod.get_conn()
+    try:
+        try:
+            profile_store.get_candidate(conn, candidate_id)
+        except profile_store.ProfileStoreError as error:
+            raise HTTPException(404, str(error))
+
+        applications = applications_store.list_applications(
+            conn, candidate_id,
+            status=status, company=company, source=source,
+            follow_up_state=follow_up_state, date_from=date_from, date_to=date_to,
+        )
+        summary = applications_store.get_applications_summary(applications)
+        return {"candidate_id": candidate_id, "summary": summary, "applications": applications}
+    finally:
+        conn.close()
+
+
 @app.get("/api/candidates/{candidate_id}/dashboard")
 def dashboard(candidate_id: str):
     conn = db_mod.get_conn()
@@ -971,17 +1103,23 @@ def dashboard(candidate_id: str):
 
 
 @app.get("/api/candidates/{candidate_id}/follow-ups")
-def list_follow_ups(candidate_id: str):
+def list_follow_ups(candidate_id: str, due_only: bool = False):
     """
-    Candidate-scoped list of every job this candidate has set a
-    follow_up_date on (candidate_job_matches, migrate_v15_follow_up_
-    date.py -- never the global jobs table), soonest first. Serves
-    two callers: the dashboard's "Follow-ups" widget, and the n8n
-    Follow-Up Reminder workflow (see n8n/workflows/) -- one query, no
-    duplicated logic. A candidate must supply their OWN candidate_id
-    (same DB-query-scoping convention as every other route in this
-    API, which has no separate auth layer -- see web/app.js's own
-    docstring on this).
+    Candidate-scoped list of every job this candidate has an ACTIVE
+    (PENDING) follow_up_date on, soonest first -- same scope as
+    before, now built on application_follow_ups.list_follow_ups_with_
+    state() (2026-09-28 application-tracker implementation) so every
+    row also carries the ONE canonical is_overdue/is_due_today/is_due/
+    is_upcoming state. Every existing field (job_id/follow_up_date/
+    candidate_status/title/company/job_url/application_url) is still
+    present, unchanged -- this is a strictly additive response-shape
+    change, so the dashboard widget and the n8n Follow-Up Reminder
+    workflow keep working even before they're updated to read the new
+    fields.
+
+    ?due_only=true restricts to is_due rows (overdue or due today) --
+    what the n8n workflow now uses instead of its own former
+    independent date computation.
     """
     conn = db_mod.get_conn()
     try:
@@ -989,18 +1127,93 @@ def list_follow_ups(candidate_id: str):
             profile_store.get_candidate(conn, candidate_id)
         except profile_store.ProfileStoreError as error:
             raise HTTPException(404, str(error))
-        rows = conn.execute(
-            """
-            SELECT cjm.job_id, cjm.follow_up_date, cjm.candidate_status,
-                   j.title, j.company, j.job_url, j.application_url
-            FROM candidate_job_matches cjm
-            JOIN jobs j ON j.job_id = cjm.job_id
-            WHERE cjm.candidate_id = ? AND cjm.follow_up_date IS NOT NULL
-            ORDER BY cjm.follow_up_date ASC
-            """,
-            (candidate_id,),
-        ).fetchall()
-        return {"follow_ups": [dict(r) for r in rows]}
+        rows = follow_ups_mod.list_follow_ups_with_state(conn, candidate_id, due_only=due_only)
+        return {"follow_ups": rows}
+    finally:
+        conn.close()
+
+
+@app.get("/api/candidates/{candidate_id}/jobs/{job_id}/follow-up-history")
+def get_follow_up_history(candidate_id: str, job_id: str):
+    """Full, never-deleted history of every follow-up instance
+    (PENDING/COMPLETED/CANCELLED) ever scheduled for this (candidate,
+    job) pair -- see scripts/application_follow_ups.py's module
+    docstring for why "clearing the date" alone was never enough."""
+    conn = db_mod.get_conn()
+    try:
+        try:
+            profile_store.get_candidate(conn, candidate_id)
+        except profile_store.ProfileStoreError as error:
+            raise HTTPException(404, str(error))
+        try:
+            follow_ups_mod._verify_match_exists(conn, candidate_id, job_id)
+        except follow_ups_mod.FollowUpError as error:
+            raise HTTPException(404, str(error))
+        history = follow_ups_mod.get_follow_up_history(conn, candidate_id, job_id)
+        return {"candidate_id": candidate_id, "job_id": job_id, "history": history}
+    finally:
+        conn.close()
+
+
+@app.post("/api/candidates/{candidate_id}/jobs/{job_id}/follow-up/schedule")
+def schedule_follow_up(candidate_id: str, job_id: str, payload: FollowUpScheduleIn):
+    """Schedule (or reschedule) a follow-up, with real history -- the
+    dedicated action behind "Follow Up" / "Reschedule" in My
+    Applications. Any currently-PENDING follow-up for this pair is
+    marked CANCELLED first (never deleted); candidate_job_matches.
+    follow_up_date is kept in sync for the existing PATCH .../follow-up
+    endpoint / dashboard / n8n workflow, all of which keep working
+    unchanged."""
+    conn = db_mod.get_conn()
+    try:
+        try:
+            profile_store.get_candidate(conn, candidate_id)
+        except profile_store.ProfileStoreError as error:
+            raise HTTPException(404, str(error))
+        try:
+            return follow_ups_mod.create_follow_up(conn, candidate_id, job_id, payload.due_date, notes=payload.notes)
+        except follow_ups_mod.FollowUpError as error:
+            raise HTTPException(404, str(error))
+    finally:
+        conn.close()
+
+
+@app.post("/api/candidates/{candidate_id}/jobs/{job_id}/follow-up/complete")
+def complete_follow_up(candidate_id: str, job_id: str, payload: FollowUpCompleteIn):
+    """"Follow Up Now" -- marks the current PENDING follow-up
+    COMPLETED (with a real completed_at), never deletes it. Scheduling
+    the next follow-up is a separate, subsequent call to .../schedule."""
+    conn = db_mod.get_conn()
+    try:
+        try:
+            profile_store.get_candidate(conn, candidate_id)
+        except profile_store.ProfileStoreError as error:
+            raise HTTPException(404, str(error))
+        try:
+            return follow_ups_mod.complete_follow_up(conn, candidate_id, job_id, notes=payload.notes)
+        except follow_ups_mod.FollowUpError as error:
+            raise HTTPException(404, str(error))
+    finally:
+        conn.close()
+
+
+@app.post("/api/candidates/{candidate_id}/jobs/{job_id}/follow-up/cancel")
+def cancel_follow_up(candidate_id: str, job_id: str):
+    """Cancel the current PENDING follow-up without claiming it was
+    completed -- a distinct terminal state from "Follow Up Now". Also
+    what the existing PATCH .../follow-up endpoint now calls internally
+    when clearing a date, so that action preserves history too."""
+    conn = db_mod.get_conn()
+    try:
+        try:
+            profile_store.get_candidate(conn, candidate_id)
+        except profile_store.ProfileStoreError as error:
+            raise HTTPException(404, str(error))
+        try:
+            history = follow_ups_mod.cancel_follow_up(conn, candidate_id, job_id)
+        except follow_ups_mod.FollowUpError as error:
+            raise HTTPException(404, str(error))
+        return {"candidate_id": candidate_id, "job_id": job_id, "history": history}
     finally:
         conn.close()
 
@@ -1307,6 +1520,15 @@ def serve_search_detail_page(search_id: str):
 @app.get("/dashboard")
 def serve_dashboard_page():
     return FileResponse(WEB_DIR / "dashboard.html")
+
+
+@app.get("/applications")
+def serve_applications_page():
+    # "My Applications" (2026-09-28 application-tracker implementation)
+    # -- candidate-wide view across ALL searches, backed by
+    # GET /api/candidates/{id}/applications. Loads its own data
+    # client-side, same static-shell pattern as every other page here.
+    return FileResponse(WEB_DIR / "applications.html")
 
 
 @app.get("/jobs/{job_id}")

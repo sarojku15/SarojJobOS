@@ -83,6 +83,16 @@ until it reaches a terminal status.
 `NOT_ATTEMPTED` status for every source you selected), and the scored,
 explainable results table. See [SCORING.md](SCORING.md).
 
+## 11. Track your applications
+
+Shortlist and Approve a job from its result card, then apply on the
+employer's own site and come back to click **Mark as Applied** — it
+records when you applied and which resume you used. `/applications`
+("My Applications") shows every job you've ever acted on, across every
+search, with follow-up reminders clearly marked overdue/due today/
+upcoming. See [APPLICATION_LIFECYCLE.md](APPLICATION_LIFECYCLE.md) and
+[USER_GUIDE.md](USER_GUIDE.md).
+
 ## Diagnose your setup
 
 ```bash

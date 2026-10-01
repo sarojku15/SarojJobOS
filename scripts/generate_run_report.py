@@ -242,6 +242,13 @@ class ReportRow:
     # (migrate_v15_follow_up_date.py) -- correctly candidate+job
     # scoped, never the shared global `jobs` table. None when unset.
     follow_up_date: object = None
+    # 2026-09-28 application-tracker implementation: same candidate+job
+    # scoping/never-invented convention as follow_up_date above. None
+    # when unset (never applied yet, or a non-qualifying job with no
+    # candidate_job_matches row at all).
+    applied_at: object = None
+    applied_resume_variant: object = None
+    notes: object = None
     eligible: bool = False
     report_status: str = ""
     previously_seen: object = None  # True/False/None (None = not applicable -- no candidate_job_matches row exists, e.g. non-qualifying jobs)
@@ -307,15 +314,16 @@ def load_candidate_job_matches(conn, candidate_id):
     conn.row_factory = sqlite3.Row
     try:
         rows = conn.execute(
-            "SELECT job_id, created_at, updated_at, candidate_status, resume_variant, follow_up_date FROM candidate_job_matches WHERE candidate_id = ?",
+            "SELECT job_id, created_at, updated_at, candidate_status, resume_variant, follow_up_date, "
+            "applied_at, applied_resume_variant, notes FROM candidate_job_matches WHERE candidate_id = ?",
             (candidate_id,),
         ).fetchall()
     except sqlite3.OperationalError as error:
-        if "no such column: follow_up_date" not in str(error):
+        if "no such column" not in str(error):
             raise
         # Defensive fallback for a DB predating migrate_v15_follow_up_
-        # date.py (same posture as every other additive-migration
-        # fallback in this project).
+        # date.py / migrate_v16_application_tracking.py (same posture
+        # as every other additive-migration fallback in this project).
         rows = conn.execute(
             "SELECT job_id, created_at, updated_at, candidate_status, resume_variant FROM candidate_job_matches WHERE candidate_id = ?",
             (candidate_id,),
@@ -324,6 +332,9 @@ def load_candidate_job_matches(conn, candidate_id):
     for row in rows:
         d = dict(row)
         d.setdefault("follow_up_date", None)
+        d.setdefault("applied_at", None)
+        d.setdefault("applied_resume_variant", None)
+        d.setdefault("notes", None)
         result[row["job_id"]] = d
     return result
 
@@ -556,12 +567,18 @@ def build_report_rows(jobs, candidate_profile, since=None, candidate_job_matches
         # migrate_v7_candidate_resume_variant.py).
         resume_variant = (match_row or {}).get("resume_variant") or str(job.get("resume_variant") or "")
         follow_up_date = (match_row or {}).get("follow_up_date")
+        applied_at = (match_row or {}).get("applied_at")
+        applied_resume_variant = (match_row or {}).get("applied_resume_variant")
+        match_notes = (match_row or {}).get("notes")
 
         row = ReportRow(
             ranking=ranking,
             status=status,
             resume_variant=resume_variant,
             follow_up_date=follow_up_date,
+            applied_at=applied_at,
+            applied_resume_variant=applied_resume_variant,
+            notes=match_notes,
             application_url=str(job.get("application_url") or ""),
             first_discovered=created_at,
             last_seen=last_seen,
