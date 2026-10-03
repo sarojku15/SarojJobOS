@@ -5,18 +5,30 @@
 - Python 3.11+ (developed/tested on 3.13)
 - Node.js 18+ (only needed for Playwright, used by the Naukri/Hirist/
   IIMJobs/Apna adapters)
-- macOS or Linux
+- Git
+- macOS, Linux, or Windows (Windows is documented below and should
+  work from the actual project requirements — it has not been
+  independently executed on a Windows machine in this project's own
+  testing; the macOS/Linux steps have been)
 - No other system packages required
 
 ## 1. Clone
 
+**macOS / Linux:**
 ```bash
+git clone <this-repo-url>
+cd SarojJobOS
+```
+
+**Windows (PowerShell):**
+```powershell
 git clone <this-repo-url>
 cd SarojJobOS
 ```
 
 ## 2. Install dependencies
 
+**macOS / Linux:**
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
@@ -25,25 +37,47 @@ npm install
 npx playwright install chromium
 ```
 
-## 3. Configure environment (optional)
+**Windows (PowerShell):**
+```powershell
+py -3 -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
 
-```bash
-cp config/jobos.env.example .env
+npm install
+npx playwright install chromium
 ```
 
-Nothing in `.env` is required to run JobOS. Edit it only if you want
-the 7 additional provider-backed sources (LinkedIn, Indeed, Foundit,
-Instahyre, Cutshort, Wellfound, Shine) — see
-[CONFIGURATION.md](CONFIGURATION.md).
+If PowerShell blocks the venv activation script with an execution-
+policy error, you don't need to activate it at all for the commands in
+this guide — every command below calls the venv's Python directly
+(`.venv\Scripts\python.exe` / `.venv/bin/python3`), which works without
+activation.
+
+## 3. Search-provider API keys (optional)
+
+Nothing here is required to run JobOS. Four job boards (Naukri,
+Hirist, IIMJobs, Apna) work with zero configuration. If you also want
+the 7 provider-backed boards (LinkedIn, Indeed, Foundit, Instahyre,
+Cutshort, Wellfound, Shine), add your **own** API key from any one of
+You.com/Tavily/Exa/Brave/Serper later, from inside the app, at
+**Settings → Search Providers** — no `.env` editing, no shell profile,
+no OS keychain. Full instructions, including where to get a key for
+each provider: [API_PROVIDER_SETUP.md](API_PROVIDER_SETUP.md).
 
 ## 4. Start JobOS
 
+**macOS / Linux:**
 ```bash
 .venv/bin/uvicorn api.main:app --reload --port 8420
 ```
 
+**Windows (PowerShell):**
+```powershell
+.venv\Scripts\uvicorn api.main:app --reload --port 8420
+```
+
 The database is created automatically on first request — nothing to
-initialize by hand.
+initialize by hand. Stop it with `Ctrl+C` in the same terminal, on any
+OS.
 
 ## 5. Open the application
 
@@ -95,8 +129,16 @@ upcoming. See [APPLICATION_LIFECYCLE.md](APPLICATION_LIFECYCLE.md) and
 
 ## Diagnose your setup
 
+**macOS / Linux:**
 ```bash
 scripts/jobos-doctor
+```
+
+**Windows (PowerShell)** — the `scripts/jobos-doctor` wrapper is a
+bash script and won't run directly; call the underlying Python checker
+it wraps instead:
+```powershell
+.venv\Scripts\python scripts\jobos_doctor.py
 ```
 
 Runs real checks (Python, Node, dependencies, database, API, Playwright,

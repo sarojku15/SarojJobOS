@@ -1,9 +1,15 @@
 # JobOS
 
-**An AI-powered personal Job Search Operating System** that helps you
-discover, understand, match, score, shortlist, prepare for, and track
-job opportunities — while keeping the final application decision under
-your control.
+**A personal Job Search Operating System** that helps you discover,
+understand, match, score, shortlist, prepare for, and track job
+opportunities — while keeping the final application decision under
+your control. Matching/scoring and resume tailoring are
+**deterministic and rule-based**, never an LLM rewriting or inventing
+content — see [SCORING.md](docs/SCORING.md) and
+[USER_GUIDE.md](docs/USER_GUIDE.md). An optional Claude Code integration
+lets you *talk to* this same deterministic system in plain language
+(see [CLAUDE_GUIDE.md](docs/CLAUDE_GUIDE.md)) — it is a conversational
+interface on top, not a different/AI scoring engine.
 
 This is Saroj's own personal project, but the application itself is
 **fully generic and multi-user**: anyone who runs it locally gets their
@@ -231,10 +237,21 @@ A few subsystems worth knowing about up front, each documented in full:
 
 ## Documentation
 
+See [docs/README.md](docs/README.md) for the full, categorized
+documentation map. Highlights:
+
 | Doc | Covers |
 |---|---|
-| [GETTING_STARTED.md](docs/GETTING_STARTED.md) | Full install walkthrough |
+| [GETTING_STARTED.md](docs/GETTING_STARTED.md) | Full install walkthrough (macOS/Linux/Windows) |
+| [FIRST_SEARCH_WALKTHROUGH.md](docs/FIRST_SEARCH_WALKTHROUGH.md) | One complete, concrete walkthrough with a fictional candidate |
+| [QUICK_REFERENCE.md](docs/QUICK_REFERENCE.md) | One-page cheat sheet |
 | [USER_GUIDE.md](docs/USER_GUIDE.md) | Goal-oriented "I want to..." guide |
+| [API_PROVIDER_SETUP.md](docs/API_PROVIDER_SETUP.md) | Getting and configuring your own search-provider API key |
+| [SEARCH.md](docs/SEARCH.md) / [MATCHING.md](docs/MATCHING.md) / [RESUMES.md](docs/RESUMES.md) | Search, scoring, and resume workflows |
+| [APPLICATION_TRACKER.md](docs/APPLICATION_TRACKER.md) / [INTERVIEW_PREP.md](docs/INTERVIEW_PREP.md) / [FOLLOWUPS.md](docs/FOLLOWUPS.md) / [COMPANY_RESEARCH.md](docs/COMPANY_RESEARCH.md) | Application lifecycle, interview prep, follow-ups, company research |
+| [N8N_SETUP.md](docs/N8N_SETUP.md) / [AUTOMATION.md](docs/AUTOMATION.md) | Optional n8n automation |
+| [API_REFERENCE.md](docs/API_REFERENCE.md) | Every real API endpoint |
+| [DATA_AND_BACKUP.md](docs/DATA_AND_BACKUP.md) | Where your data lives, backup, moving computers |
 | [CLAUDE_GUIDE.md](docs/CLAUDE_GUIDE.md) | How Claude Code operates JobOS |
 | [CLAUDE_COOKBOOK.md](docs/CLAUDE_COOKBOOK.md) | Natural-language prompt examples |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Components, diagrams, both pipelines |

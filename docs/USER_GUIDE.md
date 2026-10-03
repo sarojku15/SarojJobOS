@@ -4,6 +4,22 @@ Organized around what you're actually trying to do. See
 [GETTING_STARTED.md](GETTING_STARTED.md) first if you haven't installed
 JobOS yet.
 
+## "I want to configure a search-provider API key."
+
+Go to **Settings → Search Providers** (`/settings/search-providers`).
+JobOS needs **no key at all** to work — four job boards (Naukri,
+Hirist, IIMJobs, Apna) are searched directly with nothing configured.
+Adding your own key for any one of You.com/Tavily/Exa/Brave/Serper
+additionally unlocks seven more boards (LinkedIn, Indeed, Foundit,
+Instahyre, Cutshort, Wellfound, Shine), discovered through that
+provider's own search API. For each provider you can **add**, **test**
+(makes one real call to confirm it works), **enable**, **disable**,
+**replace**, or **remove** a key — a saved key is always shown back to
+you masked (e.g. `••••••••1234`), never in full, and no plain-text key
+is ever returned by any JobOS API response. Full walkthrough,
+including where to create an account and generate a key for each
+provider: [API_PROVIDER_SETUP.md](API_PROVIDER_SETUP.md).
+
 ## "I want to find jobs."
 
 Create a search at `/searches/new` with your target roles/locations,
