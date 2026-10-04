@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Python dependencies
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r requirements.txt
+
+      - name: Install Node dependencies and Playwright Chromium
+        run: |
+          npm install
+          npx playwright install --with-deps chromium
+
+      # No .env, no production DB, no provider API keys are configured
+      # here on purpose -- CI exercises exactly the "fresh clone, zero
+      # configuration" path every new contributor starts from. Tests
+      # that genuinely need a provider key or an existing production
+      # DB skip themselves cleanly (see their own SKIP output) rather
+      # than being special-cased here.
+      - name: Run backend test suite
+        run: |
+          set -e
+          for f in scripts/test_*.py; do
+            echo "=== $f ==="
+            .venv/bin/python3 "$f"
+          done
+
+      - name: Run frontend integrity checks
+        run: .venv/bin/python3 scripts/test_frontend_integrity.py

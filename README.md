@@ -281,11 +281,19 @@ limitations.
 
 ## Development and contribution
 
-Run the full backend suite: `for f in scripts/test_*.py; do .venv/bin/python3 "$f"; done`.
-Frontend integrity check: `.venv/bin/python3 scripts/test_frontend_integrity.py`.
-See `CLAUDE.md` for the project's working conventions (extend, don't
-rebuild; smallest change that achieves the goal; run tests before
-calling anything done).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full fork → branch → PR
+workflow (macOS/Linux and Windows), [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+for the real repository structure and where to make common changes,
+[SECURITY.md](SECURITY.md) for reporting a vulnerability, and
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations.
+
+Quick version: run the full backend suite with
+`for f in scripts/test_*.py; do .venv/bin/python3 "$f"; done`, and the
+frontend integrity check with
+`.venv/bin/python3 scripts/test_frontend_integrity.py`. See `CLAUDE.md`
+for the project's working conventions (extend, don't rebuild; smallest
+change that achieves the goal; run tests before calling anything
+done).
 
 Never commit credentials, OAuth tokens, browser sessions, application
 data, or other personal information to Git. Browser automation must

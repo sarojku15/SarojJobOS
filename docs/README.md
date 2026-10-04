@@ -50,6 +50,8 @@
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 
 ## Development
+- [DEVELOPMENT.md](DEVELOPMENT.md) — real repository structure, where to add a source/provider/scoring rule/UI feature
+- [../CONTRIBUTING.md](../CONTRIBUTING.md) — fork → branch → PR workflow
 - [ARCHITECTURE.md](ARCHITECTURE.md) — components, both pipelines, scheduling model
 - [CONFIGURATION.md](CONFIGURATION.md) — every env var and config file
 - [GLOSSARY.md](GLOSSARY.md) — plain-language term definitions
