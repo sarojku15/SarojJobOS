@@ -1,18 +1,12 @@
 #!/usr/bin/env python3
 
 """
-Hirist adapter. Parsing/pagination logic (Phase 6 Step 3) and live
-fetching (Phase 6 Step 4) are both real and implemented. This adapter
-is DELIBERATELY KEPT `status = AdapterStatus.NOT_ENABLED` and
-`capabilities = frozenset()`. source_registry.discover_from_sources()
-therefore still skips this adapter before any network call, with zero
-behavior change to the production pipeline -- exactly the same
-architecture NaukriAdapter itself relies on (NaukriFetcher is also
-live-capable by construction; the registry-level status check, not the
-fetcher, is what keeps a NOT_ENABLED source inert). See
-data/reports/hirist_phase6_adapter_implementation.md and
-data/reports/hirist_one_query_live_validation.md for the full
-rationale and evidence trail.
+Hirist adapter. Parsing, pagination, and live detail-page fetching
+are implemented. Phase 11's controlled live validation passed, and the
+adapter is ENABLED with SEARCH, DETAIL, and PAGINATION capabilities.
+The registry status gate continues to skip adapters that remain
+NOT_ENABLED. See data/reports/phase11_public_multisource_completion.md
+for the Hirist enablement evidence.
 
 ============================================================================
 STRICT EVIDENCE RULE
@@ -168,51 +162,29 @@ def _build_search_url(query: SearchQuery) -> str:
 
 class HiristAdapter(JobSourceAdapter):
     """
-    Hirist source adapter. Search-results parsing is based on the
-    site's embedded schema.org JSON-LD ItemList (see hirist_parser.py);
-    no HTML card scraping is implemented, since Phase 6's own
-    class-name selector heuristic proved unreliable (matched 0
-    elements against the real page).
+    Hirist source adapter. Search-result parsing uses the site's embedded
+    schema.org JSON-LD ItemList; unreliable HTML card scraping is not used.
 
-    No detail-page fetching is implemented: DETAIL and APPLICATION_URL
-    were both classified "Unknown" in the Phase 6 offline design, and
-    detail pages were never visited in Phase 6 Step 1's live
-    inspection, and are never visited by this adapter either.
+    Phase 11 added bounded detail-page fetching. Listing pages provide job
+    titles and URLs. Selected detail pages provide company, location, posted
+    date, employment type, and description through JobPosting JSON-LD.
+    Entries without a resolvable company are skipped rather than guessed.
 
-    Fetching is delegated entirely to an injectable fetcher
-    (HiristFetcher by default -- live-capable, see hirist_fetcher.py).
-    Every offline test in this project injects a fake fetcher instead,
-    so no network, Node, or Playwright process is ever invoked by this
-    project's test suite. Safety against accidental production use
-    comes entirely from `status = AdapterStatus.NOT_ENABLED` (the
-    registry-level pre-flight gate skips this adapter before
-    health_check()/search() is ever called) -- exactly the same
-    architecture NaukriAdapter itself relies on.
+    Fetching is delegated to an injectable fetcher (HiristFetcher by default).
+    Offline tests inject fake fetchers, so they do not invoke live network
+    requests or Playwright.
 
-    status = AdapterStatus.NOT_ENABLED and capabilities = frozenset()
-    remain UNCHANGED by the live-fetch capability added in Phase 6 Step
-    4, exactly matching the Phase 6 offline design's own conclusion
-    (Section 2): no capability is marked confirmed for real, production
-    use "until demonstrated the same way Naukri's were" -- i.e. via the
-    full Section 11 enablement gate (policy review, multi-query
-    validation, etc.).
+    ENABLEMENT EVIDENCE — PHASE 11
+    The controlled live validation documented in
+    data/reports/phase11_public_multisource_completion.md reported 14 requests:
+    one health check, three listing pages, and ten detail pages. All returned
+    HTTP 200, with no blocks/CAPTCHA and ten jobs resolved. The adapter is
+    ENABLED with SEARCH, DETAIL, and PAGINATION capabilities.
 
-    ============================================================================
-    PHASE 11: ENABLED -- the full gate has now been passed
-    ============================================================================
-    robots.txt permits generic-agent crawling of job pages (only
-    technical/admin paths disallowed; Crawl-delay: 10, honored by
-    self._rate_limit_seconds). Offline tests pass
-    (test_hirist_adapter.py, test_hirist_phase11_detail_fetch.py). A
-    controlled live validation (data/reports/phase11_public_multisource_completion.md)
-    ran the REAL adapter end-to-end with the real Playwright fetcher:
-    health_check() reachable/no block; search() made 14 real requests
-    (1 health-check + 3 listing pages + 10 detail pages), every one
-    status 200, zero blocks/CAPTCHA, 10/10 jobs correctly resolved
-    (title, company via each job's own detail-page JobPosting JSON-LD,
-    location, canonical job_url) -- zero silent data loss, zero
-    ambiguous splitting. This is the same evidence bar Naukri was held
-    to before being enabled.
+    Application-URL extraction, native freshness filtering, remote filtering,
+    and undocumented query parameters are not implemented. The locations
+    query parameter remains best-effort and its filtering effect is unconfirmed.
+
     """
 
     name = "HIRIST"

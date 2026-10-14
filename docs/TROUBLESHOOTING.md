@@ -27,6 +27,41 @@ port (`--port 8421`) and open that URL instead.
 (`jobos_dev.db`) is created automatically on the first API request, not
 at process startup — open the app in a browser first.
 
+## API keys / search providers
+
+**"JobOS never asked me for an API key — is it using someone else's?"**
+No. JobOS ships with no API key of any kind, has no default or
+fallback key, and never uses another installation's credentials — a
+fresh install genuinely has zero providers configured (verified by
+`scripts/test_byok_credential_isolation.py`). It never asks for a key
+because **no key is required**: the four direct boards (Naukri,
+Hirist, IIMJobs, Apna) are searched directly and work with nothing
+configured, which is why your first search can return real results
+with an empty Settings page. The other seven boards stay
+`SEARCH_PROVIDER_NOT_CONFIGURED` and are skipped until *you* add your
+own key under **Settings → Search Providers**. Confirm what's actually
+in use at any time with `GET /api/sources` (shows each board's real
+status) or `GET /api/settings/search-providers` (shows
+`configured: true/false` per provider — never a key value).
+
+**Settings page shows a provider as configured, but I never added a
+key there.** Check whether a provider variable is exported in your
+shell environment (e.g. `TAVILY_API_KEY`) — an exported environment
+variable takes precedence over the UI-saved value and is reported as
+configured. See [SECURITY.md](SECURITY.md)'s
+"Environment-variable precedence".
+
+**Two people share one installation and see each other's provider
+quota.** Expected: provider keys are scoped per *installation*, not
+per candidate. Run separate installations for independent users — see
+[SECURITY.md](SECURITY.md)'s "Credential ownership (BYOK) and its
+scope".
+
+**A provider test says `AUTH_FAILED`.** The key is wrong, revoked, or
+lacks the required scope on the provider's side. Re-generate it on the
+provider's own dashboard and save it again. JobOS reports the
+provider's own response message and never echoes your key.
+
 ## Using the app
 
 **"Profile needs to be confirmed" when trying to run a search.** Go to
@@ -97,6 +132,41 @@ should be structurally rare (the pipeline only ever reorders/extracts
 existing text) — if you see it, it means the automated check found
 generated text that doesn't trace back to the original profile; treat
 it as a real bug worth reporting with the `tailored_resume_id`.
+
+## Custom Scoring Profiles
+
+**`GET /api/candidates/{id}/scoring-profiles` (or any scoring-profile
+page/route) returns `500: sqlite3.OperationalError: no such table:
+scoring_profiles`.** The production database hasn't been migrated
+since this feature was added — this is expected on an existing
+installation and is not a code bug. `scripts/run_production_api.py`
+never runs migrations itself by design (see
+[CONFIGURATION.md](CONFIGURATION.md)'s "Two API instances" section).
+Fix: `.venv/bin/python3 scripts/migrate_production_schema.py --confirm`
+once (safe, backed up, verified, and a no-op if already current). The
+dev database (`jobos_dev.db`, served on port 8420) gets this
+automatically on next startup via `scripts/init_dev_db.py` — only the
+production DB (port 8421) needs this explicit step.
+
+**A search run shows `status: FAILED` with "no longer exists" in the
+error message.** The scoring profile this search had selected was
+deleted (or belongs to a different candidate). This is deliberate —
+JobOS never silently falls back to default scoring under a deleted
+profile's name. Select a different profile, or clear the selection, on
+the search's edit page, then re-run it.
+
+**My search's results don't seem to use my profile's weights.**
+Results only reflect a profile once that search has actually been
+*run* with it selected — selecting a profile never retroactively
+rescales a previous run's already-persisted scores (see
+[SCORING.md](SCORING.md#when-scores-are-recomputed)). Run the search
+again after selecting/changing the profile.
+
+**I changed a saved search's own "Minimum match score" and nothing
+changed.** That field only has an effect when no custom scoring
+profile is selected on that search — once a profile is selected, only
+the profile's own shortlist threshold determines qualification. See
+[SCORING.md](SCORING.md#the-two-thresholds-and-precedence).
 
 ## Scheduling
 

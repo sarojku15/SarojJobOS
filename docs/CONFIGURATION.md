@@ -98,10 +98,26 @@ expected and safe (they open the same SQLite engine against two
 completely different files). Before this is useful, production's
 schema must already include the automation tables
 (`saved_searches`, `search_schedules`, `tailored_resumes`,
-`company_research`, `interview_preparations`, etc.) — run
-`scripts/migrate_production_schema.py --confirm` once, first (it backs
+`company_research`, `interview_preparations`, `scoring_profiles`,
+etc.) — run `scripts/migrate_production_schema.py --confirm` (it backs
 up, verifies integrity before and after, and confirms no existing row
 was touched, before reporting success).
+
+**This is not a one-time step — it is "once per added migration."**
+`run_production_api.py` deliberately never runs a migration itself
+(see its own docstring); it only ever serves whatever schema already
+exists on disk. Every time a new `migrate_vN_*.py` module is added to
+`migrate_production_schema.py`'s own chain (as happened for Custom Job
+Scoring Profiles, `migrate_v17_scoring_profiles.py`), production stays
+on the OLD schema — silently, with no error at startup — until
+`--confirm` is run again. A real incident of exactly this shape
+happened live: `GET /api/candidates/{id}/scoring-profiles` returned
+`500: no such table: scoring_profiles` on a production API that had
+been running, un-migrated, since before that migration existed. Check
+`PRAGMA table_info(saved_searches)` for a `scoring_profile_id` column
+(or just re-run `--confirm`, which is a safe no-op if already current)
+whenever a new feature's docs mention a new table/column and production
+starts returning a `500`/`no such table`/`no such column` error.
 
 From inside the n8n Docker container, reach the production API at
 `http://host.docker.internal:8421` — **never** `localhost`/`127.0.0.1`,

@@ -6,9 +6,12 @@ JobOS yet.
 
 ## "I want to configure a search-provider API key."
 
-Go to **Settings → Search Providers** (`/settings/search-providers`).
-JobOS needs **no key at all** to work — four job boards (Naukri,
-Hirist, IIMJobs, Apna) are searched directly with nothing configured.
+Go to **Settings → Search Providers** (`/settings/search-providers`,
+also in the top nav). JobOS needs **no key at all** to work — four job
+boards (Naukri, Hirist, IIMJobs, Apna) are searched directly with
+nothing configured. Every key you add is **your own**, from your own
+provider account: JobOS ships with no key, has no default or fallback,
+and never uses anyone else's.
 Adding your own key for any one of You.com/Tavily/Exa/Brave/Serper
 additionally unlocks seven more boards (LinkedIn, Indeed, Foundit,
 Instahyre, Cutshort, Wellfound, Shine), discovered through that
@@ -47,6 +50,17 @@ Click any result for its detail view: the raw score, priority tier
 produced it. Full explanation of every dimension in
 [SCORING.md](SCORING.md). Ask Claude "explain why this job scored X"
 for the same data in plain language.
+
+## "I want to score jobs using my own criteria instead of the built-in model."
+
+Go to **Settings → Scoring Profiles** to create a profile: your own
+weighted criteria (technical skills, experience, role/title alignment,
+salary, location, certifications, company/domain), a mandatory-skill
+gate (on by default), and your own shortlist threshold. Select it on
+any saved search's create/edit page — leave it on "Default scoring" to
+keep using the built-in 100-point model, exactly as before. Full detail,
+including how the two thresholds interact, in
+[SCORING.md](SCORING.md#custom-job-scoring-profiles-optional-per-candidate).
 
 ## "I want to identify skill gaps."
 

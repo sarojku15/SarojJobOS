@@ -90,6 +90,8 @@ from experience_eligibility import Eligibility
 from job_eligibility import assess_job_eligibility
 from location_taxonomy import LocationEligibility
 from score_job import score_job
+import scoring_profile_store
+import scoring_profiles as scoring_profiles_mod
 from search_submission import SearchSubmissionError, load_candidate_confirmed_profile
 from candidate_profile import apply_search_target_override, to_legacy_matching_profile
 from source_adapter import SearchQuery
@@ -180,6 +182,33 @@ def _resolve_pinned_profile_version(conn, search_run_id):
         # predates migrate_v8_resume_profile_traceability.py's
         # profile_version column, simply has no possible pin -- always
         # fresh, exactly like today's default.
+        if "no such table" in str(error) or "no such column" in str(error):
+            return None
+        raise
+    return row[0] if row and row[0] is not None else None
+
+
+def _resolve_scoring_profile_id(conn, search_run_id):
+    """
+    The custom scripts/scoring_profiles.py profile id selected on this
+    run's saved search, if any -- None for a run with no saved search,
+    an unpinned/legacy saved search, or a DB that predates
+    migrate_v17_scoring_profiles.py. Mirrors _resolve_pinned_profile_
+    version()'s exact defensive posture (same query shape, same
+    "no such table/column" -> None fallback) since both read an
+    optional saved_searches column through the same saved_search_runs
+    join.
+    """
+    try:
+        row = conn.execute(
+            """
+            SELECT ss.scoring_profile_id FROM saved_search_runs ssr
+            JOIN saved_searches ss ON ss.saved_search_id = ssr.saved_search_id
+            WHERE ssr.search_run_id = ?
+            """,
+            (search_run_id,),
+        ).fetchone()
+    except sqlite3.OperationalError as error:
         if "no such table" in str(error) or "no such column" in str(error):
             return None
         raise
@@ -509,7 +538,10 @@ def _match_exists(conn, candidate_id, job_id):
     return row is not None
 
 
-def upsert_candidate_job_match(conn, candidate_id, job, scoring, eligibility_result, search_run_id, profile_version=None):
+def upsert_candidate_job_match(
+    conn, candidate_id, job, scoring, eligibility_result, search_run_id, profile_version=None,
+    scoring_profile_id=None, scoring_profile_version=None,
+):
     """
     Create or update the ONE candidate_job_matches row for
     (candidate_id, job_id) -- the table's own PRIMARY KEY already
@@ -563,14 +595,17 @@ def upsert_candidate_job_match(conn, candidate_id, job, scoring, eligibility_res
             candidate_id, job_id, search_run_id, resume_id, fit_score, priority,
             experience_eligibility, salary_match, location_match,
             skill_match_json, matched_skills_json, missing_skills_json,
-            candidate_status, created_at, updated_at, resume_variant, profile_version
+            candidate_status, created_at, updated_at, resume_variant, profile_version,
+            scoring_profile_id, scoring_profile_version
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(candidate_id, job_id) DO UPDATE SET
             search_run_id = excluded.search_run_id,
             resume_id = excluded.resume_id,
             resume_variant = excluded.resume_variant,
             profile_version = excluded.profile_version,
+            scoring_profile_id = excluded.scoring_profile_id,
+            scoring_profile_version = excluded.scoring_profile_version,
             fit_score = excluded.fit_score,
             priority = excluded.priority,
             experience_eligibility = excluded.experience_eligibility,
@@ -612,6 +647,8 @@ def upsert_candidate_job_match(conn, candidate_id, job, scoring, eligibility_res
             now,
             resume_variant,
             profile_version,
+            scoring_profile_id,
+            scoring_profile_version,
         ),
     )
 
@@ -632,8 +669,9 @@ def upsert_candidate_job_match(conn, candidate_id, job, scoring, eligibility_res
                 search_run_id, job_id, candidate_id, fit_score, priority,
                 experience_eligibility, location_match, skill_match_json,
                 matched_skills_json, missing_skills_json, resume_id,
-                resume_variant, profile_version, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                resume_variant, profile_version, scoring_profile_id,
+                scoring_profile_version, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(search_run_id, job_id) DO UPDATE SET
                 fit_score = excluded.fit_score,
                 priority = excluded.priority,
@@ -644,7 +682,9 @@ def upsert_candidate_job_match(conn, candidate_id, job, scoring, eligibility_res
                 missing_skills_json = excluded.missing_skills_json,
                 resume_id = excluded.resume_id,
                 resume_variant = excluded.resume_variant,
-                profile_version = excluded.profile_version
+                profile_version = excluded.profile_version,
+                scoring_profile_id = excluded.scoring_profile_id,
+                scoring_profile_version = excluded.scoring_profile_version
             """,
             (
                 search_run_id,
@@ -660,6 +700,8 @@ def upsert_candidate_job_match(conn, candidate_id, job, scoring, eligibility_res
                 resume_id,
                 resume_variant,
                 profile_version,
+                scoring_profile_id,
+                scoring_profile_version,
                 now,
             ),
         )
@@ -1010,6 +1052,39 @@ def process_queue_item(conn, claimed, db_write_lock_note=None):
     # is None, load_candidate_confirmed_profile() loads the active
     # profile exactly like it always has.
     pinned_profile_version = _resolve_pinned_profile_version(conn, search_run_id)
+
+    # Custom Job Scoring Profiles (migrate_v17_scoring_profiles.py): if
+    # this run's saved search selected one, every job in this run is
+    # scored with scripts/scoring_profiles.score_with_profile() against
+    # it instead of the legacy score_job() call below -- same
+    # normalize/eligibility/persistence pipeline either way, only the
+    # scoring step itself differs. None (the default -- no saved
+    # search, or one with no profile selected) preserves today's
+    # legacy scoring behavior byte-for-byte, exactly as before this
+    # feature existed.
+    #
+    # A profile id that no longer resolves (e.g. deleted, or belongs to
+    # a different candidate) is NEVER silently treated as "no profile
+    # selected" -- that would misrepresent which scoring model actually
+    # produced this run's results. The whole run fails explicitly here,
+    # before any network/adapter activity, with FAILED status and a
+    # clear error_message, exactly like the existing candidate-profile-
+    # not-CONFIRMED failure immediately below.
+    scoring_profile = None
+    selected_scoring_profile_id = _resolve_scoring_profile_id(conn, search_run_id)
+    if selected_scoring_profile_id is not None:
+        try:
+            scoring_profile = scoring_profile_store.get_profile(conn, candidate_id, selected_scoring_profile_id)
+        except scoring_profile_store.ScoringProfileNotFoundError:
+            message = (
+                f"Selected scoring profile {selected_scoring_profile_id!r} no longer "
+                "exists for this candidate. Select a different profile, or clear the "
+                "selection to use legacy scoring, then re-run this search."
+            )
+            result.errors.append(message)
+            _finalize_queue_item(conn, queue_id, search_run_id, "FAILED", result, error_message=message)
+            return result
+
     try:
         candidate_profile = load_candidate_confirmed_profile(conn, candidate_id, profile_version=pinned_profile_version)
         legacy_profile = to_legacy_matching_profile(candidate_profile)
@@ -1101,9 +1176,17 @@ def process_queue_item(conn, claimed, db_write_lock_note=None):
             result.eligible_count += 1
 
             try:
-                scoring = score_job(
-                    job, legacy_profile, experience_assessment=eligibility_result.experience_assessment
-                )
+                if scoring_profile is not None:
+                    scoring = scoring_profiles_mod.result_to_dict(
+                        scoring_profiles_mod.score_with_profile(
+                            job, legacy_profile, scoring_profile=scoring_profile,
+                            experience_assessment=eligibility_result.experience_assessment,
+                        )
+                    )
+                else:
+                    scoring = score_job(
+                        job, legacy_profile, experience_assessment=eligibility_result.experience_assessment
+                    )
             except Exception as error:
                 result.errors.append(f"Scoring failed for job {job.get('job_id')}: {error}")
                 continue
@@ -1121,6 +1204,8 @@ def process_queue_item(conn, claimed, db_write_lock_note=None):
             match_inserted = upsert_candidate_job_match(
                 conn, candidate_id, job, scoring, eligibility_result, search_run_id,
                 profile_version=used_profile_version,
+                scoring_profile_id=scoring_profile["scoring_profile_id"] if scoring_profile else None,
+                scoring_profile_version=scoring_profile["version"] if scoring_profile else None,
             )
             if match_inserted:
                 result.matches_created += 1

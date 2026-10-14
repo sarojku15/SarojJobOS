@@ -100,6 +100,7 @@ and the tracking states in full detail.
 | Search-provider layer | `scripts/search_provider.py`, `search_provider_manager.py`, `search_provider_adapter.py`, `restricted_source_registry.py` |
 | Eligibility | `scripts/job_eligibility.py`, `experience_eligibility.py`, `location_taxonomy.py` |
 | Scoring | `scripts/score_job.py`, `scripts/score_explanation.py` |
+| Custom Scoring Profiles (optional, per-candidate; extends the row above, never a second scoring implementation) | `scripts/scoring_profiles.py`, `scripts/scoring_profile_store.py` |
 | Dedup/freshness | `scripts/cross_source_dedup.py`, `scripts/canonical_job.py`, `scripts/freshness.py` |
 | Application lifecycle | `scripts/application_lifecycle.py` (status transitions, `applied_at`/applied-resume/notes, "Mark as Applied") |
 | My Applications | `api/applications_store.py` (candidate-wide, cross-search list) |

@@ -55,6 +55,7 @@ import migrate_v13_interview_prep
 import migrate_v14_search_schedules
 import migrate_v15_follow_up_date
 import migrate_v16_application_tracking
+import migrate_v17_scoring_profiles
 
 
 def init_dev_db(db_path=DEV_DB):
@@ -100,6 +101,7 @@ def init_dev_db(db_path=DEV_DB):
     migrate_v14_search_schedules.migrate(db_path)
     migrate_v15_follow_up_date.migrate(db_path)
     migrate_v16_application_tracking.migrate(db_path)
+    migrate_v17_scoring_profiles.migrate(db_path)
 
     return db_path
 

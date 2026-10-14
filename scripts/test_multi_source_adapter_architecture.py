@@ -158,22 +158,14 @@ def test_unsupported_adapter_behavior(failures):
     calls (trivially true -- no browser/subprocess/HTTP import is even
     reachable in those modules).
 
-    HIRIST is deliberately excluded from this specific loop as of
-    Phase 6 Step 3 (data/reports/hirist_phase6_adapter_implementation.md):
-    it is no longer a bare skeleton that raises immediately -- it has
-    real, offline-tested parsing/pagination logic (see
-    hirist_parser.py, test_hirist_adapter.py). It remains NOT_ENABLED
-    via the class-level status/registry pre-flight gate (still
-    verified below, and by test_capability_declarations /
-    test_source_registration elsewhere in this file), not via an
-    immediate raise -- so calling health_check()/search() on it
-    directly now reaches HiristAdapter's own safety backstop instead
-    (HiristFetcher.fetch() raising NotImplementedError, asserted
-    separately below), never AdapterNotEnabledError. This is a real,
-    intentional behavior change for this one adapter, not a test
-    weakening -- HIRIST's NOT_ENABLED status, empty capabilities, and
-    exclusion from the default search plan are all still independently
-    verified elsewhere in this file."""
+    HIRIST is excluded from this bare-skeleton loop because it is
+    now genuinely ENABLED after Phase 11 validation. Its real
+    parsing, pagination, and detail-page fetching are covered by
+    test_hirist_adapter.py. The assertions below continue to verify
+    that the remaining bare skeleton adapters raise
+    AdapterNotEnabledError and are excluded from the default search
+    plan. HIRIST's enabled status and capabilities are verified
+    separately in this file."""
     query = SearchQuery(role="Test Role", location="Test Location")
 
     bare_skeletons = {source: cls for source, cls in SKELETON_CLASSES.items() if source not in ("HIRIST", "IIMJOBS")}

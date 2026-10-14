@@ -1,0 +1,326 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Job Search OS — Scoring Profiles</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<header>
+  <span class="brand">Job Search OS</span>
+  <a href="/">Home</a>
+  <a href="/profile">Profile</a>
+  <a href="/searches">Searches</a>
+  <a href="/dashboard">Dashboard</a>
+  <a href="/applications">Applications</a>
+  <a href="/settings/search-providers">Settings</a>
+  <a href="/settings/scoring-profiles" class="active">Scoring Profiles</a>
+</header>
+<main>
+  <h1>Custom Job Scoring Profiles</h1>
+  <p class="lede">
+    Every candidate already gets the built-in, deterministic 100-point score with no setup
+    (see <code>docs/SCORING.md</code>) — this page is entirely optional. A custom profile
+    lets you define your <strong>own</strong> weighting across seven criteria, a minimum
+    shortlist score, and whether the mandatory-skill gate applies. A saved search only uses a
+    custom profile if you explicitly select one for it; every search that doesn't keeps using
+    the built-in score, unchanged.
+  </p>
+  <p class="hint">
+    <strong>What a mandatory-skill gate failure means:</strong> if enabled, a job missing a skill
+    the job itself marks mandatory is rejected regardless of its weighted score — a high score can
+    never override a failed gate.
+  </p>
+  <div id="msg"></div>
+  <div class="button-row">
+    <button id="new-profile-btn">+ New profile</button>
+  </div>
+  <div id="list"><div class="loading-state">Loading...</div></div>
+
+  <div id="editor" style="display:none" class="card">
+    <h2 id="editor-title">New scoring profile</h2>
+    <label>Name</label>
+    <input type="text" id="f-name" placeholder="e.g. Senior SRE / Platform Engineering" />
+    <label>Description</label>
+    <input type="text" id="f-description" placeholder="Optional — what this profile targets" />
+
+    <h3>Criterion weights</h3>
+    <p class="hint">Entered weights don't need to already sum to 100 — they're normalized automatically. Normalized result shown live below.</p>
+    <div id="weight-rows"></div>
+    <div class="hint" id="weight-total"></div>
+
+    <div class="row">
+      <div>
+        <label><input type="checkbox" id="f-mandatory-gate" checked /> Enforce mandatory-skill gate</label>
+      </div>
+      <div>
+        <label>Minimum shortlist score (0–100)</label>
+        <input type="number" id="f-min-score" min="0" max="100" value="70" />
+      </div>
+    </div>
+    <div>
+      <label><input type="checkbox" id="f-is-default" /> Make this my default profile</label>
+    </div>
+
+    <div class="button-row">
+      <button id="save-profile-btn">Save</button>
+      <button class="secondary" id="cancel-edit-btn">Cancel</button>
+    </div>
+  </div>
+
+  <div id="preview-section" class="card" style="display:none">
+    <h2>Preview against a job</h2>
+    <p class="hint">Scores one job you paste in below — never runs a real search, never saves a match.</p>
+    <label>Job title</label>
+    <input type="text" id="pv-title" placeholder="e.g. Senior Site Reliability Engineer" />
+    <label>Mandatory skills (comma-separated)</label>
+    <input type="text" id="pv-mandatory" placeholder="e.g. Kubernetes, Terraform" />
+    <label>Job description text</label>
+    <textarea id="pv-jd" rows="4" placeholder="Paste a job description here"></textarea>
+    <div class="button-row">
+      <button id="pv-run-btn">Preview score</button>
+      <button class="secondary" id="pv-close-btn">Close</button>
+    </div>
+    <div id="pv-result"></div>
+  </div>
+</main>
+
+<template id="tpl-profile-card">
+  <div class="card profile-card">
+    <div class="button-row" style="justify-content: space-between; margin-top:0">
+      <h2 style="margin:0"><span class="pc-name"></span> <span class="pc-default hint"></span></h2>
+      <span class="pc-version hint"></span>
+    </div>
+    <div class="pc-description hint"></div>
+    <div class="pc-weights hint"></div>
+    <div class="hint">Mandatory gate: <span class="pc-gate"></span> · Minimum shortlist score: <span class="pc-min-score"></span></div>
+    <div class="button-row">
+      <button class="secondary small pc-edit">Edit</button>
+      <button class="secondary small pc-duplicate">Duplicate</button>
+      <button class="secondary small pc-set-default">Set as default</button>
+      <button class="secondary small pc-preview">Preview</button>
+      <button class="secondary small pc-delete">Delete</button>
+    </div>
+  </div>
+</template>
+
+<script src="/static/app.js"></script>
+<script>
+const candidateId = getCandidateId();
+const CRITERIA_LABELS = {
+  technical_skills: "Technical skills",
+  relevant_experience: "Relevant experience",
+  role_title_alignment: "Role/title alignment",
+  salary_compensation: "Salary and compensation",
+  location_work_mode: "Location and work mode",
+  certifications: "Certifications",
+  company_domain: "Company and domain",
+};
+let illustrativeDefaults = {};
+let editingProfileId = null;
+let previewProfileId = null;
+
+async function load() {
+  if (!candidateId) {
+    showError(document.getElementById("msg"), new Error("Create/select a candidate profile first."));
+    return;
+  }
+  try {
+    const data = await api(`/api/candidates/${candidateId}/scoring-profiles`);
+    illustrativeDefaults = data.illustrative_default_weights;
+    render(data.scoring_profiles);
+  } catch (err) {
+    showError(document.getElementById("msg"), err);
+  }
+}
+
+function render(profiles) {
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+  if (!profiles.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent = "No custom scoring profiles yet — every search uses the built-in score until you create one.";
+    list.appendChild(empty);
+    return;
+  }
+  profiles.forEach((p) => {
+    const card = document.getElementById("tpl-profile-card").content.cloneNode(true);
+    card.querySelector(".pc-name").textContent = p.name;
+    card.querySelector(".pc-default").textContent = p.is_default ? "(default)" : "";
+    card.querySelector(".pc-version").textContent = `v${p.version}`;
+    card.querySelector(".pc-description").textContent = p.description || "";
+    card.querySelector(".pc-weights").textContent = Object.entries(p.weights)
+      .map(([k, v]) => `${CRITERIA_LABELS[k] || k}: ${v}`).join(" · ");
+    card.querySelector(".pc-gate").textContent = p.mandatory_gate_enabled ? "enabled" : "disabled";
+    card.querySelector(".pc-min-score").textContent = p.min_shortlist_score;
+
+    card.querySelector(".pc-edit").addEventListener("click", () => openEditor(p));
+    card.querySelector(".pc-duplicate").addEventListener("click", async () => {
+      const name = prompt("Name for the duplicate:", `${p.name} (copy)`);
+      if (!name) return;
+      try {
+        await api(`/api/candidates/${candidateId}/scoring-profiles/${p.scoring_profile_id}/duplicate`, { method: "POST", body: { name } });
+        showSuccess(document.getElementById("msg"), `Duplicated as "${name}".`);
+        load();
+      } catch (err) { showError(document.getElementById("msg"), err); }
+    });
+    card.querySelector(".pc-set-default").addEventListener("click", async () => {
+      try {
+        await api(`/api/candidates/${candidateId}/scoring-profiles/${p.scoring_profile_id}`, { method: "PUT", body: { is_default: true } });
+        showSuccess(document.getElementById("msg"), `"${p.name}" is now your default profile.`);
+        load();
+      } catch (err) { showError(document.getElementById("msg"), err); }
+    });
+    card.querySelector(".pc-preview").addEventListener("click", () => openPreview(p.scoring_profile_id));
+    card.querySelector(".pc-delete").addEventListener("click", async () => {
+      if (!confirm(`Delete scoring profile "${p.name}"? This cannot be undone.`)) return;
+      try {
+        await api(`/api/candidates/${candidateId}/scoring-profiles/${p.scoring_profile_id}`, { method: "DELETE" });
+        showSuccess(document.getElementById("msg"), `"${p.name}" deleted.`);
+        load();
+      } catch (err) { showError(document.getElementById("msg"), err); }
+    });
+
+    document.getElementById("list").appendChild(card);
+  });
+}
+
+function renderWeightRows(weights) {
+  const container = document.getElementById("weight-rows");
+  container.innerHTML = "";
+  Object.keys(CRITERIA_LABELS).forEach((criterion) => {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `<label>${CRITERIA_LABELS[criterion]}</label>`;
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = "0";
+    input.step = "1";
+    input.dataset.criterion = criterion;
+    input.value = weights[criterion] !== undefined ? weights[criterion] : 0;
+    input.addEventListener("input", updateWeightTotal);
+    row.appendChild(input);
+    container.appendChild(row);
+  });
+  updateWeightTotal();
+}
+
+function currentWeights() {
+  const weights = {};
+  document.querySelectorAll("#weight-rows input").forEach((input) => {
+    weights[input.dataset.criterion] = parseFloat(input.value) || 0;
+  });
+  return weights;
+}
+
+function updateWeightTotal() {
+  const weights = currentWeights();
+  const total = Object.values(weights).reduce((a, b) => a + b, 0);
+  const totalDiv = document.getElementById("weight-total");
+  if (total <= 0) {
+    totalDiv.textContent = "Entered total: 0 — at least one criterion must have a positive weight.";
+    return;
+  }
+  const normalized = Object.entries(weights)
+    .filter(([, v]) => v > 0)
+    .map(([k, v]) => `${CRITERIA_LABELS[k]}: ${((v / total) * 100).toFixed(1)}%`)
+    .join(" · ");
+  totalDiv.textContent = `Entered total: ${total} → normalized to 100%: ${normalized}`;
+}
+
+function openEditor(profile) {
+  editingProfileId = profile ? profile.scoring_profile_id : null;
+  document.getElementById("editor-title").textContent = profile ? `Edit: ${profile.name}` : "New scoring profile";
+  document.getElementById("f-name").value = profile ? profile.name : "";
+  document.getElementById("f-description").value = (profile && profile.description) || "";
+  document.getElementById("f-mandatory-gate").checked = profile ? profile.mandatory_gate_enabled : true;
+  document.getElementById("f-min-score").value = profile ? profile.min_shortlist_score : 70;
+  document.getElementById("f-is-default").checked = profile ? profile.is_default : false;
+  renderWeightRows(profile ? profile.weights : illustrativeDefaults);
+  document.getElementById("editor").style.display = "block";
+  document.getElementById("preview-section").style.display = "none";
+}
+
+document.getElementById("new-profile-btn").addEventListener("click", () => openEditor(null));
+document.getElementById("cancel-edit-btn").addEventListener("click", () => {
+  document.getElementById("editor").style.display = "none";
+});
+
+document.getElementById("save-profile-btn").addEventListener("click", async () => {
+  const name = document.getElementById("f-name").value.trim();
+  if (!name) {
+    showError(document.getElementById("msg"), new Error("Name is required."));
+    return;
+  }
+  const weights = currentWeights();
+  if (Object.values(weights).every((v) => v <= 0)) {
+    showError(document.getElementById("msg"), new Error("At least one criterion must have a positive weight."));
+    return;
+  }
+  const body = {
+    name,
+    description: document.getElementById("f-description").value.trim() || null,
+    weights,
+    mandatory_gate_enabled: document.getElementById("f-mandatory-gate").checked,
+    min_shortlist_score: parseFloat(document.getElementById("f-min-score").value) || 0,
+    is_default: document.getElementById("f-is-default").checked,
+  };
+  try {
+    if (editingProfileId) {
+      await api(`/api/candidates/${candidateId}/scoring-profiles/${editingProfileId}`, { method: "PUT", body });
+      showSuccess(document.getElementById("msg"), `"${name}" updated.`);
+    } else {
+      await api(`/api/candidates/${candidateId}/scoring-profiles`, { method: "POST", body });
+      showSuccess(document.getElementById("msg"), `"${name}" created.`);
+    }
+    document.getElementById("editor").style.display = "none";
+    load();
+  } catch (err) {
+    showError(document.getElementById("msg"), err);
+  }
+});
+
+function openPreview(scoringProfileId) {
+  previewProfileId = scoringProfileId;
+  document.getElementById("preview-section").style.display = "block";
+  document.getElementById("editor").style.display = "none";
+  document.getElementById("pv-result").innerHTML = "";
+}
+document.getElementById("pv-close-btn").addEventListener("click", () => {
+  document.getElementById("preview-section").style.display = "none";
+});
+
+document.getElementById("pv-run-btn").addEventListener("click", async () => {
+  const title = document.getElementById("pv-title").value.trim();
+  if (!title) {
+    showError(document.getElementById("msg"), new Error("Job title is required for a preview."));
+    return;
+  }
+  const job = {
+    job_id: "preview",
+    title,
+    jd_text: document.getElementById("pv-jd").value,
+    mandatory_skills: document.getElementById("pv-mandatory").value.split(",").map((s) => s.trim()).filter(Boolean),
+  };
+  try {
+    const result = await api(`/api/candidates/${candidateId}/scoring-profiles/preview`, {
+      method: "POST",
+      body: { job, scoring_profile_id: previewProfileId },
+    });
+    const resultDiv = document.getElementById("pv-result");
+    const qualifiedBadge = result.qualified ? badgeHtml("A", "A") : badgeHtml("Not qualified", "REJECT");
+    resultDiv.innerHTML = `
+      <h3>Score: ${result.score} — ${result.priority} ${qualifiedBadge}</h3>
+      <div class="hint">Mandatory gate: ${result.mandatory_gate_passed ? "passed" : "FAILED — " + result.hard_reject_reasons.join("; ")}</div>
+      <ul>${result.criteria.map((c) => `<li><strong>${c.display_name}</strong> (${c.weight_percent.toFixed(1)}%): ${(c.raw_score * 100).toFixed(0)}% → ${c.weighted_contribution.toFixed(1)} pts${c.missing_data ? " — <em>missing data: " + (c.reason || "") + "</em>" : ""}</li>`).join("")}</ul>
+    `;
+  } catch (err) {
+    showError(document.getElementById("msg"), err);
+  }
+});
+
+load();
+</script>
+</body>
+</html>

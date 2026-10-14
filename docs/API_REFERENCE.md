@@ -57,13 +57,28 @@ Base URL for local use: `http://127.0.0.1:8420` (dev) or
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/candidates/{candidate_id}/searches` | Create a saved search. Fields (from the actual creation form): role/keyword list, locations, min/max experience years, max job age (days), min/max salary + currency, work model (Remote/Hybrid/Onsite), skills/criteria, employment type, minimum match score, which sources to use, optional resume/profile version pin. |
+| POST | `/api/candidates/{candidate_id}/searches` | Create a saved search. Fields (from the actual creation form): role/keyword list, locations, min/max experience years, max job age (days), min/max salary + currency, work model (Remote/Hybrid/Onsite), skills/criteria, employment type, minimum match score, which sources to use, optional resume/profile version pin, optional `scoring_profile_id` (see Scoring Profiles below — `null`/omitted means default scoring). |
 | GET | `/api/candidates/{candidate_id}/searches` | List your saved searches. |
 | GET` / PUT` / PATCH` / DELETE` | `/api/searches/{search_id}` | Read/replace/partially-update/delete one saved search. |
 | POST | `/api/searches/{search_id}/run` | Starts a run in the background; returns a `run_id` immediately (does not block). |
 | GET | `/api/runs/{run_id}` | Poll this to see run status (queued/running/a terminal state) until it finishes. |
 | GET | `/api/searches/{search_id}/results` | Scored results for that search's latest usable run, plus the per-source execution audit (`SUCCESS`/`ZERO`/`FAILED`/`BLOCKED`/`NOT_CONFIGURED`/`NOT_ATTEMPTED` — see [JOB_SOURCES.md](JOB_SOURCES.md)). |
 | PUT / GET | `/api/searches/{search_id}/schedule` | Set/read a recurring schedule (hourly/daily/weekly) — see [ARCHITECTURE.md](ARCHITECTURE.md) (Scheduling section) for what actually triggers it. |
+
+## Scoring Profiles
+
+See [SCORING.md](SCORING.md#custom-job-scoring-profiles-optional-per-candidate)
+for the full model (weights, mandatory gate, missing-data policy,
+threshold precedence). All routes below are candidate-scoped and
+ownership-enforced (404 across candidates).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/candidates/{candidate_id}/scoring-profiles` | List your profiles, plus the illustrative default weights/criteria list for a "start from here" UI. |
+| POST | `/api/candidates/{candidate_id}/scoring-profiles` | Create a profile: `name`, `weights` (dict of criterion → positive number), optional `description`, `mandatory_gate_enabled` (default `true`), `min_shortlist_score` (default 70), `is_default`. |
+| GET / PUT / DELETE | `/api/candidates/{candidate_id}/scoring-profiles/{scoring_profile_id}` | Read/update/delete one profile. |
+| POST | `/api/candidates/{candidate_id}/scoring-profiles/{scoring_profile_id}/duplicate` | Copy a profile under a new name. |
+| POST | `/api/candidates/{candidate_id}/scoring-profiles/preview` | Score one synthetic/sample job dict against a saved profile (`scoring_profile_id`) or inline `weights` — never touches a real search or persists anything. |
 
 ## Jobs / Applications
 

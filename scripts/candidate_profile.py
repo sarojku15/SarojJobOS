@@ -740,6 +740,18 @@ def to_legacy_matching_profile(profile, allow_draft=False):
         # targeting.
         "target_roles": list(profile.job_preferences.target_roles),
         **legacy_skills,
+        # Additive (Custom Scoring Profiles): these two keys did not
+        # exist in the legacy flat dict before. score_job.py's own
+        # score_job()/evaluate_hard_reject() never read them -- only
+        # scripts/scoring_profiles.py's optional Salary/Certifications
+        # criteria do, falling back to this module's documented
+        # missing-data policy when absent. Every existing reader of
+        # this dict (score_job, experience_eligibility, location_
+        # taxonomy) only reads the specific keys it already read, so
+        # adding these two is a strictly backward-compatible change.
+        "salary_expectation_min": profile.job_preferences.salary_expectation_min,
+        "salary_expectation_max": profile.job_preferences.salary_expectation_max,
+        "certifications": [c.name for c in profile.certifications],
     }
 
 

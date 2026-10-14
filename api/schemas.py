@@ -140,6 +140,12 @@ class SavedSearchCreate(BaseModel):
     # preserves today's existing "always current" behavior exactly.
     # See migrate_v8_resume_profile_traceability.py.
     profile_version: Optional[int] = None
+    # None (default) = legacy scoring, exactly as before, using
+    # this search's own minimum_match_score column above. When set,
+    # this search's results use scripts/scoring_profiles.py's
+    # weighted model instead -- see docs/SCORING.md's "Custom
+    # Scoring Profiles" section for the precedence rule.
+    scoring_profile_id: Optional[str] = None
     # USER (default, via the DB column's own DEFAULT when omitted) /
     # TEST / SYSTEM -- see migrate_v10_search_type.py. A real user
     # creating a search through the normal UI never sets this; only
@@ -165,6 +171,7 @@ class SavedSearchUpdate(BaseModel):
     sources: Optional[list[str]] = None
     schedule: Optional[ScheduleIn] = None
     profile_version: Optional[int] = None
+    scoring_profile_id: Optional[str] = None
 
 
 class ManualJobImportIn(BaseModel):
@@ -246,3 +253,48 @@ class FollowUpScheduleIn(BaseModel):
 
 class FollowUpCompleteIn(BaseModel):
     notes: Optional[str] = Field(None, max_length=2000)
+
+
+class ScoringProfileCreateIn(BaseModel):
+    """Custom Job Scoring Profiles. `weights` keys must be one of the
+    seven criteria scripts/scoring_profiles.py supports -- validated
+    server-side (scoring_profile_store._validate_payload()), never
+    trusted blindly. Weights do not need to already sum to 100 --
+    they are normalized at evaluation/save time (see
+    scoring_profiles.validate_scoring_profile())."""
+    name: str = Field(..., min_length=1, max_length=200)
+    weights: dict = Field(...)
+    description: Optional[str] = Field(None, max_length=2000)
+    mandatory_gate_enabled: bool = True
+    min_shortlist_score: float = Field(70, ge=0, le=100)
+    is_default: bool = False
+
+
+class ScoringProfileUpdateIn(BaseModel):
+    """Every field optional -- an update only touches the fields the
+    caller actually supplied (same convention as CandidatePatch)."""
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    weights: Optional[dict] = None
+    description: Optional[str] = Field(None, max_length=2000)
+    mandatory_gate_enabled: Optional[bool] = None
+    min_shortlist_score: Optional[float] = Field(None, ge=0, le=100)
+    is_default: Optional[bool] = None
+
+
+class ScoringProfileDuplicateIn(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+
+
+class ScoringProfilePreviewIn(BaseModel):
+    """Score ONE representative job against a (not-yet-saved, or
+    already-saved) profile -- never runs a real search, never writes
+    anything. `job` is a plain job dict in the same shape
+    discover_local.normalize_job() produces (title/jd_text/location/
+    work_model/mandatory_skills/salary_min/salary_max, all optional
+    except title). `scoring_profile_id` is used INSTEAD of inline
+    weights when previewing an already-saved profile."""
+    job: dict = Field(...)
+    scoring_profile_id: Optional[str] = None
+    weights: Optional[dict] = None
+    mandatory_gate_enabled: bool = True
+    min_shortlist_score: float = Field(70, ge=0, le=100)

@@ -311,6 +311,19 @@ def test_b5_no_other_production_caller_bypasses_the_gate():
         # mirroring search_worker.py's own pattern above.
         "resume_tailoring.py",
         "interview_prep.py",
+        # scoring_profiles.py (Custom Job Scoring Profiles, added
+        # 2026-10): manually reviewed -- its score_job() call is ONLY
+        # the legacy-mode delegation path (scoring_profile=None), a
+        # pure passthrough with zero transformation, used by exactly
+        # the same (already-gated) callers score_job.py itself always
+        # had. It is NOT wired into the discovery/ingestion pipeline;
+        # its only new entry points are the explicit, non-pipeline
+        # Settings-UI "preview one job" route (never required to pass
+        # eligibility -- a preview is a sandbox, not a real match) and
+        # the custom-profile scoring path, which computes its own
+        # experience_assessment via assess_experience_eligibility()
+        # exactly like score_job() does, never bypassing it.
+        "scoring_profiles.py",
     }
 
     # Matches an actual invocation with a `job` argument (score_job(job

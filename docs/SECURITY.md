@@ -9,6 +9,47 @@
 - No API key is ever logged, returned in an API response, or written
   into a report/export.
 
+## Credential ownership (BYOK) and its scope
+
+**JobOS ships with no API key of any kind.** A fresh clone/install has
+zero configured providers: there is no bundled key, no default, no
+hardcoded value, and **no fallback to anyone else's key** — if you
+haven't configured a provider, the seven provider-backed boards are
+reported `SEARCH_PROVIDER_NOT_CONFIGURED` and skipped, and the four
+direct boards continue to work. Every key is one *you* create on your
+own provider account. This is verified by
+`scripts/test_byok_credential_isolation.py`.
+
+**Scope is per-installation, not per-candidate — this matters if you
+share a machine.** Provider keys live in one local `.env` for the whole
+installation; nothing in the credential path takes a `candidate_id`
+(also asserted by that same test file). So:
+
+- **Single local user (the intended model)**: your keys are yours,
+  stored on your own machine, used only by your own searches. Safe.
+- **Multiple candidates in one installation**: they *share* one set of
+  provider keys. A key configured by one candidate **will** be used for
+  another candidate's searches on that same install. JobOS does **not**
+  provide per-user credential isolation, and the `localStorage`-based
+  `candidate_id` is not authentication (see below) — so it could not
+  safely enforce such isolation even if the storage were split.
+- **Therefore**: if you need independent users with independent keys,
+  run separate installations (separate checkout + separate `.env`),
+  and do not expose a shared installation to people who shouldn't share
+  billing/quota for the same provider key.
+
+Scheduled/automated searches (n8n, cron) resolve credentials through
+exactly the same path as manual searches — there is no separate or
+privileged credential route.
+
+**Environment-variable precedence**: a provider key exported in the
+real shell environment takes precedence over the one saved through the
+UI (standard dotenv `setdefault` semantics — see
+[CONFIGURATION.md](CONFIGURATION.md)). That is the supported way to
+supply a deployment-level credential, but it means an operator-set
+environment variable can outrank what the UI shows as saved. The UI
+always displays whichever variable is actually in effect.
+
 ## Candidate & resume privacy
 
 - `resumes/` (uploaded resume files) and `data/applications/` (the

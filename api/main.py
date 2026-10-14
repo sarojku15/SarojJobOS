@@ -65,6 +65,8 @@ import interview_prep
 import scheduler
 import applications_store
 import application_follow_ups as follow_ups_mod
+import scoring_profile_store
+import scoring_profiles as scoring_profiles_mod
 from schemas import (
     ApplicationNotesIn,
     CandidateCreate,
@@ -73,6 +75,10 @@ from schemas import (
     FollowUpCompleteIn,
     FollowUpDateIn,
     FollowUpScheduleIn,
+    ScoringProfileCreateIn,
+    ScoringProfileDuplicateIn,
+    ScoringProfilePreviewIn,
+    ScoringProfileUpdateIn,
     InterviewAnswerIn,
     InterviewOutcomeIn,
     InterviewPrepIn,
@@ -89,7 +95,7 @@ from schemas import (
     TailorResumeIn,
 )
 
-from candidate_profile import serialize_candidate_profile, validate_candidate_profile
+from candidate_profile import serialize_candidate_profile, to_legacy_matching_profile, validate_candidate_profile
 from resume_extractor import extract_candidate_profile_draft_result
 
 app = FastAPI(title="SarojJobOS Job Search")
@@ -673,6 +679,7 @@ def get_results(search_id: str, candidate_id: str):
             results = results_store.get_results_for_saved_search(
                 conn, saved_search["candidate_id"], search_id,
                 pinned_profile_version=saved_search.get("profile_version"),
+                scoring_profile_id=saved_search.get("scoring_profile_id"),
             )
         except results_store.ResultsNotReadyError as error:
             raise HTTPException(409, str(error))
@@ -1326,6 +1333,159 @@ def get_company_research_route(candidate_id: str, company_research_id: str):
         conn.close()
 
 
+# ------------------------------------------------------ scoring profiles
+#
+# Custom Job Scoring Profiles. scoring_profiles.py does the scoring
+# math (reusing score_job.py's own dimension logic, never a competing
+# implementation); scoring_profile_store.py owns persistence.
+#
+# Backward compatibility: a candidate/search that never selects a
+# profile continues to use legacy score_job() scoring exactly as
+# before -- these routes exist purely as an ADDITIVE, opt-in layer.
+
+@app.get("/api/candidates/{candidate_id}/scoring-profiles")
+def list_scoring_profiles_route(candidate_id: str):
+    conn = db_mod.get_conn()
+    try:
+        try:
+            profile_store.get_candidate(conn, candidate_id)
+        except profile_store.ProfileStoreError as error:
+            raise HTTPException(404, str(error))
+        return {
+            "scoring_profiles": scoring_profile_store.list_profiles(conn, candidate_id),
+            "illustrative_default_weights": scoring_profiles_mod.ILLUSTRATIVE_DEFAULT_WEIGHTS,
+            "criteria": list(scoring_profiles_mod.CRITERIA),
+        }
+    finally:
+        conn.close()
+
+
+@app.post("/api/candidates/{candidate_id}/scoring-profiles")
+def create_scoring_profile_route(candidate_id: str, payload: ScoringProfileCreateIn):
+    conn = db_mod.get_conn()
+    try:
+        try:
+            profile_store.get_candidate(conn, candidate_id)
+        except profile_store.ProfileStoreError as error:
+            raise HTTPException(404, str(error))
+        try:
+            return scoring_profile_store.create_profile(
+                conn, candidate_id, payload.name, payload.weights,
+                description=payload.description,
+                mandatory_gate_enabled=payload.mandatory_gate_enabled,
+                min_shortlist_score=payload.min_shortlist_score,
+                is_default=payload.is_default,
+            )
+        except scoring_profiles_mod.ScoringProfileError as error:
+            raise HTTPException(400, str(error))
+    finally:
+        conn.close()
+
+
+@app.get("/api/candidates/{candidate_id}/scoring-profiles/{scoring_profile_id}")
+def get_scoring_profile_route(candidate_id: str, scoring_profile_id: str):
+    conn = db_mod.get_conn()
+    try:
+        try:
+            return scoring_profile_store.get_profile(conn, candidate_id, scoring_profile_id)
+        except scoring_profile_store.ScoringProfileNotFoundError as error:
+            raise HTTPException(404, str(error))
+    finally:
+        conn.close()
+
+
+@app.put("/api/candidates/{candidate_id}/scoring-profiles/{scoring_profile_id}")
+def update_scoring_profile_route(candidate_id: str, scoring_profile_id: str, payload: ScoringProfileUpdateIn):
+    conn = db_mod.get_conn()
+    try:
+        try:
+            return scoring_profile_store.update_profile(
+                conn, candidate_id, scoring_profile_id,
+                name=payload.name, weights=payload.weights, description=payload.description,
+                mandatory_gate_enabled=payload.mandatory_gate_enabled,
+                min_shortlist_score=payload.min_shortlist_score, is_default=payload.is_default,
+            )
+        except scoring_profile_store.ScoringProfileNotFoundError as error:
+            raise HTTPException(404, str(error))
+        except scoring_profiles_mod.ScoringProfileError as error:
+            raise HTTPException(400, str(error))
+    finally:
+        conn.close()
+
+
+@app.delete("/api/candidates/{candidate_id}/scoring-profiles/{scoring_profile_id}")
+def delete_scoring_profile_route(candidate_id: str, scoring_profile_id: str):
+    conn = db_mod.get_conn()
+    try:
+        try:
+            scoring_profile_store.delete_profile(conn, candidate_id, scoring_profile_id)
+        except scoring_profile_store.ScoringProfileNotFoundError as error:
+            raise HTTPException(404, str(error))
+        return {"deleted": scoring_profile_id}
+    finally:
+        conn.close()
+
+
+@app.post("/api/candidates/{candidate_id}/scoring-profiles/{scoring_profile_id}/duplicate")
+def duplicate_scoring_profile_route(candidate_id: str, scoring_profile_id: str, payload: ScoringProfileDuplicateIn):
+    conn = db_mod.get_conn()
+    try:
+        try:
+            return scoring_profile_store.duplicate_profile(conn, candidate_id, scoring_profile_id, payload.name)
+        except scoring_profile_store.ScoringProfileNotFoundError as error:
+            raise HTTPException(404, str(error))
+    finally:
+        conn.close()
+
+
+@app.post("/api/candidates/{candidate_id}/scoring-profiles/preview")
+def preview_scoring_profile_route(candidate_id: str, payload: ScoringProfilePreviewIn):
+    """Scores ONE caller-supplied representative job against a
+    profile -- never runs a real search, never writes a match row,
+    never touches jobs/candidate_job_matches. Uses the candidate's
+    own CONFIRMED profile (the same requirement a real search already
+    has) so the preview reflects the same inputs a real score would."""
+    conn = db_mod.get_conn()
+    try:
+        try:
+            profile = profile_store.load_active_profile(conn, candidate_id)
+        except profile_store.ProfileStoreError as error:
+            raise HTTPException(404, str(error))
+        if profile.metadata.profile_status.value != "CONFIRMED":
+            raise HTTPException(409, "Profile must be CONFIRMED before previewing a scoring profile.")
+        matching_profile = to_legacy_matching_profile(profile)
+
+        if payload.scoring_profile_id:
+            try:
+                saved = scoring_profile_store.get_profile(conn, candidate_id, payload.scoring_profile_id)
+            except scoring_profile_store.ScoringProfileNotFoundError as error:
+                raise HTTPException(404, str(error))
+            scoring_profile = {
+                "scoring_profile_id": saved["scoring_profile_id"],
+                "version": saved["version"],
+                "name": saved["name"],
+                "weights": saved["weights"],
+                "mandatory_gate_enabled": saved["mandatory_gate_enabled"],
+                "min_shortlist_score": saved["min_shortlist_score"],
+            }
+        elif payload.weights:
+            scoring_profile = {
+                "weights": payload.weights,
+                "mandatory_gate_enabled": payload.mandatory_gate_enabled,
+                "min_shortlist_score": payload.min_shortlist_score,
+            }
+        else:
+            raise HTTPException(400, "Provide either scoring_profile_id or weights to preview.")
+
+        try:
+            result = scoring_profiles_mod.score_with_profile(payload.job, matching_profile, scoring_profile=scoring_profile)
+        except scoring_profiles_mod.ScoringProfileError as error:
+            raise HTTPException(400, str(error))
+        return scoring_profiles_mod.result_to_dict(result)
+    finally:
+        conn.close()
+
+
 # ------------------------------------------------------- interview prep
 
 @app.post("/api/candidates/{candidate_id}/interview-prep")
@@ -1494,6 +1654,11 @@ def serve_import_page():
 @app.get("/settings/search-providers")
 def serve_search_provider_settings_page():
     return FileResponse(WEB_DIR / "settings_search_providers.html")
+
+
+@app.get("/settings/scoring-profiles")
+def serve_scoring_profiles_page():
+    return FileResponse(WEB_DIR / "scoring_profiles.html")
 
 
 @app.get("/searches/{search_id}/results")

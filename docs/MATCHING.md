@@ -36,10 +36,16 @@ score for a job, only a score *for you*.
 ## Qualification threshold
 
 A search's **minimum match score** field (set when you create/edit the
-search) is the cutoff — jobs scoring below it are excluded from your
-results entirely, not just hidden. Priority tiers (A/B/C/Reject) are
-assigned from the score itself (see [SCORING.md](SCORING.md)'s
-threshold table).
+search) is stored and shown back to you, but — using the default
+scoring model described here — it does not itself filter which jobs
+appear; priority tiers (A/B/C/Reject) are assigned purely from the
+score itself (see [SCORING.md](SCORING.md)'s threshold table), and a
+job's eligibility in your results comes from the eligibility +
+mandatory-skill gates above, not from this field. If you select a
+[custom scoring profile](SCORING.md#custom-job-scoring-profiles-optional-per-candidate)
+on a search instead, that profile's own shortlist threshold (not this
+field) determines qualification — see SCORING.md for the exact
+precedence rule between the two.
 
 ## Score explanation
 

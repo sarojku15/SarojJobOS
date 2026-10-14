@@ -13,6 +13,8 @@
   <a href="/searches">Searches</a>
   <a href="/dashboard">Dashboard</a>
   <a href="/applications">Applications</a>
+  <a href="/settings/search-providers" class="active">Settings</a>
+  <a href="/settings/scoring-profiles">Scoring Profiles</a>
 </header>
 <main>
   <h1>Settings — Search Providers</h1>
@@ -22,6 +24,18 @@
     or more providers below — JobOS tries them in priority order and automatically fails over if one is
     unavailable. Keys are stored only in this project's local <code>.env</code> file, never in the
     database, never shown again in full after saving.
+  </p>
+  <p class="hint">
+    <strong>Bring your own key.</strong> JobOS ships with no API key of any kind and never uses
+    anyone else's. Each key below is one you create on your own free account with that provider,
+    and it is used only by this installation on this machine. All of this is optional — the four
+    direct boards (Naukri, Hirist, IIMJobs, Apna) work with nothing configured here. Where to get
+    a key: <a href="https://api.you.com" target="_blank" rel="noopener">You.com</a> ·
+    <a href="https://tavily.com" target="_blank" rel="noopener">Tavily</a> ·
+    <a href="https://exa.ai" target="_blank" rel="noopener">Exa</a> ·
+    <a href="https://brave.com/search/api/" target="_blank" rel="noopener">Brave</a> ·
+    <a href="https://serper.dev" target="_blank" rel="noopener">Serper</a>.
+    Full walkthrough: <code>docs/API_PROVIDER_SETUP.md</code>.
   </p>
   <div id="msg"></div>
   <div id="content"><div class="loading-state">Loading...</div></div>

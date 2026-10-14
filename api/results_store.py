@@ -264,7 +264,8 @@ def _load_persisted_results(conn, candidate_id, job_ids, saved_search_id=None):
                 scoped = cursor.execute(
                     f"""
                     SELECT job_id, fit_score, priority, matched_skills_json, missing_skills_json,
-                           skill_match_json, resume_id, resume_variant
+                           skill_match_json, resume_id, resume_variant,
+                           scoring_profile_id, scoring_profile_version
                     FROM candidate_job_search_matches
                     WHERE candidate_id = ? AND search_run_id IN ({run_placeholders})
                     """,
@@ -272,7 +273,7 @@ def _load_persisted_results(conn, candidate_id, job_ids, saved_search_id=None):
                 ).fetchall()
                 scoped_rows_by_job = {r["job_id"]: dict(r) for r in scoped}
             except Exception as error:
-                if "no such table" not in str(error):
+                if "no such table" not in str(error) and "no such column" not in str(error):
                     raise
 
     rows = conn.execute(
@@ -283,7 +284,8 @@ def _load_persisted_results(conn, candidate_id, job_ids, saved_search_id=None):
                cjm.fit_score, cjm.priority, cjm.candidate_status,
                cjm.matched_skills_json, cjm.missing_skills_json, cjm.skill_match_json,
                cjm.resume_variant AS candidate_resume_variant,
-               cjm.follow_up_date, cjm.applied_at, cjm.applied_resume_variant, cjm.notes
+               cjm.follow_up_date, cjm.applied_at, cjm.applied_resume_variant, cjm.notes,
+               cjm.scoring_profile_id, cjm.scoring_profile_version
         FROM candidate_job_matches cjm
         JOIN jobs j ON j.job_id = cjm.job_id
         WHERE cjm.candidate_id = ? AND cjm.job_id IN ({placeholders})
@@ -307,6 +309,8 @@ def _load_persisted_results(conn, candidate_id, job_ids, saved_search_id=None):
         missing_skills_json = scoped["missing_skills_json"] if scoped else row["missing_skills_json"]
         skill_match_json = scoped["skill_match_json"] if scoped else row["skill_match_json"]
         resume_variant = (scoped["resume_variant"] if scoped else None) or row["candidate_resume_variant"] or row["resume_variant"]
+        scoring_profile_id = scoped["scoring_profile_id"] if scoped else row["scoring_profile_id"]
+        scoring_profile_version = scoped["scoring_profile_version"] if scoped else row["scoring_profile_version"]
 
         matched_skills = json.loads(matched_skills_json) if matched_skills_json else []
         missing_skills = json.loads(missing_skills_json) if missing_skills_json else []
@@ -360,6 +364,11 @@ def _load_persisted_results(conn, candidate_id, job_ids, saved_search_id=None):
                 # cross-source dedup itself (see this function's own
                 # docstring) -- honestly empty, never fabricated.
                 "duplicate_candidates": [],
+                # None/None = legacy scoring (score_job.py), exactly as
+                # before this feature existed -- never fabricated for a
+                # match that was actually legacy-scored.
+                "scoring_profile_id": scoring_profile_id,
+                "scoring_profile_version": scoring_profile_version,
             }
         )
 
@@ -545,7 +554,7 @@ def _apply_scoped_resume_overrides(conn, candidate_id, saved_search_id, matches)
         matches[job_id]["resume_variant"] = override["resume_variant"]
 
 
-def get_results_for_saved_search(conn, candidate_id, saved_search_id, pinned_profile_version=None):
+def get_results_for_saved_search(conn, candidate_id, saved_search_id, pinned_profile_version=None, scoring_profile_id=None):
     """
     Results already computed for this saved search's run(s).
 
@@ -571,8 +580,29 @@ def get_results_for_saved_search(conn, candidate_id, saved_search_id, pinned_pro
     search are returned directly instead (_load_persisted_results()).
     Only if there are none of those either does this raise
     ResultsNotReadyError -- never a 500, never fabricated results.
+
+    scoring_profile_id (Custom Job Scoring Profiles): when this saved
+    search has selected a custom profile, the live-rescore branch below
+    is ALSO skipped, even if the candidate's profile is CONFIRMED --
+    that branch only knows how to call the legacy score_job.score_job()
+    path (via generate_run_report.build_report_rows()), and re-running
+    it here would silently overwrite a custom-profile-scored search's
+    results with legacy scores on every view. Persisted results
+    (already scored by the correct profile at search-run time via
+    search_worker.process_queue_item()) are returned directly instead
+    -- the same reduced-fidelity, no-rescore path a DRAFT profile uses,
+    for the same reason: never silently substitute a different scoring
+    model than the one actually requested.
     """
     scoped_job_ids = _job_ids_for_search(conn, candidate_id, saved_search_id)
+
+    if scoring_profile_id is not None:
+        if not scoped_job_ids:
+            raise ResultsNotReadyError(
+                "This search uses a custom scoring profile and has no persisted "
+                "results yet. Run the search to see results."
+            )
+        return _load_persisted_results(conn, candidate_id, scoped_job_ids, saved_search_id=saved_search_id)
 
     try:
         if pinned_profile_version is not None:

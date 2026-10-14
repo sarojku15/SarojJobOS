@@ -25,8 +25,8 @@ Step 3:
  10. maximum-page protection
  11. HTTP error handling
  12. parser never invents unsupported fields
- 13. adapter remains NOT_ENABLED
- 14. default sources remain ['NAUKRI']
+ 13. adapter is ENABLED with validated capabilities
+ 14. default sources include HIRIST
 """
 
 import sys
@@ -423,7 +423,7 @@ def test_parser_never_invents_unsupported_fields(failures):
 
 
 # ---------------------------------------------------------------------
-# 13. Adapter remains NOT_ENABLED
+# 13. Adapter is ENABLED after Phase 11 validation
 # ---------------------------------------------------------------------
 
 def test_adapter_enabled_phase11(failures):

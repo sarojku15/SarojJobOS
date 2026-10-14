@@ -210,6 +210,30 @@ for tracker_file in (APPLICATIONS_HTML, WEB_DIR / "results.html", WEB_DIR / "das
     check(not _REAL_CANDIDATE_ID_PATTERN.search(text), f"{tracker_file.name}: no hardcoded production-looking candidate_id")
     check(not _SECRET_SHAPED_PATTERN.search(text), f"{tracker_file.name}: no accidental secret-shaped string")
 
+# ---------------------------------------------------------------------
+# Scoring Profiles navigation -- regression for a real bug found live:
+# web/settings_search_providers.html was missing the Scoring Profiles
+# nav link entirely (an earlier BYOK-work edit to this file's header
+# didn't match the batch nav-insertion pattern used for every other
+# page), while every other primary page had it. Guards against both
+# "missing on one page" and "duplicated on any page".
+# ---------------------------------------------------------------------
+
+_PRIMARY_NAV_PAGES = [
+    "index.html", "profile.html", "searches.html", "dashboard.html",
+    "applications.html", "settings_search_providers.html", "scoring_profiles.html",
+]
+_SCORING_PROFILES_LINK_PATTERN = re.compile(r'<a href="/settings/scoring-profiles"[^>]*>Scoring Profiles</a>')
+
+for page_name in _PRIMARY_NAV_PAGES:
+    page_path = WEB_DIR / page_name
+    check(page_path.exists(), f"{page_name}: exists")
+    if not page_path.exists():
+        continue
+    text = page_path.read_text(encoding="utf-8")
+    link_count = len(_SCORING_PROFILES_LINK_PATTERN.findall(text))
+    check(link_count == 1, f"{page_name}: has exactly one Scoring Profiles nav link (found {link_count})")
+
 print()
 print(f"{passed} passed, {failed} failed")
 if failed:

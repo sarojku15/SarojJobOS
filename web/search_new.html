@@ -13,6 +13,8 @@
   <a href="/searches" class="active">Searches</a>
   <a href="/dashboard">Dashboard</a>
   <a href="/applications">Applications</a>
+  <a href="/settings/search-providers">Settings</a>
+  <a href="/settings/scoring-profiles">Scoring Profiles</a>
 </header>
 <main>
   <h1 id="page-title">Create a saved search</h1>
@@ -84,6 +86,22 @@
 
     <label>Minimum match score (0-100)</label>
     <input id="s-minscore" type="number" min="0" max="100" value="70" />
+    <div class="hint" style="margin-top:4px">This threshold is informational/display-only: it is stored with the search and shown back to you, but it does not currently gate or filter results -- that distinction matters once a custom scoring profile is selected below.</div>
+  </div>
+
+  <div class="card">
+    <h2>Scoring</h2>
+    <div class="hint" style="margin-bottom:8px">
+      By default this search uses JobOS's built-in 100-point scoring (unchanged). You can instead
+      score this search's jobs with one of your own <a href="/settings/scoring-profiles">custom scoring profiles</a> --
+      your own weighted criteria, mandatory requirements, and shortlist threshold.
+    </div>
+    <label>Scoring profile</label>
+    <select id="s-scoring-profile"><option value="">Default scoring (JobOS's built-in 100-point model)</option></select>
+    <div id="s-scoring-profile-detail" class="hint" style="margin-top:6px"></div>
+    <div id="s-scoring-profile-empty" class="hint" style="display:none">
+      You have no custom scoring profiles yet. <a href="/settings/scoring-profiles">Create one</a>, then come back here to select it.
+    </div>
   </div>
 
   <div class="card">
@@ -195,6 +213,7 @@ async function load() {
 
     document.getElementById("create-btn").addEventListener("click", handleCreate);
     await loadProfileVersions();
+    await loadScoringProfiles();
     wireResumeUploadOnSearchForm();
   } catch (err) {
     showError(msg, err);
@@ -256,6 +275,74 @@ async function loadProfileVersions() {
   }
 }
 
+let scoringProfilesById = {};
+
+async function loadScoringProfiles() {
+  const select = document.getElementById("s-scoring-profile");
+  const emptyHint = document.getElementById("s-scoring-profile-empty");
+  if (!select) return;
+  try {
+    const data = await api(`/api/candidates/${candidateId}/scoring-profiles`);
+    const profiles = data.scoring_profiles || [];
+    scoringProfilesById = {};
+
+    if (!profiles.length) {
+      emptyHint.style.display = "block";
+    } else {
+      for (const p of profiles) {
+        scoringProfilesById[p.scoring_profile_id] = p;
+        const label = p.is_default ? `${p.name} (default)` : p.name;
+        select.appendChild(el(`<option value="${escapeHtml(p.scoring_profile_id)}">${escapeHtml(label)}</option>`));
+      }
+    }
+
+    // Edit mode: reflect the search's actual saved selection -- never
+    // guessed, never left on "Default scoring" just because the list
+    // happened to load after the value would otherwise have been set.
+    // A selection pointing at a profile that no longer exists (e.g.
+    // deleted since this search was created) is shown explicitly as a
+    // broken reference rather than silently resetting to "Default
+    // scoring" -- picking a replacement (or clearing it) is the user's
+    // decision, not this page's to make silently.
+    if (editSearchId) {
+      const savedId = existingSearch.scoring_profile_id;
+      if (savedId && !scoringProfilesById[savedId]) {
+        select.appendChild(el(`<option value="${escapeHtml(savedId)}">(deleted profile: ${escapeHtml(savedId)} -- select a different one)</option>`));
+      }
+      select.value = savedId || "";
+    }
+
+    renderScoringProfileDetail();
+    select.addEventListener("change", renderScoringProfileDetail);
+  } catch (err) {
+    // Non-fatal -- the form still works with "Default scoring" only.
+  }
+}
+
+function renderScoringProfileDetail() {
+  const select = document.getElementById("s-scoring-profile");
+  const detail = document.getElementById("s-scoring-profile-detail");
+  if (!select || !detail) return;
+  const selectedId = select.value;
+  if (!selectedId) {
+    detail.innerHTML = `Default scoring: JobOS's existing 100-point model (role alignment, SRE/DevOps responsibilities, cloud, Kubernetes, IaC, CI/CD, observability, experience, location, domain fit), unchanged. This search's own "Minimum match score" above is purely informational for this mode.`;
+    return;
+  }
+  const profile = scoringProfilesById[selectedId];
+  if (!profile) {
+    detail.innerHTML = `<span style="color:#b00">This search is pointed at a scoring profile that no longer exists. Pick a different one, or switch back to Default scoring, before your next run.</span>`;
+    return;
+  }
+  const gate = profile.mandatory_gate_enabled ? "On (a missing mandatory skill always rejects the job, regardless of score)" : "Off";
+  detail.innerHTML = `
+    Shortlist threshold: <b>${profile.min_shortlist_score}</b>/100 (this profile's own threshold -- this is what actually
+    determines whether a job qualifies once this profile is selected; it is independent of this search's
+    "Minimum match score" field above, which stays purely informational in this mode).<br/>
+    Mandatory-skill gate: <b>${gate}</b>.<br/>
+    <a href="/settings/scoring-profiles">Edit this profile</a>
+  `;
+}
+
 function wireResumeUploadOnSearchForm() {
   const btn = document.getElementById("s-upload-resume-btn");
   if (!btn) return;
@@ -315,6 +402,14 @@ async function handleCreate() {
   // has no history to worry about either way).
   const profileVersionValue = document.getElementById("s-profile-version").value;
   payload.profile_version = profileVersionValue === "" ? null : Number(profileVersionValue);
+
+  // Same always-explicit convention as profile_version above: "" (the
+  // Default-scoring option) must send an explicit null so clearing a
+  // previously-selected custom profile in edit mode actually reverts
+  // this search to legacy scoring, rather than being silently dropped
+  // by the API's "omitted means unchanged" semantics for an update.
+  const scoringProfileValue = document.getElementById("s-scoring-profile").value;
+  payload.scoring_profile_id = scoringProfileValue === "" ? null : scoringProfileValue;
 
   try {
     if (editSearchId) {

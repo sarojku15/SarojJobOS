@@ -6,13 +6,14 @@ Thin wrapper around the Node/Playwright fetch bridge
 contract: one subprocess invocation per URL, injectable so tests
 substitute a fake fetcher instead of invoking Node/Playwright at all.
 
-Live-capable by construction -- exactly like NaukriFetcher. Safety
-against accidental production use is NOT this class's job: it is
-provided entirely by HiristAdapter.status == AdapterStatus.NOT_ENABLED
-(the registry-level pre-flight gate in source_registry.
-discover_from_sources() skips a NOT_ENABLED adapter before
-health_check()/search() -- and therefore this fetcher -- is ever
-called), the same architecture Naukri itself relies on.
+Live-capable by construction -- exactly like NaukriFetcher.
+HiristAdapter is ENABLED following Phase 11's controlled live
+validation, so the registry can invoke this fetcher through the
+adapter's normal search flow. The registry-level pre-flight gate
+continues to prevent calls to adapters that remain NOT_ENABLED.
+This fetcher itself does not determine adapter enablement.
+See data/reports/phase11_public_multisource_completion.md for
+Hirist's enablement evidence.
 """
 
 import subprocess

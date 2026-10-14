@@ -194,6 +194,73 @@ result2 = migrate_production_schema.migrate_production_schema(db_path=prod_copy,
 check(result2["new_tables"] == [], f"11. re-running migration is idempotent -- no new tables the second time, got {result2['new_tables']}")
 check(_sha(prod_copy) == sha_after_first, "11. re-running migration produces a byte-identical file (true idempotence, not just 'no error')")
 
+# ---------------------------------------------- Custom Job Scoring Profiles:
+# a production-style DB upgraded through THIS SAME documented migration
+# chain (migrate_production_schema.py --confirm) must end up with the
+# full scoring-profile schema -- found missing live on 2026-10-14 (the
+# real production DB had never been re-migrated since v17 was added to
+# this chain; run_production_api.py deliberately never auto-migrates,
+# see its own docstring). Guards against that exact regression: adding
+# a new migrate_vN module to scripts/init_dev_db.py's chain is NOT
+# sufficient on its own -- it must also land here, and this test proves
+# it actually did.
+scoring_conn = sqlite3.connect(prod_copy)
+scoring_conn.row_factory = sqlite3.Row
+check(
+    scoring_conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='scoring_profiles'").fetchone() is not None,
+    "20. production migration chain creates the scoring_profiles table",
+)
+for table, column in (
+    ("saved_searches", "scoring_profile_id"),
+    ("candidate_job_matches", "scoring_profile_id"),
+    ("candidate_job_matches", "scoring_profile_version"),
+    ("candidate_job_search_matches", "scoring_profile_id"),
+    ("candidate_job_search_matches", "scoring_profile_version"),
+):
+    cols = [r[1] for r in scoring_conn.execute(f"PRAGMA table_info({table})").fetchall()]
+    check(column in cols, f"20. {table}.{column} exists after the production migration chain")
+
+# Any row that existed BEFORE this migration (candidates/jobs/matches
+# the fixture seeded above, or copied from the real production DB)
+# must have gotten NULL provenance -- never a fabricated non-NULL
+# scoring_profile_id/version for a match that was actually legacy-scored.
+for table in ("candidate_job_matches", "candidate_job_search_matches"):
+    if table in pre_tables:
+        fabricated = scoring_conn.execute(
+            f"SELECT COUNT(*) FROM {table} WHERE scoring_profile_id IS NOT NULL"
+        ).fetchone()[0]
+        check(fabricated == 0, f"20. every pre-existing {table} row got NULL scoring_profile_id, never fabricated (found {fabricated} non-NULL)")
+scoring_conn.close()
+
+# The real API route must be able to QUERY the upgraded schema, not
+# just the raw table/column shape -- proves the migration is actually
+# sufficient for the feature to work, not merely schema-complete.
+import db as db_mod
+_orig_dev_db = db_mod.DEV_DB
+db_mod.DEV_DB = prod_copy
+try:
+    import main as api_main
+    from fastapi.testclient import TestClient
+    api_client = TestClient(api_main.app)
+    lookup_conn = sqlite3.connect(prod_copy)
+    existing_row = lookup_conn.execute("SELECT candidate_id FROM candidates LIMIT 1").fetchone() if "candidates" in pre_tables else None
+    lookup_conn.close()
+    existing_candidate_id = existing_row[0] if existing_row else None
+    if existing_candidate_id is None:
+        existing_candidate_id = "cand_sp_schema_check"
+        pre_conn = sqlite3.connect(prod_copy)
+        pre_conn.execute(
+            "INSERT INTO candidates (candidate_id, name, email, phone, created_at, updated_at, status) VALUES (?,?,?,?,?,?,?)",
+            (existing_candidate_id, "Schema Check", None, None, "2026-01-01T00:00:00+00:00", "2026-01-01T00:00:00+00:00", "ACTIVE"),
+        )
+        pre_conn.commit()
+        pre_conn.close()
+    list_resp = api_client.get(f"/api/candidates/{existing_candidate_id}/scoring-profiles")
+    check(list_resp.status_code == 200, f"20. GET .../scoring-profiles succeeds against the upgraded production-style DB (got {list_resp.status_code}: {list_resp.text[:200]})")
+    check(list_resp.json().get("scoring_profiles") == [], "20. the list is correctly empty for a candidate with no profiles -- no fabricated rows")
+finally:
+    db_mod.DEV_DB = _orig_dev_db
+
 # ---------------------------------------------- 14-19: startup/DB safety hardening
 # (2026-09-29) -- root-caused during a live investigation: a bare
 # `uvicorn api.main:app --port 8421` (never setting JOBOS_DB_PATH) was

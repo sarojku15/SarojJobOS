@@ -13,6 +13,8 @@
   <a href="/searches" class="active">Searches</a>
   <a href="/dashboard">Dashboard</a>
   <a href="/applications">Applications</a>
+  <a href="/settings/search-providers">Settings</a>
+  <a href="/settings/scoring-profiles">Scoring Profiles</a>
 </header>
 <main>
   <h1 id="title">Search</h1>
@@ -109,7 +111,8 @@ async function load() {
         <tr><th>Experience</th><td>${search.minimum_experience_years ?? "-"} to ${search.maximum_experience_years ?? "-"} years</td></tr>
         <tr><th>Salary</th><td>${search.salary_expectation_min ?? "-"} to ${search.salary_expectation_max ?? "-"} ${escapeHtml(search.salary_currency || "")}</td></tr>
         <tr><th>Skills</th><td>${escapeHtml((search.skills || []).join(", ") || "-")}</td></tr>
-        <tr><th>Minimum score</th><td>${search.minimum_match_score ?? 70}</td></tr>
+        <tr><th>Minimum score</th><td>${search.minimum_match_score ?? 70} <span class="hint">(informational unless Default scoring is used with the built-in priority buckets -- see "Scoring" row below)</span></td></tr>
+        <tr><th>Scoring</th><td id="scoring-cell">Loading...</td></tr>
         <tr><th>Freshness</th><td>${search.max_job_age_days ?? "-"} days</td></tr>
         <tr><th>Sources</th><td>${escapeHtml((search.sources || []).join(", ") || "(default enabled sources)")}</td></tr>
         <tr><th>Resume / Profile</th><td id="pin-cell">Loading...</td></tr>
@@ -118,6 +121,7 @@ async function load() {
     `;
 
     renderPinnedProfileCell(search);
+    renderScoringCell(search);
     await loadSchedule();
   } catch (err) {
     showError(msg, err);
@@ -181,6 +185,21 @@ async function renderPinnedProfileCell(search) {
       : `Pinned: profile v${search.profile_version}`;
   } catch (err) {
     cell.textContent = `Pinned: profile v${search.profile_version}`;
+  }
+}
+
+async function renderScoringCell(search) {
+  const cell = document.getElementById("scoring-cell");
+  if (!cell) return;
+  if (!search.scoring_profile_id) {
+    cell.textContent = "Default scoring (JobOS's built-in 100-point model)";
+    return;
+  }
+  try {
+    const profile = await api(`/api/candidates/${search.candidate_id}/scoring-profiles/${search.scoring_profile_id}`);
+    cell.innerHTML = `Custom profile: <b>${escapeHtml(profile.name)}</b> (shortlist threshold ${profile.min_shortlist_score}/100) -- <a href="/searches/${searchId}/edit">change</a>`;
+  } catch (err) {
+    cell.innerHTML = `<span style="color:#b00">Selected scoring profile no longer exists -- <a href="/searches/${searchId}/edit">pick a different one</a> before your next run.</span>`;
   }
 }
 

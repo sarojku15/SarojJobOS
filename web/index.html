@@ -13,6 +13,8 @@
   <a href="/searches">Searches</a>
   <a href="/dashboard">Dashboard</a>
   <a href="/applications">Applications</a>
+  <a href="/settings/search-providers">Settings</a>
+  <a href="/settings/scoring-profiles">Scoring Profiles</a>
   <span class="spacer"></span>
 </header>
 <main id="app">
@@ -40,6 +42,29 @@
       <p>Create your profile manually.</p>
       <button class="secondary" id="manual-btn">Enter profile manually</button>
     </div>
+  </div>
+
+  <div class="card" style="margin-top:1.5rem">
+    <h2>About job sources and API keys</h2>
+    <p class="hint">
+      <strong>No API key is required to use JobOS.</strong> Four job boards
+      (Naukri, Hirist, IIMJobs, Apna) are searched directly and need no
+      configuration at all.
+    </p>
+    <p class="hint">
+      Seven more boards (LinkedIn, Indeed, Foundit, Instahyre, Cutshort,
+      Wellfound, Shine) can't be searched directly, so JobOS discovers them
+      through a search-provider API instead. Those need
+      <strong>your own API key</strong>, from your own free account with
+      You.com, Tavily, Exa, Brave or Serper — JobOS ships with no key of any
+      kind and never uses anyone else's. Until you add one, those seven
+      sources are simply shown as <em>Not configured</em> and skipped.
+    </p>
+    <p class="hint">
+      You can add a key now or any time later from
+      <a href="/settings/search-providers"><strong>Settings &rarr; Search
+      Providers</strong></a> — it's entirely optional.
+    </p>
   </div>
 </template>
 

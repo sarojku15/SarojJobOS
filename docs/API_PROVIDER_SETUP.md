@@ -63,6 +63,28 @@ For each provider, the general steps are the same shape:
    five providers has a developer dashboard once logged in).
 3. Generate a new key and copy it — you'll paste it into JobOS next.
 
+### Free-tier note (advisory only — verify before relying on it)
+
+JobOS stores advisory free-tier descriptions for display purposes
+only (`PROVIDER_ADVISORY_FREE_TIER` in `scripts/search_provider.py`);
+**no runtime logic reads them**, and providers change pricing without
+notice. At the time of this project's last check, each of the five
+advertised some form of free allocation (You.com: a daily free query
+allowance; Tavily: monthly free credits; Exa: starter-plan credits;
+Brave: monthly free credits, card verification may be required;
+Serper: an initial batch of free queries). **Check the provider's own
+current pricing page before assuming anything is free** — JobOS makes
+no promise about cost, quota, or billing on your behalf.
+
+### Which sources a provider unlocks
+
+Configuring **any one** provider enables the same seven boards —
+LinkedIn, Indeed, Foundit, Instahyre, Cutshort, Wellfound, Shine
+(the `*_SEARCH` entries in `scripts/source_registry.py`). No provider
+is tied to a specific board; they are interchangeable discovery
+backends, tried in your configured priority order with automatic
+failover on real provider failures.
+
 ## Adding a key inside JobOS
 
 1. Open JobOS in your browser and go to **Settings → Search

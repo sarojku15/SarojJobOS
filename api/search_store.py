@@ -106,9 +106,9 @@ def create_saved_search(conn, candidate_id, payload):
             employment_type, minimum_experience_years, maximum_experience_years,
             salary_expectation_min, salary_expectation_max, salary_currency,
             minimum_match_score, max_job_age_days, sources_json,
-            skills_json, schedule_json, profile_version, search_type,
+            skills_json, schedule_json, profile_version, scoring_profile_id, search_type,
             status, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?)
         """,
         (
             saved_search_id,
@@ -129,6 +129,7 @@ def create_saved_search(conn, candidate_id, payload):
             json.dumps(payload.skills or []),
             json.dumps(payload.schedule.model_dump()) if payload.schedule else json.dumps({"enabled": False, "frequency": None}),
             payload.profile_version,
+            payload.scoring_profile_id,
             search_type,
             now,
             now,
@@ -281,6 +282,13 @@ def update_saved_search(conn, saved_search_id, payload):
     if "profile_version" in payload.model_fields_set:
         set_clauses.append("profile_version = ?")
         params.append(payload.profile_version)
+
+    # scoring_profile_id follows the identical explicit-field convention
+    # as profile_version just above -- None is a meaningful value
+    # ("revert to legacy scoring"), not "leave unchanged".
+    if "scoring_profile_id" in payload.model_fields_set:
+        set_clauses.append("scoring_profile_id = ?")
+        params.append(payload.scoring_profile_id)
 
     if not set_clauses:
         return current

@@ -362,16 +362,28 @@ try:
     )
     check(resp.status_code == 422, "9. negative salary rejected (422)")
 
+    # Include LINKEDIN in the registry for this assertion so validation
+    # rejects it because the adapter is NOT_ENABLED, not because it is unknown.
+    source_registry.list_sources = lambda: [
+        "FAKE_PHASE9_ENABLED",
+        "LINKEDIN",
+    ]
+
     resp = client.post(
         f"/api/candidates/{candidate_ids['A']}/searches",
         json={
             "name": "bad source",
             "target_roles": ["X"],
             "target_locations": ["Y"],
-            "sources": ["HIRIST"],
+            "sources": ["LINKEDIN"],
         },
     )
-    check(resp.status_code == 400, "9. requesting a NOT_ENABLED source (HIRIST) is rejected (400)")
+    check(
+        resp.status_code == 400,
+        "9. requesting a NOT_ENABLED source (LINKEDIN) is rejected (400)",
+    )
+
+    source_registry.list_sources = lambda: ["FAKE_PHASE9_ENABLED"]
 
     resp = client.get("/api/candidates/does-not-exist")
     check(resp.status_code == 404, "9. unknown candidate_id -> 404")

@@ -54,14 +54,25 @@ activation.
 
 ## 3. Search-provider API keys (optional)
 
-Nothing here is required to run JobOS. Four job boards (Naukri,
-Hirist, IIMJobs, Apna) work with zero configuration. If you also want
-the 7 provider-backed boards (LinkedIn, Indeed, Foundit, Instahyre,
-Cutshort, Wellfound, Shine), add your **own** API key from any one of
-You.com/Tavily/Exa/Brave/Serper later, from inside the app, at
-**Settings → Search Providers** — no `.env` editing, no shell profile,
-no OS keychain. Full instructions, including where to get a key for
-each provider: [API_PROVIDER_SETUP.md](API_PROVIDER_SETUP.md).
+**JobOS will never ask you for an API key, because none is required.**
+It also ships with no key of any kind — there is no bundled, default,
+or fallback credential, and it never uses anyone else's. A fresh
+install has zero providers configured.
+
+Four job boards (Naukri, Hirist, IIMJobs, Apna) are searched directly
+and work with zero configuration — that's why your first search can
+return real results with nothing set up.
+
+Seven more boards (LinkedIn, Indeed, Foundit, Instahyre, Cutshort,
+Wellfound, Shine) can't be crawled directly, so JobOS discovers them
+through a search-provider API. Those need **your own** API key from
+your own free account with any one of You.com/Tavily/Exa/Brave/Serper.
+Add it from inside the app at **Settings → Search Providers** — no
+`.env` editing, no shell profile, no OS keychain. Until you do, those
+seven are shown as *Not configured* and skipped.
+
+Full instructions, including where to create a key for each provider:
+[API_PROVIDER_SETUP.md](API_PROVIDER_SETUP.md).
 
 ## 4. Start JobOS
 
