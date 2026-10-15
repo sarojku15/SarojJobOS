@@ -142,6 +142,17 @@ tell it you already did — it never acts on your behalf. Full detail:
 
 ## Quick Start
 
+**This is the development quick start — port `8420`, a disposable
+`jobos_dev.db` that's created and migrated automatically.** Running
+JobOS for real, durable use (your own lasting candidate/search data,
+or anything n8n/cron will call) means production mode on port `8421`
+instead — a genuinely different command, not just a different port
+number on this same one. See
+**[docs/INSTALLATION.md](docs/INSTALLATION.md)** for the full
+production setup and startup guide, including first-run database
+initialization, safe upgrades of an existing installation, and
+verification steps.
+
 **Requirements**: Python 3.11+ (developed/tested on 3.13), Node.js 18+
 (Playwright only), macOS/Linux.
 
@@ -242,6 +253,7 @@ documentation map. Highlights:
 
 | Doc | Covers |
 |---|---|
+| [INSTALLATION.md](docs/INSTALLATION.md) | Production installation & startup guide (port 8421, real database) |
 | [GETTING_STARTED.md](docs/GETTING_STARTED.md) | Full install walkthrough (macOS/Linux/Windows) |
 | [FIRST_SEARCH_WALKTHROUGH.md](docs/FIRST_SEARCH_WALKTHROUGH.md) | One complete, concrete walkthrough with a fictional candidate |
 | [QUICK_REFERENCE.md](docs/QUICK_REFERENCE.md) | One-page cheat sheet |
