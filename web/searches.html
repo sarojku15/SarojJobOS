@@ -6,26 +6,23 @@
 <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-<header>
-  <span class="brand">Job Search OS</span>
-  <a href="/">Home</a>
-  <a href="/profile">Profile</a>
-  <a href="/searches" class="active">Searches</a>
-  <a href="/dashboard">Dashboard</a>
-  <a href="/applications">Applications</a>
-  <a href="/settings/search-providers">Settings</a>
-  <a href="/settings/scoring-profiles">Scoring Profiles</a>
-</header>
-<main>
-  <h1>Your saved searches</h1>
+<a class="skip-link" href="#main-content">Skip to main content</a>
+<div id="app-shell-root"></div>
+<main id="main-content">
+  <div class="page-header">
+    <h1>Your saved searches</h1>
+    <div class="page-actions">
+      <button onclick="window.location.href='/searches/new'">+ New search</button>
+    </div>
+  </div>
   <div id="msg"></div>
   <div class="card">
     <div id="list"><div class="loading-state">Loading...</div></div>
-    <button onclick="window.location.href='/searches/new'">+ New search</button>
   </div>
 </main>
 <script src="/static/app.js"></script>
 <script>
+renderAppShell('searches');
 async function load() {
   const msg = document.getElementById("msg");
   const list = document.getElementById("list");

@@ -183,7 +183,7 @@ APPLICATIONS_HTML = WEB_DIR / "applications.html"
 check(APPLICATIONS_HTML.exists(), "My Applications page exists at web/applications.html")
 applications_text = APPLICATIONS_HTML.read_text(encoding="utf-8")
 
-check('href="/applications"' in applications_text, "applications.html: nav links to itself (marked active)")
+check("renderAppShell('applications')" in applications_text, "applications.html: renders the shared app shell with itself marked active")
 check("/api/candidates/${candidateId}/applications" in applications_text, "applications.html: fetches real application data from the API, not a hardcoded fixture")
 check("summary-cards" in applications_text and "stat-value" in applications_text, "applications.html: renders summary cards (Total/Applied/Follow-ups Due/Overdue/etc.)")
 check('badgeHtml(a.candidate_status)' in applications_text, "applications.html: renders a real status badge per application")
@@ -211,28 +211,63 @@ for tracker_file in (APPLICATIONS_HTML, WEB_DIR / "results.html", WEB_DIR / "das
     check(not _SECRET_SHAPED_PATTERN.search(text), f"{tracker_file.name}: no accidental secret-shaped string")
 
 # ---------------------------------------------------------------------
-# Scoring Profiles navigation -- regression for a real bug found live:
-# web/settings_search_providers.html was missing the Scoring Profiles
-# nav link entirely (an earlier BYOK-work edit to this file's header
-# didn't match the batch nav-insertion pattern used for every other
-# page), while every other primary page had it. Guards against both
-# "missing on one page" and "duplicated on any page".
+# Navigation -- originally a regression guard for a real bug found
+# live: web/settings_search_providers.html was missing the Scoring
+# Profiles nav link entirely while every other primary page had it.
+#
+# Since the SaaS-shell redesign, every page's nav is rendered at
+# RUNTIME by app.js's renderAppShell() from one shared NAV_ITEMS array
+# (web/app.js), not hand-duplicated per-page HTML -- so the guarantee
+# ("every primary page has exactly one Scoring Profiles destination,
+# never duplicated, never missing") is now verified at its real single
+# source of truth instead of by grepping markup that no longer exists
+# statically. Each page is still checked to confirm it actually wires
+# up that shared shell (call renderAppShell(...) at all) -- a page
+# that forgot the call entirely would previously have shown the old
+# hand-written nav; now it would render with no navigation at all,
+# which this guards against.
 # ---------------------------------------------------------------------
+
+APP_JS_TEXT = (WEB_DIR / "app.js").read_text(encoding="utf-8")
+
+_nav_items_match = re.search(r"const NAV_ITEMS = \[(.*?)\];", APP_JS_TEXT, re.DOTALL)
+check(_nav_items_match is not None, "app.js: defines a single NAV_ITEMS array (the one source of truth for navigation)")
+_nav_items_src = _nav_items_match.group(1) if _nav_items_match else ""
+
+_scoring_entries = re.findall(r'label:\s*"Scoring Profiles"', _nav_items_src)
+check(len(_scoring_entries) == 1, f"app.js: NAV_ITEMS contains exactly one Scoring Profiles entry (found {len(_scoring_entries)})")
+check('href: "/settings/scoring-profiles"' in _nav_items_src, "app.js: the Scoring Profiles NAV_ITEMS entry points at /settings/scoring-profiles")
+
+# Every nav destination from the original hand-written header is still
+# present in the shared array -- preserves all existing navigation
+# destinations, just rendered from one place now.
+for expected_href in ("/", "/profile", "/searches", "/dashboard", "/applications", "/settings/search-providers", "/settings/scoring-profiles"):
+    check(f'href: "{expected_href}"' in _nav_items_src, f"app.js: NAV_ITEMS preserves the existing {expected_href} destination")
+
+# renderAppShell() must build its nav from a SINGLE pass over
+# NAV_ITEMS (one .map() call) -- guards against a future edit
+# accidentally duplicating the render loop and silently doubling every
+# link (the same failure class the old per-page grep was guarding
+# against, just at the real source now).
+_render_fn_match = re.search(r"function _navLinksHtml\(.*?\n\}", APP_JS_TEXT, re.DOTALL)
+check(_render_fn_match is not None, "app.js: _navLinksHtml() exists (the one nav-rendering function every page's shell uses)")
+if _render_fn_match:
+    map_calls = _render_fn_match.group(0).count("NAV_ITEMS\n    .map(")
+    check(map_calls == 1, f"app.js: _navLinksHtml() iterates NAV_ITEMS exactly once (found {map_calls} .map() calls over it)")
 
 _PRIMARY_NAV_PAGES = [
     "index.html", "profile.html", "searches.html", "dashboard.html",
     "applications.html", "settings_search_providers.html", "scoring_profiles.html",
 ]
-_SCORING_PROFILES_LINK_PATTERN = re.compile(r'<a href="/settings/scoring-profiles"[^>]*>Scoring Profiles</a>')
-
 for page_name in _PRIMARY_NAV_PAGES:
     page_path = WEB_DIR / page_name
     check(page_path.exists(), f"{page_name}: exists")
     if not page_path.exists():
         continue
     text = page_path.read_text(encoding="utf-8")
-    link_count = len(_SCORING_PROFILES_LINK_PATTERN.findall(text))
-    check(link_count == 1, f"{page_name}: has exactly one Scoring Profiles nav link (found {link_count})")
+    check('id="app-shell-root"' in text, f"{page_name}: has the shared app-shell mount point")
+    check(re.search(r"renderAppShell\(", text) is not None, f"{page_name}: calls renderAppShell() to render the shared navigation")
+    check(text.count('id="app-shell-root"') == 1, f"{page_name}: has exactly one app-shell mount point (found {text.count('id=\"app-shell-root\"')})")
 
 print()
 print(f"{passed} passed, {failed} failed")

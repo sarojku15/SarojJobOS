@@ -6,25 +6,143 @@
 <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-<header>
-  <span class="brand">Job Search OS</span>
-  <a href="/">Home</a>
-  <a href="/profile">Profile</a>
-  <a href="/searches">Searches</a>
-  <a href="/dashboard" class="active">Dashboard</a>
-  <a href="/applications">Applications</a>
-  <a href="/settings/search-providers">Settings</a>
-  <a href="/settings/scoring-profiles">Scoring Profiles</a>
-</header>
-<main>
-  <h1>Dashboard</h1>
-  <div id="profile-status" class="hint"></div>
+<a class="skip-link" href="#main-content">Skip to main content</a>
+<div id="app-shell-root"></div>
+<main id="main-content" class="wide">
+  <div class="page-header">
+    <div>
+      <h1>Dashboard</h1>
+      <div class="page-subtitle" id="profile-status"></div>
+    </div>
+    <div class="page-actions">
+      <button class="secondary" onclick="window.location.href='/searches/new'">+ New search</button>
+    </div>
+  </div>
   <div id="msg"></div>
   <div id="content"><div class="loading-state">Loading...</div></div>
 </main>
 <script src="/static/app.js"></script>
 <script>
+renderAppShell('dashboard');
 let candidateId = null;
+
+// Real-data-only KPI/status definitions -- every count below is read
+// directly from an existing API response field (GET .../dashboard's
+// summary, GET .../applications's summary), never invented or
+// re-derived with new frontend logic. See api/applications_store.py's
+// get_applications_summary() for the authoritative definition of
+// "applied"/"interviews"/"offers" this page reuses unchanged.
+function renderKpiGrid(dashboardSummary, appsSummary) {
+  const jobsFound = dashboardSummary ? dashboardSummary.total_jobs_in_scope : null;
+  const applied = appsSummary ? appsSummary.applied : null;
+  const interviews = appsSummary ? appsSummary.interviews : null;
+  const offers = appsSummary ? appsSummary.offers : null;
+
+  const cards = [
+    { label: "Jobs Found", value: jobsFound, cls: "kpi-blue", icon: "searches", note: "Across all your saved searches" },
+    { label: "Applications Submitted", value: applied, cls: "kpi-green", icon: "applications", note: "Jobs you've marked as applied" },
+    { label: "Interviews", value: interviews, cls: "kpi-amber", icon: "dashboard", note: "Recruiter contact through final round" },
+    { label: "Offers", value: offers, cls: "kpi-purple", icon: "profile", note: "Offer stage" },
+  ];
+
+  return `
+    <div class="kpi-grid">
+      ${cards
+        .map(
+          (c) => `
+        <div class="kpi-card ${c.cls}">
+          <div class="kpi-top">
+            <span class="kpi-label">${escapeHtml(c.label)}</span>
+            <span class="kpi-icon">${_navIconSvg(c.icon)}</span>
+          </div>
+          <div class="kpi-value">${c.value == null ? "—" : c.value}</div>
+          <div class="kpi-note">${escapeHtml(c.note)}</div>
+        </div>
+      `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+// CSS-only stacked bar -- no charting dependency. Buckets are the
+// SAME mutually-exclusive candidate_status groupings
+// get_applications_summary() already computes server-side; "In
+// progress" is simply total_applications minus the four buckets the
+// API names explicitly, so the bar always accounts for every
+// application exactly once (never double-counted, never invented).
+function renderStatusChart(appsSummary) {
+  if (!appsSummary || !appsSummary.total_applications) {
+    return `<div class="empty-state">No applications yet. Approve and mark a job as Applied to see your pipeline here.</div>`;
+  }
+  const total = appsSummary.total_applications;
+  const buckets = [
+    { label: "Awaiting Response", count: appsSummary.awaiting_response, color: "var(--info)" },
+    { label: "Interviewing", count: appsSummary.interviews, color: "var(--warning)" },
+    { label: "Offer", count: appsSummary.offers, color: "var(--success)" },
+    { label: "Rejected / Closed", count: appsSummary.rejected, color: "var(--danger)" },
+  ];
+  const accountedFor = buckets.reduce((sum, b) => sum + b.count, 0);
+  const inProgress = Math.max(0, total - accountedFor);
+  buckets.push({ label: "In Progress (not yet applied)", count: inProgress, color: "var(--neutral-text)" });
+
+  const segmentsHtml = buckets
+    .filter((b) => b.count > 0)
+    .map((b) => `<span class="status-bar-segment" style="width:${(b.count / total) * 100}%; background:${b.color}" title="${escapeHtml(b.label)}: ${b.count}"></span>`)
+    .join("");
+
+  const legendHtml = buckets
+    .filter((b) => b.count > 0)
+    .map(
+      (b) => `
+      <span class="legend-item">
+        <span class="legend-swatch" style="background:${b.color}"></span>
+        ${escapeHtml(b.label)}: <span class="legend-count">${b.count}</span>
+      </span>
+    `
+    )
+    .join("");
+
+  // Screen-reader-friendly summary -- the chart's full information
+  // never depends on color alone.
+  const srSummary = buckets
+    .filter((b) => b.count > 0)
+    .map((b) => `${b.label}: ${b.count} of ${total}`)
+    .join(", ");
+
+  return `
+    <div class="status-bar-wrap">
+      <div class="status-bar" role="img" aria-label="Application status distribution: ${escapeHtml(srSummary)}">${segmentsHtml}</div>
+      <div class="status-legend">${legendHtml}</div>
+      <p class="sr-only">${escapeHtml(srSummary)}</p>
+    </div>
+  `;
+}
+
+function renderRecentActivity(applications) {
+  if (!applications.length) {
+    return `<div class="empty-state">No recent activity yet. Run a search and shortlist a job to see it here.</div>`;
+  }
+  return applications
+    .slice(0, 6)
+    .map((a) => {
+      const metaParts = [a.company, a.location || null, a.source].filter(Boolean);
+      return `
+        <div class="job-row">
+          <div>
+            <div class="job-row-title">${escapeHtml(a.title || "(untitled)")}</div>
+            <div class="job-row-meta">${escapeHtml(metaParts.join(" · "))}</div>
+            <div class="job-row-meta">${badgeHtml(a.candidate_status)} updated ${a.updated_at ? new Date(a.updated_at).toLocaleDateString() : "-"}</div>
+          </div>
+          <div style="text-align:right">
+            <div class="job-row-score">${a.fit_score ?? "—"}</div>
+            ${a.job_url ? `<a class="job-link" target="_blank" rel="noopener" href="${a.job_url}">View Job</a>` : ""}
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
 
 async function load() {
   const content = document.getElementById("content");
@@ -39,56 +157,66 @@ async function load() {
   }
 
   try {
-    const [data, providerSummary] = await Promise.all([
+    const [data, providerSummary, appsData] = await Promise.all([
       api(`/api/candidates/${candidateId}/dashboard`),
       api("/api/settings/search-providers").catch(() => null),
+      api(`/api/candidates/${candidateId}/applications`).catch(() => null),
     ]);
     document.getElementById("profile-status").innerHTML =
       `Profile status: ${badgeHtml(data.profile_status || "DRAFT")}`;
 
+    const appsSummary = appsData ? appsData.summary : null;
+    const applications = appsData ? appsData.applications : [];
+
     content.innerHTML = `
-      <div class="card">
-        <h2>Summary</h2>
-        <div id="summary"></div>
+      ${renderKpiGrid(data.summary, appsSummary)}
+
+      <div class="section-card">
+        <div class="section-card-header"><h2>Application pipeline</h2></div>
+        <div id="status-chart"></div>
       </div>
-      <div class="card">
-        <h2>Your saved searches</h2>
+
+      <div class="section-card">
+        <div class="section-card-header"><h2>Recent activity</h2>
+          <button class="secondary small" onclick="window.location.href='/applications'">View all &rarr;</button>
+        </div>
+        <div id="recent-activity"></div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-card-header"><h2>Your saved searches</h2></div>
         <div id="search-list"></div>
         <button class="secondary" onclick="window.location.href='/searches/new'">+ New search</button>
       </div>
-      <div class="card">
-        <h2>Sources</h2>
+
+      <div class="section-card">
+        <div class="section-card-header"><h2>Sources</h2></div>
         <div id="sources-block"></div>
         <div class="button-row">
           <button class="secondary" onclick="window.location.href='/import'">+ Import a job manually</button>
         </div>
       </div>
-      <div class="card">
-        <h2>Follow-ups</h2>
+
+      <div class="section-card">
+        <div class="section-card-header"><h2>Follow-ups</h2></div>
         <div id="followups-block"></div>
       </div>
-      <div class="card">
-        <h2>Excel report</h2>
+
+      <div class="section-card">
+        <div class="section-card-header"><h2>Excel report</h2></div>
         <p class="hint">Every matched job across every search, in the standard 9-sheet workbook.</p>
         <button id="download-btn">Download Excel report</button>
       </div>
     `;
 
-    const summaryEl = document.getElementById("summary");
-    if (data.summary) {
-      summaryEl.innerHTML = `
-        <div class="summary-grid">
-          <div class="summary-tile"><div class="value">${data.summary.total_jobs_in_scope}</div><div class="label">Jobs Found</div></div>
-          <div class="summary-tile"><div class="value">${data.summary.eligible_count}</div><div class="label">Matching</div></div>
-          <div class="summary-tile"><div class="value">${data.summary.apply_today_count}</div><div class="label">Apply Today</div></div>
-          <div class="summary-tile"><div class="value">${data.summary.duplicate_candidate_pairs}</div><div class="label">Duplicate Pairs</div></div>
-          <div class="summary-tile"><div class="value">${data.summary.new_jobs_count}</div><div class="label">New Since Last Check</div></div>
-          <div class="summary-tile"><div class="value">${data.tailored_resume_count ?? 0}</div><div class="label">Tailored Resumes</div></div>
-          <div class="summary-tile"><div class="value">${data.interview_prep_count ?? 0}</div><div class="label">Interview Preps</div></div>
-        </div>
-      `;
-    } else {
-      showEmpty(summaryEl, "Confirm your profile and run a search to see summary metrics.");
+    document.getElementById("status-chart").innerHTML = renderStatusChart(appsSummary);
+    document.getElementById("recent-activity").innerHTML = renderRecentActivity(applications);
+
+    if (!data.summary) {
+      document.getElementById("status-chart").insertAdjacentHTML(
+        "beforebegin",
+        `<div class="hint" style="margin-bottom:8px">Confirm your profile and run a search to see full summary metrics.</div>`
+      );
     }
 
     if (data.sources) {

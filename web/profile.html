@@ -6,19 +6,15 @@
 <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-<header>
-  <span class="brand">Job Search OS</span>
-  <a href="/">Home</a>
-  <a href="/profile" class="active">Profile</a>
-  <a href="/searches">Searches</a>
-  <a href="/dashboard">Dashboard</a>
-  <a href="/applications">Applications</a>
-  <a href="/settings/search-providers">Settings</a>
-  <a href="/settings/scoring-profiles">Scoring Profiles</a>
-</header>
-<main>
-  <h1>Review your profile</h1>
-  <p class="lede">Edit anything below, then confirm it before creating a search. Any edit un-confirms the profile until you confirm again.</p>
+<a class="skip-link" href="#main-content">Skip to main content</a>
+<div id="app-shell-root"></div>
+<main id="main-content">
+  <div class="page-header">
+    <div>
+      <h1>Review your profile</h1>
+      <p class="page-subtitle">Edit anything below, then confirm it before creating a search. Any edit un-confirms the profile until you confirm again.</p>
+    </div>
+  </div>
   <div id="msg"></div>
   <div id="content"><div class="loading-state">Loading your profile...</div></div>
 </main>
@@ -104,6 +100,7 @@
 
 <script src="/static/app.js"></script>
 <script>
+renderAppShell('profile');
 let candidateId = null;
 
 // Bug fix: PUT /api/candidates/{id}/profile REPLACES the entire skills

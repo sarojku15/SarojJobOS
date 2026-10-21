@@ -279,6 +279,103 @@ function renderSourceStatus(container, data, providerSummary) {
   }
 }
 
+// ===========================================================================
+// Application shell (dark sidebar / mobile top bar + drawer)
+// Single source of truth for nav destinations, icons, and labels --
+// every page calls renderAppShell(key) once, into
+// <div id="app-shell-root"></div>, instead of hand-writing a <header>.
+// Destinations/hrefs are UNCHANGED from the project's original plain
+// top-nav bar -- this only changes presentation, never routes.
+// ===========================================================================
+
+const NAV_ICONS = {
+  home: '<path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V21h14V9.5" /><path d="M9 21v-6h6v6" />',
+  profile: '<circle cx="12" cy="8" r="4" /><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8" />',
+  searches: '<circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />',
+  dashboard: '<rect x="3" y="3" width="7" height="9" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" /><rect x="14" y="12" width="7" height="9" rx="1.5" /><rect x="3" y="16" width="7" height="5" rx="1.5" />',
+  applications: '<rect x="3" y="7" width="18" height="13" rx="2" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><path d="M3 12h18" />',
+  settings: '<circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />',
+  scoring: '<line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" />',
+};
+
+const NAV_ITEMS = [
+  { key: "home", href: "/", label: "Home", icon: "home" },
+  { key: "profile", href: "/profile", label: "Profile", icon: "profile" },
+  { key: "searches", href: "/searches", label: "Searches", icon: "searches" },
+  { key: "dashboard", href: "/dashboard", label: "Dashboard", icon: "dashboard" },
+  { key: "applications", href: "/applications", label: "Applications", icon: "applications" },
+  { key: "settings", href: "/settings/search-providers", label: "Settings", icon: "settings" },
+  { key: "scoring-profiles", href: "/settings/scoring-profiles", label: "Scoring Profiles", icon: "scoring" },
+];
+
+function _navIconSvg(key) {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${NAV_ICONS[key] || ""}</svg>`;
+}
+
+function _navLinksHtml(activeKey) {
+  return NAV_ITEMS
+    .map((item) => {
+      const isActive = item.key === activeKey;
+      return `<a class="app-nav-link${isActive ? " active" : ""}" href="${item.href}"${isActive ? ' aria-current="page"' : ""}>${_navIconSvg(item.icon)}<span>${escapeHtml(item.label)}</span></a>`;
+    })
+    .join("");
+}
+
+/**
+ * Renders the shared application shell (dark sidebar on desktop, a top
+ * bar + slide-in drawer on narrow viewports) into
+ * <div id="app-shell-root"></div>. `activeKey` is one of NAV_ITEMS'
+ * `key` values, or null/omitted if no destination should be marked
+ * active (preserves the handful of pages -- e.g. job workspace, manual
+ * import -- that never highlighted a nav item under the old top bar
+ * either). Call this once, as early as possible in each page's own
+ * script, right after app.js loads.
+ */
+function renderAppShell(activeKey) {
+  const root = document.getElementById("app-shell-root");
+  if (!root) return;
+  document.body.classList.add("has-app-shell");
+
+  root.innerHTML = `
+    <div class="app-drawer-overlay" id="app-drawer-overlay"></div>
+    <header class="app-topbar">
+      <span class="brand"><span class="brand-mark"></span>Job Search OS</span>
+      <button type="button" class="app-menu-btn" id="app-menu-btn" aria-label="Open navigation menu" aria-expanded="false" aria-controls="app-sidebar">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+    </header>
+    <nav class="app-sidebar" id="app-sidebar" aria-label="Main navigation">
+      <div class="brand"><span class="brand-mark"></span>Job Search OS</div>
+      ${_navLinksHtml(activeKey)}
+      <div class="app-sidebar-footer">Local, single-candidate-per-browser</div>
+    </nav>
+  `;
+
+  const sidebar = document.getElementById("app-sidebar");
+  const overlay = document.getElementById("app-drawer-overlay");
+  const menuBtn = document.getElementById("app-menu-btn");
+
+  function closeDrawer() {
+    sidebar.classList.remove("open");
+    overlay.classList.remove("open");
+    menuBtn.setAttribute("aria-expanded", "false");
+  }
+  function openDrawer() {
+    sidebar.classList.add("open");
+    overlay.classList.add("open");
+    menuBtn.setAttribute("aria-expanded", "true");
+  }
+
+  menuBtn.addEventListener("click", () => {
+    sidebar.classList.contains("open") ? closeDrawer() : openDrawer();
+  });
+  overlay.addEventListener("click", closeDrawer);
+  sidebar.querySelectorAll("a").forEach((a) => a.addEventListener("click", closeDrawer));
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeDrawer();
+  });
+}
+
 function badgeHtml(value, extraClass, label) {
   if (!value) return "";
   return `<span class="badge ${escapeHtml(value)} ${extraClass || ""}">${escapeHtml(label || value)}</span>`;

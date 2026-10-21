@@ -6,19 +6,15 @@
 <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-<header>
-  <span class="brand">Job Search OS</span>
-  <a href="/">Home</a>
-  <a href="/profile">Profile</a>
-  <a href="/searches" class="active">Searches</a>
-  <a href="/dashboard">Dashboard</a>
-  <a href="/applications">Applications</a>
-  <a href="/settings/search-providers">Settings</a>
-  <a href="/settings/scoring-profiles">Scoring Profiles</a>
-</header>
-<main>
-  <h1 id="page-title">Create a saved search</h1>
-  <p class="lede" id="page-lede">You can create multiple searches with different criteria for the same profile.</p>
+<a class="skip-link" href="#main-content">Skip to main content</a>
+<div id="app-shell-root"></div>
+<main id="main-content">
+  <div class="page-header">
+    <div>
+      <h1 id="page-title">Create a saved search</h1>
+      <p class="page-subtitle" id="page-lede">You can create multiple searches with different criteria for the same profile.</p>
+    </div>
+  </div>
   <div id="msg"></div>
   <div id="content"><div class="loading-state">Loading...</div></div>
 </main>
@@ -114,6 +110,7 @@
 
 <script src="/static/app.js"></script>
 <script>
+renderAppShell('searches');
 let candidateId = null;
 // Edit mode is detected purely from this page's own URL
 // (/searches/{id}/edit) -- the same form/JS is reused for both create

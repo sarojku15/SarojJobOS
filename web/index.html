@@ -6,17 +6,8 @@
 <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-<header>
-  <span class="brand">Job Search OS</span>
-  <a href="/" class="active">Home</a>
-  <a href="/profile">Profile</a>
-  <a href="/searches">Searches</a>
-  <a href="/dashboard">Dashboard</a>
-  <a href="/applications">Applications</a>
-  <a href="/settings/search-providers">Settings</a>
-  <a href="/settings/scoring-profiles">Scoring Profiles</a>
-  <span class="spacer"></span>
-</header>
+<a class="skip-link" href="#app">Skip to main content</a>
+<div id="app-shell-root"></div>
 <main id="app">
   <div class="loading-state">Loading...</div>
 </main>
@@ -97,6 +88,7 @@
 
 <script src="/static/app.js"></script>
 <script>
+renderAppShell('home');
 const app = document.getElementById("app");
 
 function csv(str) { return str.split(",").map((s) => s.trim()).filter(Boolean); }

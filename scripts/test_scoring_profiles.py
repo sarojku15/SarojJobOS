@@ -477,8 +477,8 @@ check(
     f"54d. GET /settings/search-providers still returns 200 HTML (got {search_providers_page.status_code})",
 )
 check(
-    search_providers_page.text.count('>Scoring Profiles</a>') == 1,
-    "54e. /settings/search-providers' own rendered page has exactly one Scoring Profiles nav link",
+    'id="app-shell-root"' in search_providers_page.text and "renderAppShell(" in search_providers_page.text,
+    "54e. /settings/search-providers renders the shared app shell (whose single NAV_ITEMS source of truth includes Scoring Profiles exactly once -- see scripts/test_frontend_integrity.py's dedicated nav-source-of-truth checks)",
 )
 
 # --- existing endpoints unaffected: profile confirm still returns original shape ---

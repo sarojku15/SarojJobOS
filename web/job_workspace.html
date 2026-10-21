@@ -6,22 +6,15 @@
 <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-<header>
-  <span class="brand">Job Search OS</span>
-  <a href="/">Home</a>
-  <a href="/profile">Profile</a>
-  <a href="/searches">Searches</a>
-  <a href="/dashboard">Dashboard</a>
-  <a href="/applications">Applications</a>
-  <a href="/settings/search-providers">Settings</a>
-  <a href="/settings/scoring-profiles">Scoring Profiles</a>
-</header>
-<main>
+<a class="skip-link" href="#main-content">Skip to main content</a>
+<div id="app-shell-root"></div>
+<main id="main-content" class="wide">
   <div id="msg"></div>
   <div id="content"><div class="loading-state">Loading job workspace...</div></div>
 </main>
 <script src="/static/app.js"></script>
 <script>
+renderAppShell(null);
 const jobId = window.location.pathname.split("/")[2];
 const searchId = new URLSearchParams(window.location.search).get("search_id");
 let candidateId = null;
